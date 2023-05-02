@@ -1,0 +1,3 @@
+#!/bin/bash
+# db start | stop
+~/projects/ScalefocusPlatform/pg/bin/pg_ctl -D /Users/gradev/projects/ScalefocusPlatform/pg/db -l logfile $1
