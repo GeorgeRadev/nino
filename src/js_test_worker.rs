@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use crate::js::{init_platform, run_deno_thread};
+    use crate::js::{init_platform, run_deno_main_thread, run_deno_thread};
     use deno_core::{
         anyhow::Error, futures::FutureExt, op, FastString, ModuleLoader, ModuleSource,
         ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState, ResolutionKind,
@@ -12,6 +12,31 @@ mod tests {
     struct TestModuleLoader;
     const MODULE_URI: &str = "http://nino.db/";
     const MODULE_MAIN: &str = "main";
+
+    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
+    async function main() {
+        const core = Deno[Deno.internal].core;
+        let result = "";
+        try{
+            core.print('-------------------------\ntry\n');
+            const id = core.ops.op_id();
+            core.print('id ' + id + '\n');
+            const value = core.ops.op_sync();
+            core.print('value ' + value + '\n');
+            const mod = await import("b");
+            const modValue = await mod.default();
+            core.print('modValue ' + modValue + '\n');
+            result = '' + id + value + modValue;
+        }catch(e){
+            result = ' error: ' + e;
+        }
+        core.print('RESULT: ' + result + '\n');
+        core.ops.op_set_result(result);
+    }
+    (async () => { 
+        await main();
+    })();
+    "#;
 
     impl ModuleLoader for TestModuleLoader {
         fn resolve(
@@ -65,7 +90,6 @@ mod tests {
     struct TestTask {
         id: u32,
     }
-
     fn get_ops() -> Vec<OpDecl> {
         vec![op_sync::decl(), op_id::decl(), op_set_result::decl()]
     }
@@ -97,30 +121,6 @@ mod tests {
         Ok(v)
     }
 
-    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
-    async function main() {
-        let result = "";
-        try{
-            Deno.core.print('-------------------------\ntry\n');
-            const id = Deno.core.ops.op_id();
-            Deno.core.print('id ' + id + '\n');
-            const value = Deno.core.ops.op_sync();
-            Deno.core.print('value ' + value + '\n');
-            const mod = await import("b");
-            const modValue = await mod.default();
-            Deno.core.print('modValue ' + modValue + '\n');
-            result = '' + id + value + modValue;
-        }catch(e){
-            result = ' error: ' + e;
-        }
-        Deno.core.print('RESULT: ' + result + '\n');
-        Deno.core.ops.op_set_result(result);
-    }
-    (async () => { 
-        await main();
-    })();
-    "#;
-
     static TEST_RESULTS: Mutex<Option<Box<String>>> = Mutex::new(None);
 
     async fn test_js() {
@@ -133,34 +133,30 @@ mod tests {
         }
 
         let r = tokio::try_join!(
-            poll_fn(|cx| {
-                run_deno_thread(
-                    cx,
+            async {
+                run_deno_main_thread(
                     Rc::new(TestModuleLoader {}),
                     get_ops,
                     |state| {
-                        state.put(TestTask { id: 0 });
-                        ()
+                        state.put(TestTask { id: 1 });
                     },
-                    TEST_MAIN_MODULE_SOURCE,
-                    None,
-                    None,
+                    "main",
+                    0,
                 )
-            }),
-            poll_fn(|cx| {
-                run_deno_thread(
-                    cx,
+                .await
+            },
+            async {
+                run_deno_main_thread(
                     Rc::new(TestModuleLoader {}),
                     get_ops,
                     |state| {
-                        state.put(TestTask { id: 0 });
-                        ()
+                        state.put(TestTask { id: 1 });
                     },
-                    TEST_MAIN_MODULE_SOURCE,
-                    None,
-                    None,
+                    "main",
+                    0,
                 )
-            }),
+                .await
+            },
         );
         match r {
             Err(e) => {
@@ -170,7 +166,7 @@ mod tests {
                 let mut res = TEST_RESULTS.lock().unwrap();
                 let str = (*res).as_mut().unwrap().as_mut();
                 println!("result: {}", str);
-                assert_eq!(*str, "0OK42");
+                assert_eq!(*str, "1OK42");
             }
         };
     }

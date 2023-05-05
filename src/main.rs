@@ -3,6 +3,7 @@ mod db_notification;
 mod db_settings;
 mod js;
 mod js_test;
+mod js_test_worker;
 mod js_test_debug;
 mod js_functions;
 mod nino_constants;

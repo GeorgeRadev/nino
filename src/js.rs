@@ -1,13 +1,21 @@
 use crate::db::DBManager;
 use crate::web_dynamics::DynamicsManager;
 use crate::{js_functions, nino_constants};
+use deno_core::error::AnyError;
 use deno_core::{
     anyhow::Error, futures::channel::oneshot::Sender, futures::FutureExt, url::Url, Extension,
     InspectorSessionProxy, JsRuntime, ModuleLoader, ModuleSource, ModuleSourceFuture,
     ModuleSpecifier, ModuleType, OpDecl, OpState, RuntimeOptions,
 };
-use deno_core::{v8, ResolutionKind};
+use deno_core::{v8, FastString, ResolutionKind};
+use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
+use deno_runtime::deno_web::BlobStore;
+use deno_runtime::inspector_server::InspectorServer;
+use deno_runtime::permissions::PermissionsContainer;
+use deno_runtime::worker::{MainWorker, WorkerOptions};
+use deno_runtime::BootstrapOptions;
 use http_types::Response;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
 use tokio::macros::support::poll_fn;
@@ -84,7 +92,7 @@ impl JavaScriptManager {
         }
     }
 
-    fn create_js_context_state(state: &mut OpState) -> Result<(), deno_core::anyhow::Error> {
+    fn create_js_context_state(state: &mut OpState) -> () {
         static JS_THREAD_ID: std::sync::atomic::AtomicUsize =
             std::sync::atomic::AtomicUsize::new(0);
 
@@ -102,7 +110,6 @@ impl JavaScriptManager {
             module: String::from(""),
             closed: false,
         });
-        Ok(())
     }
 
     fn start_deno_thread(cx: &mut Context, main_module: String) -> Poll<Result<(), Error>> {
@@ -133,14 +140,13 @@ pub fn init_platform(thread_count: u16) {
             let loader = Rc::new(DBModuleLoader {});
             let ext = Extension::builder(nino_constants::PROGRAM_NAME)
                 .ops(js_functions::get_javascript_ops())
-                .state(create_state)
                 .build();
             let _r = JsRuntime::new(RuntimeOptions {
                 v8_platform: platform,
                 module_loader: Some(loader),
                 extensions: vec![ext],
                 will_snapshot: false,
-                inspector: true,
+                inspector: false,
                 ..Default::default()
             });
 
@@ -150,53 +156,53 @@ pub fn init_platform(thread_count: u16) {
 }
 
 /// used for loading js modules
-struct DBModuleLoader {}
+struct DBModuleLoader;
+const MODULE_URI: &str = "http://nino.db/";
+const MODULE_MAIN: &str = "main";
 
 impl ModuleLoader for DBModuleLoader {
     fn resolve(
         &self,
         specifier: &str,
-        referrer: &str,
-        kind: ResolutionKind,
+        _referrer: &str,
+        _kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, Error> {
-        let url_str = format!("http://nino.db/{}", specifier);
-        let url = Url::parse(&url_str)?;
+        let url;
+        if specifier.starts_with(MODULE_URI) {
+            url = Url::parse(&specifier)?;
+        } else {
+            let url_str = format!("{}{}", MODULE_URI, specifier);
+            url = Url::parse(&url_str)?;
+        }
         Ok(url)
     }
 
     fn load(
         &self,
         module_specifier: &ModuleSpecifier,
-        _maybe_referrer: Option<ModuleSpecifier>,
+        _maybe_referrer: std::option::Option<&deno_core::url::Url>,
         _is_dyn_import: bool,
     ) -> Pin<Box<ModuleSourceFuture>> {
         let module_specifier = module_specifier.clone();
         async move {
             // generic_error(format!(
-            //     "Provided module specifier \"{}\" was not found",
+            //     "Provided module specifier \"{}\" is not a file URL.",
             //     module_specifier
             // ))
-            println!("load module: {}", module_specifier.path());
-            let code = r#"
-            export default async function servlet(request, response) {
-                Deno.core.print('js_servlet request: ' + JSON.stringify(request) + '\n');
-                response.set('Content-Type', 'text/html;charset=UTF-8');
-                await response.send('<hr/>method: ' + request.method + '<br/>path: ' + request.path + '</hr/>');
-                return 42;
+            let module_path = &module_specifier.path()[1..];
+            println!("load module: {}", module_path);
+            let code;
+            if MODULE_MAIN == module_path {
+                code = ""; //MAIN_MODULE_SOURCE;
+            } else {
+                code = "export default async function() { return 'b'; }";
             }
-            "#;
 
             let module_type = ModuleType::JavaScript;
             // ModuleType::Json
-
-            let codebytes = code.as_bytes().to_vec().into_boxed_slice();
-
-            let module = ModuleSource {
-                code: codebytes,
-                module_type,
-                module_url_specified: module_specifier.to_string(),
-                module_url_found: module_specifier.to_string(),
-            };
+            let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
+            let module_string = module_specifier.clone();
+            let module = ModuleSource::new(module_type, code, &module_string);
             Ok(module)
         }
         .boxed_local()
@@ -207,9 +213,9 @@ pub struct Task {
     pub id: u32,
 }
 
-fn create_state(state: &mut OpState) -> Result<(), Error> {
+fn create_state(state: &mut OpState) -> () {
     state.put(Task { id: 0 });
-    Ok(())
+    ()
 }
 
 pub enum RetrievedV8Value<'s> {
@@ -236,11 +242,12 @@ macro_rules! extract_promise {
     };
 }
 
+// old one using the deno runtime
 pub fn run_deno_thread(
     cx: &mut Context,
     module_loader: Rc<dyn ModuleLoader>,
     get_ops: fn() -> Vec<OpDecl>,
-    create_state: fn(state: &mut OpState) -> Result<(), Error>,
+    create_state: fn(state: &mut OpState) -> (),
     javascript_source_code: &str,
     inspector_session_sx: Option<InspectorSessionProxy>,
     dbg_ready: Option<Sender<bool>>,
@@ -258,38 +265,89 @@ pub fn run_deno_thread(
         ..Default::default()
     });
 
-    // define inspector for the first instance
-    if need_inspector {
-        let debug_session = inspector_session_sx.unwrap();
-        runtime.maybe_init_inspector();
-        let inspector_rc = runtime.inspector();
-        //let inspector = inspector_rc.borrow_mut();
-        //let session_sender = inspector.get_session_sender();
-        // let deregister_rx = inspector.add_deregister_handler();
-        //session_sender.unbounded_send(debug_session).unwrap();
-        //notify debug session
-        let ready_s = dbg_ready.unwrap();
-        ready_s.send(true).unwrap();
-    }
-    let result = runtime.execute_script("_main", javascript_source_code)?;
-    {
-        let mut scope = runtime.handle_scope();
-        let local = deno_core::v8::Local::new(&mut scope, &result);
-        let result = extract_promise!(&mut scope, local);
-        match result {
-            RetrievedV8Value::Value(v) => {
-                return Poll::Ready(serde_v8::from_v8(&mut scope, v).map_err(Error::from))
-            }
-            RetrievedV8Value::Error(e) => {
-                let js_error = deno_core::error::JsError::from_v8_exception(&mut scope, e);
-                return Poll::Ready(Err(Error::msg(js_error.message.unwrap())));
-            }
-            RetrievedV8Value::Promise(_) => {
-                // Wait for the promise to resolve.
-            }
-        };
-    }
+    let code = FastString::from(String::from(javascript_source_code));
+    let _result = runtime.execute_script("main", code)?;
     let r = runtime.poll_event_loop(cx, need_inspector);
     eprintln!("js thread done");
     r
+}
+
+fn get_error_class_name(e: &AnyError) -> &'static str {
+    deno_runtime::errors::get_error_class_name(e).unwrap_or("Error")
+}
+
+// new one using deno MainWorker
+pub async fn run_deno_main_thread(
+    module_loader: Rc<dyn ModuleLoader>,
+    get_ops: fn() -> Vec<OpDecl>,
+    create_state: fn(state: &mut OpState) -> (),
+    main_module: &str,
+    inspector_port: u16,
+) -> Result<(), Error> {
+    let create_web_worker_cb = Arc::new(|_| {
+        todo!("Web workers are not supported in the example");
+    });
+    let web_worker_event_cb = Arc::new(|_| {
+        todo!("Web workers are not supported in the example");
+    });
+
+    let extensions = {
+        let ext = Extension::builder("nino_extentions")
+            .ops(get_ops())
+            .state(create_state)
+            .force_op_registration()
+            .build();
+        vec![ext]
+    };
+
+    let maybe_inspector_server: Option<Arc<InspectorServer>> = {
+        if inspector_port != 0 {
+            let inspector_str = format!("127.0.0.1:{}", inspector_port);
+            let inspector_address = inspector_str.parse::<SocketAddr>().unwrap();
+            Some(Arc::new(InspectorServer::new(
+                inspector_address,
+                nino_constants::PROGRAM_NAME,
+            )))
+        } else {
+            None
+        }
+    };
+
+    let options = WorkerOptions {
+        bootstrap: BootstrapOptions::default(),
+        extensions,
+        startup_snapshot: None,
+        unsafely_ignore_certificate_errors: None,
+        root_cert_store: None,
+        seed: None,
+        source_map_getter: None,
+        format_js_error_fn: None,
+        web_worker_preload_module_cb: web_worker_event_cb.clone(),
+        web_worker_pre_execute_module_cb: web_worker_event_cb,
+        create_web_worker_cb,
+        module_loader,
+        npm_resolver: None,
+        get_error_class_fn: Some(&get_error_class_name),
+        cache_storage_dir: None,
+        origin_storage_dir: None,
+        blob_store: BlobStore::default(),
+        broadcast_channel: InMemoryBroadcastChannel::default(),
+        shared_array_buffer_store: None,
+        compiled_wasm_module_store: None,
+        maybe_inspector_server,
+        should_break_on_first_statement: false,
+        should_wait_for_inspector_session: false,
+        stdio: Default::default(),
+    };
+
+    let main_uri = format!("{}{}", MODULE_URI, main_module).to_owned();
+    let main_module = Url::parse(main_uri.as_str())?;
+    let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
+
+    let mut worker = MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
+
+    worker.execute_main_module(&main_module).await?;
+    worker.run_event_loop(false).await?;
+
+    Ok(())
 }

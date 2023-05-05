@@ -1,234 +1,255 @@
 #[cfg(test)]
 mod tests {
-    use crate::js::{init_platform, run_deno_thread};
-    use deno_core::{
-        anyhow::Error,
-        futures::{
-            channel::{
-                mpsc::{self, UnboundedReceiver, UnboundedSender},
-                oneshot::{self, Receiver},
-            },
-            FutureExt, SinkExt,
-        },
-        op, InspectorMsg, InspectorSessionProxy, ModuleLoader, ModuleSource, ModuleSourceFuture,
-        ModuleSpecifier, ModuleType, OpDecl, OpState,
-    };
+    use deno_core::anyhow::Error;
+    use deno_core::error::AnyError;
+    use deno_core::futures::FutureExt;
+    use deno_core::*;
+    use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
+    use deno_runtime::deno_web::BlobStore;
+    use deno_runtime::inspector_server::InspectorServer;
+    use deno_runtime::permissions::PermissionsContainer;
+    use deno_runtime::worker::MainWorker;
+    use deno_runtime::worker::WorkerOptions;
+    use deno_runtime::BootstrapOptions;
     use http_types::Url;
-    use std::{pin::Pin, rc::Rc, sync::Mutex};
-    use core::task::Poll;
-    use tokio::macros::support::poll_fn;
-    use tokio::task;
+    use std::net::SocketAddr;
+    use std::sync::Arc;
+    use std::{cell::RefCell, pin::Pin, rc::Rc};
 
-    struct TestModuleLoader;
+    struct TestState {
+        id: i32,
+    }
 
-    impl ModuleLoader for TestModuleLoader {
+    fn create_state(state: &mut OpState) -> () {
+        state.put(TestState { id: 0 });
+        ()
+    }
+
+    #[op]
+    fn op_set(state: &mut OpState, v: i32) -> Result<i32, AnyError> {
+        let test_state = state.borrow_mut::<TestState>();
+        test_state.id = v;
+        println!("[{}] sync set", v);
+        Ok(v)
+        //Ok(String::from("Test"))
+    }
+
+    #[op]
+    fn op_get(state: &mut OpState) -> Result<i32, AnyError> {
+        let v;
+        {
+            let test_state = state.borrow_mut::<TestState>();
+            v = test_state.id;
+            println!("[{}] sync get", v);
+        }
+        Ok(v)
+    }
+
+    #[op]
+    async fn op_async(state: Rc<RefCell<OpState>>) -> Result<i32, AnyError> {
+        let v;
+        {
+            let mut op_state = state.borrow_mut();
+            let test_state = op_state.borrow_mut::<TestState>();
+            v = test_state.id;
+        }
+        println!("[{}] async get", v);
+        // you need to await something in the async function
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        Ok(v)
+    }
+
+    #[op]
+    async fn op_a_sleep(state: Rc<RefCell<OpState>>, millis: u64) -> Result<i32, AnyError> {
+        let v;
+        {
+            let mut op_state = state.borrow_mut();
+            let test_state = op_state.borrow_mut::<TestState>();
+            v = test_state.id;
+        }
+        println!("[{}] waiting {} ms", v, millis);
+        tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+        Ok(v)
+    }
+
+    fn get_extensions() -> Vec<Extension> {
+        let ext = Extension::builder("nino_extentions")
+            .ops(vec![
+                op_get::decl(),
+                op_set::decl(),
+                op_async::decl(),
+                op_a_sleep::decl(),
+            ])
+            .state(create_state)
+            .force_op_registration()
+            .build();
+        vec![ext]
+    }
+
+    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
+    async function main() {
+        const core = Deno[Deno.internal].core;
+        try {
+            core.print('-- start\n');
+    
+            core.print('-- waiting for debugger \n');
+            let ever = false;
+            for (; ever;) {
+                // sleep for a second
+                await core.opAsync('op_a_sleep', 1000);
+                debugger;
+            }
+    
+            let id = core.ops.op_get();
+            core.print('-- after ops.op_get ' + id + '\n');
+    
+            id = await core.opAsync('op_async');
+            core.print('-- after opAsync op_async ' + id + '\n');
+    
+            id = await core.opAsync('op_a_sleep', 1);
+            core.print('-- after opAsync op_a_sleep\n');
+    
+            let m = await import('b');
+            core.print('module keys: ' + Object.keys(m) + '\n');
+            core.print('module type: ' + typeof m + '\n');
+            core.print('module default type: ' + typeof m.default + '\n');
+            core.print('module await default(): ' + (await m.default()) + '\n');
+    
+            id = await core.opAsync('op_a_sleep', 2);
+            core.print('-- after opAsync op_a_sleep ' + id + '\n');
+    
+            id = core.ops.op_get();
+            core.print('-- after ops.op_get ' + id + '\n');
+    
+            core.print('-- done !! OK\n');
+        } catch (e) {
+            core.print(' error: ' + e + '\n');
+        }
+    }
+    (async () => {
+        await main();
+    })();
+    "#;
+
+    struct ModsLoader;
+    const MODULE_URI: &str = "http://nino.db/";
+    const MODULE_MAIN: &str = "main";
+
+    impl ModuleLoader for ModsLoader {
         fn resolve(
             &self,
             specifier: &str,
-            referrer: &str,
-            kind: deno_core::ResolutionKind,
+            _referrer: &str,
+            _kind: ResolutionKind,
         ) -> Result<ModuleSpecifier, Error> {
-            let url_str = format!("http://nino.db/{}", specifier);
-            let url = Url::parse(&url_str)?;
+            let url;
+            if specifier.starts_with(MODULE_URI) {
+                url = Url::parse(&specifier)?;
+            } else {
+                let url_str = format!("{}{}", MODULE_URI, specifier);
+                url = Url::parse(&url_str)?;
+            }
             Ok(url)
         }
 
         fn load(
             &self,
             module_specifier: &ModuleSpecifier,
-            _maybe_referrer: Option<ModuleSpecifier>,
+            _maybe_referrer: std::option::Option<&deno_core::url::Url>,
             _is_dyn_import: bool,
         ) -> Pin<Box<ModuleSourceFuture>> {
             let module_specifier = module_specifier.clone();
             async move {
-                println!("load module: {}", module_specifier.path());
-                let code = "export default function() { return '42'; }";
+                // generic_error(format!(
+                //     "Provided module specifier \"{}\" is not a file URL.",
+                //     module_specifier
+                // ))
+                let module_path = &module_specifier.path()[1..];
+                println!("load module: {}", module_path);
+                let code;
+                if MODULE_MAIN == module_path {
+                    code = TEST_MAIN_MODULE_SOURCE;
+                } else {
+                    code = "export default async function() { return 'b'; }";
+                }
 
                 let module_type = ModuleType::JavaScript;
                 // ModuleType::Json
-
-                let codebytes = code.as_bytes().to_vec().into_boxed_slice();
-
-                let module = ModuleSource {
-                    code: codebytes,
-                    module_type,
-                    module_url_specified: module_specifier.to_string(),
-                    module_url_found: module_specifier.to_string(),
-                };
+                let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
+                let module_string = module_specifier.clone();
+                let module = ModuleSource::new(module_type, code, &module_string);
                 Ok(module)
             }
             .boxed_local()
         }
     }
 
-    struct TestTask {
-        id: u32,
+    fn get_error_class_name(e: &AnyError) -> &'static str {
+        deno_runtime::errors::get_error_class_name(e).unwrap_or("Error")
     }
 
-    fn get_ops() -> Vec<OpDecl> {
-        vec![op_sync::decl(), op_id::decl(), op_set_result::decl()]
-    }
+    async fn test_debugger() -> Result<(), AnyError> {
+        //    init_platform(2);
 
-    #[op]
-    fn op_sync() -> Result<String, Error> {
-        Ok(String::from("OK"))
-    }
+        let module_loader = Rc::new(ModsLoader {});
 
-    #[op]
-    fn op_set_result(result: String) -> Result<(), Error> {
-        {
-            let mut res = TEST_RESULTS.lock().unwrap();
-            let v = res.as_mut().unwrap();
-            println!("old res: {}", v);
-            *res = Some(Box::new(result.clone()));
-        }
-        Ok(())
-    }
+        let create_web_worker_cb = Arc::new(|_| {
+            todo!("Web workers are not supported in the example");
+        });
+        let web_worker_event_cb = Arc::new(|_| {
+            todo!("Web workers are not supported in the example");
+        });
 
-    #[op]
-    fn op_id(op_state: &mut OpState) -> Result<u32, Error> {
-        let v = 0;
-        {
-            //let test_state: &mut js::tests::Task = state.borrow_mut();
-            //v = test_state.id;
-        }
-        //let r = format!("{}", v);
-        Ok(v)
-    }
+        let extensions = get_extensions();
 
-    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
-    async function main() {
-        debugger;
-        let result = "";
-        try{
-            Deno.core.print('-------------------------\ntry\n');
-            const id = Deno.core.ops.op_id();
-            Deno.core.print('id ' + id + '\n');
-            const value = Deno.core.ops.op_sync();
-            Deno.core.print('value ' + value + '\n');
-            const mod = await import("b");
-            const modValue = mod.default();
-            Deno.core.print('modValue ' + modValue + '\n');
-            result = '' + id + value + modValue;
-        }catch(e){
-            result = ' error: ' + e;
-        }
-        Deno.core.print('RESULT: ' + result + '\n');
-        Deno.core.ops.op_set_result(result);
-    }
-    (async () => { 
-        await main();
-    })();
-    "#;
+        let inspector_address = "127.0.0.1:9229".parse::<SocketAddr>().unwrap();
+        let inspector_server = Arc::new(InspectorServer::new(inspector_address, "nino"));
 
-    static TEST_RESULTS: Mutex<Option<Box<String>>> = Mutex::new(None);
-
-    async fn debugger(
-        mut dbg_receiver: Receiver<bool>,
-        mut inbound_tx: UnboundedSender<String>,
-        mut outbound_rx: UnboundedReceiver<InspectorMsg>,
-    ) -> Result<(), Error> {
-        // wait for rx element to simulate join
-        loop {
-            if let Ok(_) = dbg_receiver.try_recv() {
-                break;
-            }
-        }
-
-        //init debugger
-        inbound_tx
-            .send(r#"{"id":1,"method":"Runtime.enable"}"#.to_string())
-            .await
-            .unwrap();
-        inbound_tx
-            .send(r#"{"id":2,"method":"Debugger.enable"}"#.to_string())
-            .await
-            .unwrap();
-        inbound_tx
-        .send(r#"{"id":4,"method":"Runtime.evaluate","params":{"expression":"Deno.core.print(\"hello from the inspector\\n\")","contextId":1,"includeCommandLineAPI":true,"silent":false,"returnByValue":true}}"#.to_string())
-        .await
-        .unwrap();
-        // wait for first message
-        loop {
-            match outbound_rx.try_next() {
-                Ok(msg) => match msg {
-                    Some(msg) => {
-                        println!("inspector: {}", msg.content);
-                        break;
-                    }
-                    None => {
-                        task::yield_now().await;
-                    }
-                },
-                Err(_) => {}
-            }
-        }
-        // loop untill disconnected
-        loop {
-            match outbound_rx.try_next() {
-                Ok(msg) => match msg {
-                    Some(msg) => {
-                        println!("inspector: {}", msg.content);
-                    }
-                    None => {
-                        tokio::task::yield_now().await;
-                    }
-                },
-                Err(error) => {
-                    println!("inspector ERROR: {}", error);
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    async fn run_deno_thread_with_debugger(
-        outbound_sx: UnboundedSender<InspectorMsg>, 
-        inbound_rx:UnboundedReceiver<String>, 
-        dbg_ready_sx: oneshot::Sender<bool> ) -> Poll<Result<(), Error>> {
-        let deno_closure = |cx| {
-
-        let inspector_session_proxy = InspectorSessionProxy {
-            tx: outbound_sx,
-            rx: inbound_rx,
+        let options = WorkerOptions {
+            bootstrap: BootstrapOptions::default(),
+            extensions,
+            startup_snapshot: None,
+            unsafely_ignore_certificate_errors: None,
+            root_cert_store: None,
+            seed: None,
+            source_map_getter: None,
+            format_js_error_fn: None,
+            web_worker_preload_module_cb: web_worker_event_cb.clone(),
+            web_worker_pre_execute_module_cb: web_worker_event_cb,
+            create_web_worker_cb,
+            module_loader,
+            npm_resolver: None,
+            get_error_class_fn: Some(&get_error_class_name),
+            cache_storage_dir: None,
+            origin_storage_dir: None,
+            blob_store: BlobStore::default(),
+            broadcast_channel: InMemoryBroadcastChannel::default(),
+            shared_array_buffer_store: None,
+            compiled_wasm_module_store: None,
+            maybe_inspector_server: Some(inspector_server.clone()),
+            should_break_on_first_statement: false,
+            should_wait_for_inspector_session: false,
+            stdio: Default::default(),
         };
-        
-            run_deno_thread(
-                cx,
-                Rc::new(TestModuleLoader {}),
-                get_ops,
-                |state| {
-                    state.put(TestTask { id: 0 });
-                    Ok(())
-                },
-                TEST_MAIN_MODULE_SOURCE,
-                Some(inspector_session_proxy),
-                Some(dbg_ready_sx),
-            )
-        };
-        Poll::Ready(poll_fn(|cx| deno_closure(cx)).await)
-    }
 
-    async fn test_debugger() {
-        init_platform(2);
-        // The 'inbound' channel carries messages send to the inspector.
-        let (inbound_sx, inbound_rx) = mpsc::unbounded();
-        // The 'outbound' channel carries messages received from the inspector.
-        let (outbound_sx, outbound_rx) = mpsc::unbounded();
-        // use oneshot as signal for inspector initialized
-        let (dbg_ready_sx, dbg_ready_rx) = oneshot::channel::<bool>();
- 
-        let _r = tokio::try_join!(
-            run_deno_thread_with_debugger(outbound_sx, inbound_rx, dbg_ready_sx),
-            debugger(dbg_ready_rx, inbound_sx, outbound_rx),
-        );
-        println!("Done");
+        let main_uri = format!("{}{}", MODULE_URI, MODULE_MAIN).to_owned();
+        let main_module = Url::parse(main_uri.as_str())?;
+        let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
+
+        let mut worker =
+            MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
+
+        println!("Connect to debugger and change the loop valiable ever to false");
+        worker.execute_main_module(&main_module).await?;
+        worker.run_event_loop(false).await?;
+
+        inspector_server.host;
+        Ok(())
     }
 
     #[test]
     fn deno_simple_debugger() {
-        tokio::runtime::Builder::new_multi_thread()
+        let _r = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .worker_threads(2)
             .build()
