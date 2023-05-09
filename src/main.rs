@@ -69,12 +69,14 @@ async fn get_db_settings(connection_string: &String) -> InitialSettings {
     let thread_count = settings.get_thread_count().await;
     let js_thread_count = settings.get_js_thread_count().await;
     let server_port = settings.get_server_port().await;
+    let debug_port = settings.get_debug_port().await;
     let db_pool_size = settings.get_db_pool_size().await;
 
     InitialSettings {
         connection_string: connection_string.clone(),
         thread_count,
         server_port,
+        debug_port,
         db_pool_size,
         js_thread_count,
     }
@@ -99,7 +101,7 @@ async fn main_async(settings: InitialSettings) {
         db_notifier.get_subscriber(),
     ));
     let _js_engine = js::JavaScriptManager::instance(
-        settings.js_thread_count,
+        settings.js_thread_count, settings.debug_port,
         Some(db.clone()),
         Some(dynamics.clone()),
     );

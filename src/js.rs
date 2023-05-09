@@ -3,9 +3,9 @@ use crate::web_dynamics::DynamicsManager;
 use crate::{js_functions, nino_constants};
 use deno_core::error::AnyError;
 use deno_core::{
-    anyhow::Error, futures::channel::oneshot::Sender, futures::FutureExt, url::Url, Extension,
-    InspectorSessionProxy, JsRuntime, ModuleLoader, ModuleSource, ModuleSourceFuture,
-    ModuleSpecifier, ModuleType, OpDecl, OpState, RuntimeOptions,
+    anyhow::Error, futures::FutureExt, url::Url, Extension, InspectorSessionProxy, JsRuntime,
+    ModuleLoader, ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState,
+    RuntimeOptions,
 };
 use deno_core::{v8, FastString, ResolutionKind};
 use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
@@ -15,33 +15,27 @@ use deno_runtime::permissions::PermissionsContainer;
 use deno_runtime::worker::{MainWorker, WorkerOptions};
 use deno_runtime::BootstrapOptions;
 use http_types::Response;
+use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
-use tokio::macros::support::poll_fn;
+//use tokio::macros::support::poll_fn;
 
 /// need to call start() to begin js threads
+#[derive(Clone)]
 pub struct JavaScriptManager {
     thread_count: u16,
+    inspector_port: u16,
     db: DBManager,
     dynamics: Arc<DynamicsManager>,
 }
 
-impl Clone for JavaScriptManager {
-    fn clone(&self) -> Self {
-        Self {
-            thread_count: self.thread_count,
-            db: self.db.clone(),
-            dynamics: self.dynamics.clone(),
-        }
-    }
-}
-
-static JS_INSTANCE: std::sync::Mutex<Option<JavaScriptManager>> = std::sync::Mutex::new(None);
+static JS_INSTANCE: Mutex<Option<JavaScriptManager>> = Mutex::new(None);
 
 impl JavaScriptManager {
     pub fn instance(
         thread_count: u16,
+        inspector_port: u16,
         db: Option<DBManager>,
         dynamics: Option<Arc<DynamicsManager>>,
     ) -> JavaScriptManager {
@@ -51,6 +45,7 @@ impl JavaScriptManager {
                 init_platform(thread_count);
                 let this = JavaScriptManager {
                     thread_count,
+                    inspector_port,
                     db: db.unwrap(),
                     dynamics: dynamics.unwrap().clone(),
                 };
@@ -61,11 +56,28 @@ impl JavaScriptManager {
     }
 
     pub async fn start() {
-        let thread_count = {
-            let instance = Self::instance(0, None, None);
-            instance.thread_count
+        let (thread_count, inspector_port) = {
+            let instance = Self::instance(0, 0, None, None);
+            (instance.thread_count, instance.inspector_port)
         };
 
+        //for _ in 0..thread_count {
+        //tokio::spawn(
+        if let Err(e) = run_deno_main_thread(
+            module_loader,
+            js_functions::get_javascript_ops,
+            Self::create_js_context_state,
+            nino_constants::MAIN_MODULE,
+            inspector_port,
+        )
+        .await
+        {
+            println!("ERROR: {}", e.to_string());
+        }
+        //);
+        //}
+
+        /*
         for _ in 0..thread_count {
             tokio::spawn(async {
                 let main_module = Self::get_main_module().await;
@@ -75,28 +87,14 @@ impl JavaScriptManager {
                 }
             });
         }
-    }
-
-    async fn get_main_module() -> String {
-        let instance = Self::instance(0, None, None);
-        match instance
-            .dynamics
-            .get_module_js(crate::nino_constants::MAIN_MODULE)
-            .await
-        {
-            Some(code) => return code,
-            None => panic!(
-                "cannot load the main module '{}' from dynamics",
-                crate::nino_constants::MAIN_MODULE
-            ),
-        }
+        */
     }
 
     fn create_js_context_state(state: &mut OpState) -> () {
         static JS_THREAD_ID: std::sync::atomic::AtomicUsize =
             std::sync::atomic::AtomicUsize::new(0);
 
-        let js = JavaScriptManager::instance(0, None, None);
+        let js = JavaScriptManager::instance(0, 0, None, None);
 
         let mut bunding = JS_INSTANCE.lock().unwrap();
         let inst = bunding.as_mut().unwrap();
@@ -111,7 +109,7 @@ impl JavaScriptManager {
             closed: false,
         });
     }
-
+    /*
     fn start_deno_thread(cx: &mut Context, main_module: String) -> Poll<Result<(), Error>> {
         run_deno_thread(
             cx,
@@ -123,6 +121,7 @@ impl JavaScriptManager {
             None,
         )
     }
+    */
 }
 
 /// this is used to create the v8 runtime :
@@ -137,7 +136,7 @@ pub fn init_platform(thread_count: u16) {
             let platform =
                 Some(deno_core::v8::new_default_platform(thread_count as u32, false).make_shared());
 
-            let loader = Rc::new(DBModuleLoader {});
+            let loader = Rc::new(FNModuleLoader::new(module_loader));
             let ext = Extension::builder(nino_constants::PROGRAM_NAME)
                 .ops(js_functions::get_javascript_ops())
                 .build();
@@ -155,12 +154,62 @@ pub fn init_platform(thread_count: u16) {
     }
 }
 
-/// used for loading js modules
-struct DBModuleLoader;
-const MODULE_URI: &str = "http://nino.db/";
-const MODULE_MAIN: &str = "main";
+// structure for storing async function for loading module code
+type ModuleLoadingFunction =
+    fn(String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>>;
 
-impl ModuleLoader for DBModuleLoader {
+fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
+    async move {
+        let instance = JS_INSTANCE.lock().unwrap().as_mut().unwrap().clone();
+        match instance.dynamics.get_module_js(name.clone().as_str()).await {
+            Some(code) => Ok(code),
+            None => {
+                let err_msg = format!(
+                    "cannot load the main module '{}' from dynamics",
+                    name.clone()
+                );
+                Err(Error::msg(err_msg))
+            }
+        }
+    }
+    .boxed_local()
+}
+
+/// used for loading js modules
+pub struct FNModuleLoader {}
+
+static FNMODULE_LOADER_FUNCTION: Mutex<Option<ModuleLoadingFunction>> = Mutex::new(None);
+
+impl FNModuleLoader {
+    fn new(module_loader: ModuleLoadingFunction) -> FNModuleLoader {
+        {
+            let mut fn_holder = FNMODULE_LOADER_FUNCTION.lock().unwrap();
+            *fn_holder = Some(module_loader);
+        }
+        FNModuleLoader {}
+    }
+
+    async fn async_load(module_name: String) -> Result<ModuleSource, Error> {
+        let code = {
+            let fn_holder = FNMODULE_LOADER_FUNCTION.lock().unwrap();
+            if let Some(func) = *fn_holder {
+                func(module_name.clone()).boxed_local().await?
+            } else {
+                return Err(Error::msg("No loading function in FNModuleLoaderFunction"));
+            }
+        };
+
+        let module_type = ModuleType::JavaScript;
+        // ModuleType::Json
+        let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
+        let module_string =
+            Url::parse(format!("{}{}", nino_constants::MODULE_URI, module_name).as_str())?;
+        let module = ModuleSource::new(module_type, code, &module_string);
+        Ok(module)
+    }
+}
+
+impl ModuleLoader for FNModuleLoader {
     fn resolve(
         &self,
         specifier: &str,
@@ -168,10 +217,10 @@ impl ModuleLoader for DBModuleLoader {
         _kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, Error> {
         let url;
-        if specifier.starts_with(MODULE_URI) {
+        if specifier.starts_with(nino_constants::MODULE_URI) {
             url = Url::parse(&specifier)?;
         } else {
-            let url_str = format!("{}{}", MODULE_URI, specifier);
+            let url_str = format!("{}{}", nino_constants::MODULE_URI, specifier);
             url = Url::parse(&url_str)?;
         }
         Ok(url)
@@ -183,29 +232,10 @@ impl ModuleLoader for DBModuleLoader {
         _maybe_referrer: std::option::Option<&deno_core::url::Url>,
         _is_dyn_import: bool,
     ) -> Pin<Box<ModuleSourceFuture>> {
-        let module_specifier = module_specifier.clone();
-        async move {
-            // generic_error(format!(
-            //     "Provided module specifier \"{}\" is not a file URL.",
-            //     module_specifier
-            // ))
-            let module_path = &module_specifier.path()[1..];
-            println!("load module: {}", module_path);
-            let code;
-            if MODULE_MAIN == module_path {
-                code = ""; //MAIN_MODULE_SOURCE;
-            } else {
-                code = "export default async function() { return 'b'; }";
-            }
-
-            let module_type = ModuleType::JavaScript;
-            // ModuleType::Json
-            let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
-            let module_string = module_specifier.clone();
-            let module = ModuleSource::new(module_type, code, &module_string);
-            Ok(module)
-        }
-        .boxed_local()
+        //let module_specifier = module_specifier.clone();
+        let module_path = &module_specifier.path()[1..];
+        println!("load module: {}", &module_path);
+        Self::async_load(String::from(module_path)).boxed_local()
     }
 }
 
@@ -226,6 +256,7 @@ pub enum RetrievedV8Value<'s> {
 
 // This is done as a macro so that Rust can reuse the borrow on the scope,
 // instead of treating the returned value's reference to the scope as a new mutable borrow.
+/*
 macro_rules! extract_promise {
     ($scope: expr, $v: expr) => {
         // If it's a promise, try to get the value out.
@@ -241,6 +272,7 @@ macro_rules! extract_promise {
         }
     };
 }
+*/
 
 // old one using the deno runtime
 pub fn run_deno_thread(
@@ -250,7 +282,6 @@ pub fn run_deno_thread(
     create_state: fn(state: &mut OpState) -> (),
     javascript_source_code: &str,
     inspector_session_sx: Option<InspectorSessionProxy>,
-    dbg_ready: Option<Sender<bool>>,
 ) -> Poll<Result<(), Error>> {
     let need_inspector = inspector_session_sx.is_some();
 
@@ -278,7 +309,7 @@ fn get_error_class_name(e: &AnyError) -> &'static str {
 
 // new one using deno MainWorker
 pub async fn run_deno_main_thread(
-    module_loader: Rc<dyn ModuleLoader>,
+    module_loader: ModuleLoadingFunction,
     get_ops: fn() -> Vec<OpDecl>,
     create_state: fn(state: &mut OpState) -> (),
     main_module: &str,
@@ -313,6 +344,8 @@ pub async fn run_deno_main_thread(
         }
     };
 
+    let module_loader = Rc::new(FNModuleLoader::new(module_loader));
+
     let options = WorkerOptions {
         bootstrap: BootstrapOptions::default(),
         extensions,
@@ -340,7 +373,7 @@ pub async fn run_deno_main_thread(
         stdio: Default::default(),
     };
 
-    let main_uri = format!("{}{}", MODULE_URI, main_module).to_owned();
+    let main_uri = format!("{}{}", nino_constants::MODULE_URI, main_module).to_owned();
     let main_module = Url::parse(main_uri.as_str())?;
     let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
 

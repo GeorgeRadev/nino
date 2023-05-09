@@ -144,7 +144,6 @@ mod tests {
                     },
                     TEST_MAIN_MODULE_SOURCE,
                     None,
-                    None,
                 )
             }),
             poll_fn(|cx| {
@@ -157,7 +156,6 @@ mod tests {
                         ()
                     },
                     TEST_MAIN_MODULE_SOURCE,
-                    None,
                     None,
                 )
             }),

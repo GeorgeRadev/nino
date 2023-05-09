@@ -91,4 +91,12 @@ impl SettingsManager {
         )
         .await as u16
     }
+
+    pub async fn get_debug_port(&self) -> u16 {
+        self.get_setting_i32(
+            nino_constants::SETTINGS_NINO_DEBUG_PORT,
+            nino_constants::SETTINGS_NINO_DEBUG_PORT_DEFAULT,
+        )
+        .await as u16
+    }
 }

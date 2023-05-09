@@ -1,16 +1,11 @@
 #[cfg(test)]
 mod tests {
+    use crate::js::{init_platform, run_deno_main_thread};
+    use deno_core::futures::FutureExt;
+    use deno_core::{anyhow::Error, op, OpDecl, OpState};
+    use std::{future::Future, sync::Mutex};
+    use std::pin::Pin;
 
-    use crate::js::{init_platform, run_deno_main_thread, run_deno_thread};
-    use deno_core::{
-        anyhow::Error, futures::FutureExt, op, FastString, ModuleLoader, ModuleSource,
-        ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState, ResolutionKind,
-    };
-    use http_types::Url;
-    use std::{pin::Pin, rc::Rc, sync::Mutex};
-
-    struct TestModuleLoader;
-    const MODULE_URI: &str = "http://nino.db/";
     const MODULE_MAIN: &str = "main";
 
     static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
@@ -38,53 +33,20 @@ mod tests {
     })();
     "#;
 
-    impl ModuleLoader for TestModuleLoader {
-        fn resolve(
-            &self,
-            specifier: &str,
-            _referrer: &str,
-            _kind: ResolutionKind,
-        ) -> Result<ModuleSpecifier, Error> {
-            let url;
-            if specifier.starts_with(MODULE_URI) {
-                url = Url::parse(&specifier)?;
+    fn module_loader(
+        module_name: String,
+    ) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
+        async move {
+            // todo : implement DB load module
+            if MODULE_MAIN == module_name {
+                Ok(String::from(TEST_MAIN_MODULE_SOURCE))
             } else {
-                let url_str = format!("{}{}", MODULE_URI, specifier);
-                url = Url::parse(&url_str)?;
+                Ok(String::from(
+                    "export default async function() { return 42; }",
+                ))
             }
-            Ok(url)
         }
-
-        fn load(
-            &self,
-            module_specifier: &ModuleSpecifier,
-            _maybe_referrer: std::option::Option<&deno_core::url::Url>,
-            _is_dyn_import: bool,
-        ) -> Pin<Box<ModuleSourceFuture>> {
-            let module_specifier = module_specifier.clone();
-            async move {
-                // generic_error(format!(
-                //     "Provided module specifier \"{}\" is not a file URL.",
-                //     module_specifier
-                // ))
-                let module_path = &module_specifier.path()[1..];
-                println!("load module: {}", module_path);
-                let code;
-                if MODULE_MAIN == module_path {
-                    code = TEST_MAIN_MODULE_SOURCE;
-                } else {
-                    code = "export default async function() { return 42; }";
-                }
-
-                let module_type = ModuleType::JavaScript;
-                // ModuleType::Json
-                let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
-                let module_string = module_specifier.clone();
-                let module = ModuleSource::new(module_type, code, &module_string);
-                Ok(module)
-            }
-            .boxed_local()
-        }
+        .boxed_local()
     }
 
     struct TestTask {
@@ -135,19 +97,19 @@ mod tests {
         let r = tokio::try_join!(
             async {
                 run_deno_main_thread(
-                    Rc::new(TestModuleLoader {}),
+                    module_loader,
                     get_ops,
                     |state| {
                         state.put(TestTask { id: 1 });
                     },
                     "main",
-                    0,
+                    9229,
                 )
                 .await
             },
             async {
                 run_deno_main_thread(
-                    Rc::new(TestModuleLoader {}),
+                    module_loader,
                     get_ops,
                     |state| {
                         state.put(TestTask { id: 1 });
