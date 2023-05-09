@@ -24,6 +24,8 @@ pub const STATICS_TABLE: &str = concat!(PKG_NAME!(), "_static");
 pub const DYNAMICS_TABLE: &str = concat!(PKG_NAME!(), "_dynamic");
 
 /// JS settings
+/// 
+pub const MODULE_URI: &str = "http://nino.db/";
 pub const MAIN_MODULE: &str = "_main";
 
 /// SETTINGS table constants
@@ -43,3 +45,10 @@ pub const SETTINGS_NINO_WEB_SERVER_PORT_DEFAULT: i32 = 8080;
 /// defines how many connections to be in each connection pool
 pub const SETTINGS_DB_CONNECTION_POOL_SIZE: &str = "nino_db_connection_pool_size";
 pub const SETTINGS_DB_CONNECTION_POOL_SIZE_DEFAULT: i32 = 4;
+
+/// debug port
+pub const SETTINGS_NINO_DEBUG_PORT: &str = "nino_debug_port";
+pub const SETTINGS_NINO_DEBUG_PORT_DEFAULT: i32 = 0;
+
+
+

@@ -8,6 +8,7 @@ pub struct InitialSettings {
     pub db_pool_size: usize,
     pub js_thread_count: u16,
     pub server_port: u16,
+    pub debug_port: u16,
 }
 
 #[derive(Clone)]
