@@ -1,15 +1,15 @@
-// activate await functionality
-Deno.core.initializeAsyncOps();
 
 async function main() {
+    const core = Deno[Deno.internal].core;
     for (; ;) {
         try {
-            Deno.core.print('try\n');
-            const module = Deno.core.ops.op_begin_task();
+            core.print('try\n');
+            const module = core.ops.op_begin_task();
+            debugger;
             if (module) {
-                Deno.core.print('module ' + module + '\n');
+                core.print('module ' + module + '\n');
                 const mod = await import(module);
-                Deno.core.print('after import ' + (typeof mod) + '\n');
+                core.print('after import ' + (typeof mod) + '\n');
                 let handler = mod.default;
                 if (!handler) {
                     throw Exception("module '" + module + "' has no export default async function");
@@ -19,47 +19,47 @@ async function main() {
                 }
 
                 const handler_arguments_count = handler.length;
-                Deno.core.print('default handler with ' + handler_arguments_count + ' arguments\n');
+                core.print('default handler with ' + handler_arguments_count + ' arguments\n');
 
-                const request = Deno.core.ops.op_get_request();
+                const request = core.ops.op_get_request();
                 const send_response = async function (response) {
-                    Deno.core.print('response typeof ' + (typeof response) + '\n');
+                    core.print('response typeof ' + (typeof response) + '\n');
                     if (typeof response === 'string') {
-                        await Deno.core.ops.aop_set_response_send_text(response);
+                        await core.opAsync('aop_set_response_send_text', response);
                     } else if (response instanceof Number) {
-                        await Deno.core.ops.aop_set_response_send_text(String.valueOf(response));
+                        await core.opAsync('aop_set_response_send_text', String.valueOf(response));
                     } else if (response instanceof ArrayBuffer) {
-                        await Deno.core.ops.aop_set_response_send_buf(response);
+                        await core.opAsync('aop_set_response_send_buf', response);
                     } else {
-                        await Deno.core.ops.aop_set_response_send_json(JSON.stringify(response));
+                        await core.opAsync('aop_set_response_send_json', JSON.stringify(response));
                     }
                 }
 
                 if (handler_arguments_count == 1) {
                     // rest handler with request param
-                    Deno.core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
+                    core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
                     let response = await handler(request);
-                    Deno.core.print('after handler response' + response + '\n');
+                    core.print('after handler response' + response + '\n');
                     await send_response(response);
 
                 } else if (handler_arguments_count == 2) {
                     // servlet handler with request and response params
                     const response = {
                         set: function (key, value) {
-                            Deno.core.ops.op_set_response_header(key, value);
+                            core.ops.op_set_response_header(key, value);
                         },
                         status: function (status) {
-                            Deno.core.ops.op_set_response_status(status);
+                            core.ops.op_set_response_status(status);
                         },
                         send: async function (response) {
                             await send_response(response);
                         },
                     };
 
-                    Deno.core.print('before handler 2\n');
+                    core.print('before handler 2\n');
                     let result = await handler(request, response);
-                    Deno.core.print('result = ' + (result) + '\n');
-                    Deno.core.print('after handler 2\n');
+                    core.print('result = ' + (result) + '\n');
+                    core.print('after handler 2\n');
 
                 } else {
                     throw Exception("module '" + module + "' default async function should take 1 or 2 parameters for rest and servlet modes");
@@ -67,11 +67,11 @@ async function main() {
             }
         } catch (e) {
             let errorMessage = 'JS_ERROR: ' + e + '\n' + e.stack;
-            Deno.core.print(errorMessage + '\n');
-            Deno.core.ops.op_set_response_status(500);
-            await Deno.core.ops.aop_set_response_send_text(errorMessage);
+            core.print(errorMessage + '\n');
+            core.ops.op_set_response_status(500);
+            await core.opAsync('aop_set_response_send_text', errorMessage);
         } finally {
-            await Deno.core.ops.aop_end_task();
+            await core.opAsync('aop_end_task');
         }
     }
 }

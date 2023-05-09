@@ -1,6 +1,7 @@
 export default async function rest(request) {
-    Deno.core.print('js_rest request:' + request + '\n');
+    const core = Deno[Deno.internal].core;
+    core.print('js_rest request:' + JSON.stringify(request) + '\n');
     let result = { method: request.method, path: request.path };
-    Deno.core.print('js_rest request:' + result + '\n');
+    core.print('js_rest request:' + JSON.stringify(result) + '\n');
     return result;
 }

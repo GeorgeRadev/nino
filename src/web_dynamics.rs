@@ -89,7 +89,7 @@ impl DynamicsManager {
     // returns the longest matching path
     async fn get_matching_path(&self, path: &str) -> Option<String> {
         let query: String = format!(
-            "SELECT path FROM {} WHERE path = $1",
+            "SELECT name FROM {} WHERE name = $1",
             nino_constants::DYNAMICS_TABLE
         );
         match self.db.query(&query, &[&path]).await {

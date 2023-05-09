@@ -1,6 +1,7 @@
 use crate::db::DBManager;
 use crate::web_dynamics::DynamicsManager;
 use crate::{js_functions, nino_constants};
+use async_std::task::block_on;
 use deno_core::error::AnyError;
 use deno_core::{
     anyhow::Error, futures::FutureExt, url::Url, Extension, InspectorSessionProxy, JsRuntime,
@@ -18,6 +19,7 @@ use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
 //use tokio::macros::support::poll_fn;
 
@@ -61,21 +63,33 @@ impl JavaScriptManager {
             (instance.thread_count, instance.inspector_port)
         };
 
-        //for _ in 0..thread_count {
-        //tokio::spawn(
-        if let Err(e) = run_deno_main_thread(
-            module_loader,
-            js_functions::get_javascript_ops,
-            Self::create_js_context_state,
-            nino_constants::MAIN_MODULE,
-            inspector_port,
-        )
-        .await
-        {
-            println!("ERROR: {}", e.to_string());
+        for i in 0..thread_count {
+            let builder = thread::Builder::new().name(format!("JS Thread {}", i).to_string());
+            let _ = builder.spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+
+                rt.block_on(async move {
+                    if let Err(e) = run_deno_main_thread(
+                        module_loader,
+                        js_functions::get_javascript_ops,
+                        Self::create_js_context_state,
+                        nino_constants::MAIN_MODULE,
+                        if inspector_port > 0 {
+                            inspector_port + i
+                        } else {
+                            0
+                        },
+                    )
+                    .await
+                    {
+                        println!("ERROR: {}", e.to_string());
+                    }
+                })
+            });
         }
-        //);
-        //}
 
         /*
         for _ in 0..thread_count {
@@ -315,6 +329,9 @@ pub async fn run_deno_main_thread(
     main_module: &str,
     inspector_port: u16,
 ) -> Result<(), Error> {
+    let main_uri = format!("{}{}", nino_constants::MODULE_URI, main_module).to_owned();
+    let main_module = Url::parse(main_uri.as_str())?;
+
     let create_web_worker_cb = Arc::new(|_| {
         todo!("Web workers are not supported in the example");
     });
@@ -344,8 +361,6 @@ pub async fn run_deno_main_thread(
         }
     };
 
-    let module_loader = Rc::new(FNModuleLoader::new(module_loader));
-
     let options = WorkerOptions {
         bootstrap: BootstrapOptions::default(),
         extensions,
@@ -358,7 +373,7 @@ pub async fn run_deno_main_thread(
         web_worker_preload_module_cb: web_worker_event_cb.clone(),
         web_worker_pre_execute_module_cb: web_worker_event_cb,
         create_web_worker_cb,
-        module_loader,
+        module_loader: Rc::new(FNModuleLoader::new(module_loader)),
         npm_resolver: None,
         get_error_class_fn: Some(&get_error_class_name),
         cache_storage_dir: None,
@@ -367,14 +382,12 @@ pub async fn run_deno_main_thread(
         broadcast_channel: InMemoryBroadcastChannel::default(),
         shared_array_buffer_store: None,
         compiled_wasm_module_store: None,
-        maybe_inspector_server,
+        maybe_inspector_server: maybe_inspector_server.clone(),
         should_break_on_first_statement: false,
         should_wait_for_inspector_session: false,
         stdio: Default::default(),
     };
 
-    let main_uri = format!("{}{}", nino_constants::MODULE_URI, main_module).to_owned();
-    let main_module = Url::parse(main_uri.as_str())?;
     let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
 
     let mut worker = MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
@@ -382,5 +395,6 @@ pub async fn run_deno_main_thread(
     worker.execute_main_module(&main_module).await?;
     worker.run_event_loop(false).await?;
 
+    maybe_inspector_server.unwrap();
     Ok(())
 }
