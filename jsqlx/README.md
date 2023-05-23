@@ -2,9 +2,9 @@
 
 ```jsx
 const n = 1;
-const sql = [ `SELECT id, username 
+const sql = SELECT id, username 
             FROM users 
-            WHERE active =  $1  AND department= $2  AND department =  $3 `, active, ('test'+n), 'test'] 
+            WHERE active = :active AND department=:('test'+n) AND department = 'test';
 const html = <><h><span>{sql[0]}</span></h></>;
 ```
 
