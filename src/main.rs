@@ -13,6 +13,7 @@ mod trasport;
 mod web;
 mod web_dynamics;
 mod web_statics;
+mod web_requests;
 
 use nino_structures::InitialSettings;
 use std::sync::Arc;
@@ -92,11 +93,17 @@ async fn main_async(settings: InitialSettings) {
         let transport = trasport::TransportManager::new(db.clone());
         await_and_exit_on_error!(transport.transport_file("./transports/0_transport.json"));
     }
-    let dynamics = Arc::new(web_dynamics::DynamicsManager::new(
+
+    let requests = Arc::new(web_requests::RequestManager::new(
         db.clone(),
         db_notifier.get_subscriber(),
     ));
-    let statics = Arc::new(web_statics::StaticsManager::new(
+    
+    let dynamics = Arc::new(web_dynamics::DynamicManager::new(
+        db.clone(),
+        db_notifier.get_subscriber(),
+    ));
+    let statics = Arc::new(web_statics::StaticManager::new(
         db.clone(),
         db_notifier.get_subscriber(),
     ));
@@ -110,7 +117,7 @@ async fn main_async(settings: InitialSettings) {
 
     await_and_exit_on_error!(db_notifier.notify("string message".to_string()));
 
-    let web = web::WebManager::new(settings.server_port, statics.clone(), dynamics.clone());
+    let web = web::WebManager::new(settings.server_port, requests.clone(), statics.clone(), dynamics.clone());
     await_and_exit_on_error!(web.start());
 }
 

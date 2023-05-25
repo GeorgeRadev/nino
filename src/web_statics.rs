@@ -4,23 +4,16 @@ use crate::{db::DBManager, nino_constants, nino_functions, nino_structures};
 use async_std::net::TcpStream;
 use http_types::{Method, Mime, Request, Response, StatusCode};
 
-pub struct StaticsManager {
+#[derive(Clone)]
+pub struct StaticManager {
     db: DBManager,
 }
 
-impl Clone for StaticsManager {
-    fn clone(&self) -> Self {
-        Self {
-            db: self.db.clone(),
-        }
-    }
-}
-
-impl StaticsManager {
+impl StaticManager {
     pub fn new(
         db: DBManager,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
-    ) -> StaticsManager {
+    ) -> StaticManager {
         let this = Self { db };
         let thizz = this.clone();
         tokio::spawn(async move {

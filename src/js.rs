@@ -1,7 +1,6 @@
 use crate::db::DBManager;
-use crate::web_dynamics::DynamicsManager;
+use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
-use async_std::task::block_on;
 use deno_core::error::AnyError;
 use deno_core::{
     anyhow::Error, futures::FutureExt, url::Url, Extension, InspectorSessionProxy, JsRuntime,
@@ -29,7 +28,7 @@ pub struct JavaScriptManager {
     thread_count: u16,
     inspector_port: u16,
     db: DBManager,
-    dynamics: Arc<DynamicsManager>,
+    dynamics: Arc<DynamicManager>,
 }
 
 static JS_INSTANCE: Mutex<Option<JavaScriptManager>> = Mutex::new(None);
@@ -39,7 +38,7 @@ impl JavaScriptManager {
         thread_count: u16,
         inspector_port: u16,
         db: Option<DBManager>,
-        dynamics: Option<Arc<DynamicsManager>>,
+        dynamics: Option<Arc<DynamicManager>>,
     ) -> JavaScriptManager {
         {
             let mut inst = JS_INSTANCE.lock().unwrap();

@@ -1,5 +1,5 @@
 use crate::nino_structures;
-use crate::web_dynamics::DynamicsManager;
+use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
 use async_channel::Receiver;
 use deno_core::{anyhow::Error, op, OpDecl, OpState};
@@ -28,7 +28,7 @@ pub struct JSTask {
     pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
     pub web_task: Option<Box<nino_structures::WebTask>>,
     pub response: Response,
-    pub dynamics: Arc<DynamicsManager>,
+    pub dynamics: Arc<DynamicManager>,
     pub module: String,
     pub closed: bool,
 }

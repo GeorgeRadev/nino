@@ -1,26 +1,30 @@
 use crate::nino_functions;
-use crate::web_dynamics::DynamicsManager;
-use crate::web_statics::StaticsManager;
+use crate::web_dynamics::DynamicManager;
+use crate::web_requests::RequestManager;
+use crate::web_statics::StaticManager;
 use async_std::net::{TcpListener, TcpStream};
-use http_types::{Request, Response, StatusCode};
+use http_types::{Request, Response, StatusCode, Url};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 /// A Web Server with dispatching requests to static and dynamic manager
 pub struct WebManager {
     port: u16,
-    statics: Arc<StaticsManager>,
-    dynamics: Arc<DynamicsManager>,
+    requests: Arc<RequestManager>,
+    statics: Arc<StaticManager>,
+    dynamics: Arc<DynamicManager>,
 }
 
 impl WebManager {
     pub fn new(
         port: u16,
-        statics: Arc<StaticsManager>,
-        dynamics: Arc<DynamicsManager>,
+        requests: Arc<RequestManager>,
+        statics: Arc<StaticManager>,
+        dynamics: Arc<DynamicManager>,
     ) -> WebManager {
         WebManager {
             port,
+            requests,
             statics,
             dynamics,
         }
@@ -32,14 +36,21 @@ impl WebManager {
             .map_err(|e| e.to_string())?;
         println!("starting HTTP server at http://localhost:{}", self.port);
         let bl = Box::new(listener);
-        Self::listening(bl, self.statics.clone(), self.dynamics.clone()).await;
+        Self::listening(
+            bl,
+            self.requests.clone(),
+            self.statics.clone(),
+            self.dynamics.clone(),
+        )
+        .await;
         Ok(())
     }
 
     async fn listening(
         listener: Box<TcpListener>,
-        statics: Arc<StaticsManager>,
-        dynamics: Arc<DynamicsManager>,
+        requests: Arc<RequestManager>,
+        statics: Arc<StaticManager>,
+        dynamics: Arc<DynamicManager>,
     ) -> ! {
         // serving loop
         loop {
@@ -49,6 +60,7 @@ impl WebManager {
                     // spawn new task
                     tokio::task::spawn(Self::serve_request(
                         Box::new(stream),
+                        requests.clone(),
                         statics.clone(),
                         dynamics.clone(),
                     ));
@@ -62,8 +74,9 @@ impl WebManager {
 
     async fn serve_request(
         stream: Box<TcpStream>,
-        statics: Arc<StaticsManager>,
-        dynamics: Arc<DynamicsManager>,
+        requests: Arc<RequestManager>,
+        statics: Arc<StaticManager>,
+        dynamics: Arc<DynamicManager>,
     ) {
         let from_addres = match stream.peer_addr() {
             Ok(address) => address,
@@ -83,8 +96,15 @@ impl WebManager {
                 if let Some(request) = result {
                     let (request, _) = request;
                     // queue task with request
-                    Self::dispatch_request(from_addres, request, stream.clone(), statics, dynamics)
-                        .await;
+                    Self::dispatch_request(
+                        from_addres,
+                        request,
+                        stream.clone(),
+                        requests,
+                        statics,
+                        dynamics,
+                    )
+                    .await;
                     return;
                 }
             }
@@ -102,8 +122,9 @@ impl WebManager {
         from_address: SocketAddr,
         request: Request,
         stream: Box<TcpStream>,
-        statics: Arc<StaticsManager>,
-        dynamics: Arc<DynamicsManager>,
+        requests: Arc<RequestManager>,
+        statics: Arc<StaticManager>,
+        dynamics: Arc<DynamicManager>,
     ) {
         let method = request.method();
         let url = request.url();
@@ -112,28 +133,61 @@ impl WebManager {
 
         println!("REQUEST: {} {} {}", method, from_address, url);
 
-        if statics
-            .serve_static(path, request.clone(), stream.clone())
-            .await
-        {
-            //ok - sream should be served and closed
-        } else if dynamics
-            .serve_dynamic(path, request.clone(), stream.clone())
-            .await
-        {
-            //ok - sream should be served and closed
-        } else {
-            // return 404 not found
-            // TODO: introduce 404 handler
-            let mut response = Response::new(StatusCode::NotFound);
-            let content = format!("url not found: {} ", url);
-            response.set_body(http_types::Body::from_string(content));
-            if let Err(error) =
-                nino_functions::send_response_to_stream(stream.clone().as_mut(), &mut response)
-                    .await
-            {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        // check if requests is servable
+        let request_info = match requests.get_request(path).await {
+            None => {
+                Self::response_404(stream, url).await;
+                return;
             }
+            Some(request_info) => request_info,
+        };
+
+        if request_info.dynamic {
+            // serve from dynamic resources
+            if request_info.execute {
+                // execute the JS
+                if dynamics
+                    .execute_dynamic(request_info.name.as_str(), request.clone(), stream.clone())
+                    .await
+                {
+                    //ok - stream should be served and closed
+                } else {
+                    Self::response_404(stream, url).await;
+                }
+            } else {
+                // return js code as response
+                if dynamics
+                    .serve_dynamic(request_info.name.as_str(), stream.clone())
+                    .await
+                {
+                    //ok - stream should be served and closed
+                } else {
+                    Self::response_404(stream, url).await;
+                }
+            }
+        } else {
+            //serve static resources
+            if statics
+                .serve_static(request_info.name.as_str(), request.clone(), stream.clone())
+                .await
+            {
+                //ok - stream should be served and closed
+            } else {
+                Self::response_404(stream, url).await;
+            }
+        }
+    }
+
+    async fn response_404(stream: Box<TcpStream>, url: &Url) {
+        // return 404 not found
+        // TODO: introduce 404 handler
+        let mut response = Response::new(StatusCode::NotFound);
+        let content = format!("url not found: {} ", url);
+        response.set_body(http_types::Body::from_string(content));
+        if let Err(error) =
+            nino_functions::send_response_to_stream(stream.clone().as_mut(), &mut response).await
+        {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
     }
 }

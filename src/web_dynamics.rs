@@ -1,3 +1,4 @@
+use crate::nino_functions;
 use crate::{
     db::DBManager,
     nino_constants,
@@ -6,9 +7,11 @@ use crate::{
 use async_channel::{Receiver, Sender};
 use async_std::net::TcpStream;
 use http_types::Request;
+use http_types::{Mime, Response, StatusCode};
+use std::str::FromStr;
 
 #[derive(Clone)]
-pub struct DynamicsManager {
+pub struct DynamicManager {
     db: DBManager,
     web_task_sx: Sender<Box<nino_structures::WebTask>>,
     web_task_rx: Receiver<Box<nino_structures::WebTask>>,
@@ -18,11 +21,11 @@ pub struct DynamicsManager {
     )>,
 }
 
-impl DynamicsManager {
+impl DynamicManager {
     pub fn new(
         db: DBManager,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
-    ) -> DynamicsManager {
+    ) -> DynamicManager {
         let (web_task_sx, web_task_rx) =
             async_channel::unbounded::<Box<nino_structures::WebTask>>();
         let (module_sx, mut module_rx) = tokio::sync::mpsc::unbounded_channel::<(
@@ -132,6 +135,30 @@ impl DynamicsManager {
     }
 
     pub async fn serve_dynamic(
+        &self,
+        path: &str,
+        mut stream: Box<TcpStream>,
+    ) -> bool {
+        // look for matching path
+        if let Some(js_module) = self.get_matching_path(path).await {
+            let mut response = Response::new(StatusCode::Ok);
+            response.set_content_type(Mime::from_str("application/javascript").unwrap());
+            response.set_body(http_types::Body::from(js_module));
+            match nino_functions::send_response_to_stream(stream.as_mut(), &mut response).await {
+                Ok(_) => {
+                     true
+                }
+                Err(error) => {
+                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                    false
+                }
+            }
+        } else {
+            false
+        }
+    }
+
+    pub async fn execute_dynamic(
         &self,
         path: &str,
         request: Request,
