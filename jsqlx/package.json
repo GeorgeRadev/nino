@@ -4,8 +4,8 @@
   "description": "Babel based jsx and sql transpiling to js",
   "main": "index.js",
   "scripts": {
-    "run": "node src/index.js",
-    "pack": "webpack"
+    "run": "node tests/jsqlx.test.js",
+    "pack": "webpack --mode production"
   },
   "author": "",
   "license": "ISC",
