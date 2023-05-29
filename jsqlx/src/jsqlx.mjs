@@ -1,6 +1,5 @@
-'use strict';
 import babel from '@babel/core';
-import { sqlToArray } from "./jsql.js";
+import { sqlToArray } from "./jsql.mjs";
 
 export default function jsqlx(code) {
     code = sqlToArray(code);

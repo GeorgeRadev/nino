@@ -1,5 +1,4 @@
-'use strict';
-import jsqlx from "../src";
+const jsqlx = await import("./jsqlx.mjs");
 
 var code = `
 const n = 1;
@@ -12,7 +11,7 @@ const html = <><h><span>{sql[0]}</span></h></>;
 console.log("----------------");
 console.log(code);
 
-code = jsqlx(code);
+code = jsqlx.default(code);
 console.log("----------------");
-console.log(output.code);
+console.log(code);
 console.log("----------------");

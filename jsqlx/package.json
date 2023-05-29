@@ -4,15 +4,25 @@
   "description": "Babel based jsx and sql transpiling to js",
   "main": "index.js",
   "scripts": {
-    "run": "node tests/jsqlx.test.js",
-    "pack": "webpack --mode production"
+    "run": "node src/index.js",
+    "pack": "webpack --mode production --config webpack.config.js"
   },
   "author": "",
   "license": "ISC",
-  "type": "module",
+  "_______type": "module",
   "dependencies": {
     "@babel/core": "^7.21.8",
     "@babel/plugin-transform-react-jsx": "^7.21.5",
+    "@babel/preset-typescript": "^7.21.5",
     "moo": "^0.5.2"
+  },
+  "devDependencies": {
+    "@webpack-cli/generators": "^3.0.4",
+    "webpack": "^5.84.1",
+    "webpack-cli": "^5.1.1"
+  },
+  "browser": {
+    "path": false,
+    "stream": false
   }
 }

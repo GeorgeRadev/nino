@@ -1,4 +1,3 @@
-'use strict';
 import moo from "moo";
 
 let lexer = moo.compile({
