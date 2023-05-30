@@ -10,7 +10,8 @@ module.exports = {
     },
     output: {
         path: dist,
-        filename: "[name].min.js"
+        filename: "[name].min.js",
+        libraryTarget: "commonjs-module"
     },
     target: "node",
 }

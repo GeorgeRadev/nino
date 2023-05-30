@@ -1,4 +1,4 @@
-const jsqlx = await import("./jsqlx.mjs");
+const jsqlx = await import("./dist/jsqlx.min.js");
 
 var code = `
 const n = 1;
@@ -11,7 +11,7 @@ const html = <><h><span>{sql[0]}</span></h></>;
 console.log("----------------");
 console.log(code);
 
-code = jsqlx.default(code);
+code = jsqlx.default.default(code);
 console.log("----------------");
 console.log(code);
 console.log("----------------");

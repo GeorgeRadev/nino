@@ -17,3 +17,10 @@ const sql = [`SELECT id, username
             WHERE active =  $1  AND department= $2  AND department =  $3 `, active, 'test' + n, 'test'];
 const html = _jsx(_Fragment, null, _jsx("h", null, _jsx("span", null, sql[0])));
 ```
+
+## run
+demo can be tested via:
+```
+node app.js
+```
+the production version is build via webpack and is in **./dist** folder
