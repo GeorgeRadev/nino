@@ -6,7 +6,14 @@ async function main() {
             core.print('try\n');
             const module = core.ops.op_begin_task();
             debugger;
-            if (module) {
+            const invalidation_json = core.ops.op_get_invalidation_message();
+            if (invalidation_json) {
+                //request for cache invalidation
+                const invalidationMessage = JSON.parse();
+                const threadId = core.ops.op_get_thread_id();
+                core.print('invalidation message (' + threadId + '): ' + JSON.stringify(invalidationMessage) + '\n');
+            } else if (module) {
+                // request for module execution
                 core.print('module ' + module + '\n');
                 const mod = await import(module);
                 core.print('after import ' + (typeof mod) + '\n');

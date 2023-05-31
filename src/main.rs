@@ -2,18 +2,18 @@ mod db;
 mod db_notification;
 mod db_settings;
 mod js;
-mod js_test;
-mod js_test_worker;
-mod js_test_debug;
 mod js_functions;
+mod js_test;
+mod js_test_debug;
+mod js_test_worker;
 mod nino_constants;
 mod nino_functions;
 mod nino_structures;
 mod trasport;
 mod web;
 mod web_dynamics;
-mod web_statics;
 mod web_requests;
+mod web_statics;
 
 use nino_structures::InitialSettings;
 use std::sync::Arc;
@@ -98,18 +98,23 @@ async fn main_async(settings: InitialSettings) {
         db.clone(),
         db_notifier.get_subscriber(),
     ));
-    
-    let dynamics = Arc::new(web_dynamics::DynamicManager::new(
-        db.clone(),
-        db_notifier.get_subscriber(),
-    ));
+
     let statics = Arc::new(web_statics::StaticManager::new(
         db.clone(),
         db_notifier.get_subscriber(),
     ));
+
+    let dynamics = Arc::new(web_dynamics::DynamicManager::new(
+        db.clone(),
+        settings.js_thread_count,
+        db_notifier.get_subscriber(),
+    ));
+
     let _js_engine = js::JavaScriptManager::instance(
-        settings.js_thread_count, settings.debug_port,
+        settings.js_thread_count,
+        settings.debug_port,
         Some(db.clone()),
+        //Some(db_notifier.get_subscriber()),
         Some(dynamics.clone()),
     );
     // start js threads
@@ -117,7 +122,12 @@ async fn main_async(settings: InitialSettings) {
 
     await_and_exit_on_error!(db_notifier.notify("string message".to_string()));
 
-    let web = web::WebManager::new(settings.server_port, requests.clone(), statics.clone(), dynamics.clone());
+    let web = web::WebManager::new(
+        settings.server_port,
+        requests.clone(),
+        statics.clone(),
+        dynamics.clone(),
+    );
     await_and_exit_on_error!(web.start());
 }
 

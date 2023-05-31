@@ -13,9 +13,14 @@ pub struct InitialSettings {
 
 #[derive(Clone)]
 pub struct WebTask {
-    pub js_module: String,
-    pub request: Request,
-    pub stream: Box<TcpStream>,
+    //request task
+    pub is_request: bool,
+    pub js_module: Option<String>,
+    pub request: Option<Request>,
+    pub stream: Option<Box<TcpStream>>,
+    // invalidate task
+    pub is_invalidate: bool,
+    pub message: Option<String>,
 }
 
 #[derive(Clone)]

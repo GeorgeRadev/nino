@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use deadpool_postgres::{Manager, ManagerConfig, Object, Pool, RecyclingMethod};
+use std::sync::Arc;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{Config, Row};
 
@@ -26,7 +26,7 @@ impl DBManager {
                 line!(),
                 db.err().unwrap().to_string()
             );
-            eprintln!("{}",err_str);
+            eprintln!("{}", err_str);
             return Err(err_str);
         }
         let (_client, _connection) = db.unwrap();
@@ -84,7 +84,7 @@ impl DBManager {
         let db = self.get_connection().await.map_err(|e| e.to_string())?;
         db.query_one(query, params).await.map_err(|e| e.to_string())
     }
-
+    /*
     pub async fn query_callback(
         &self,
         query: &str,
@@ -100,4 +100,5 @@ impl DBManager {
         }
         Ok(count)
     }
+    */
 }

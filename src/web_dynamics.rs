@@ -13,59 +13,30 @@ use std::str::FromStr;
 #[derive(Clone)]
 pub struct DynamicManager {
     db: DBManager,
+    js_thread_count: u16,
     web_task_sx: Sender<Box<nino_structures::WebTask>>,
     web_task_rx: Receiver<Box<nino_structures::WebTask>>,
-    module_sx: tokio::sync::mpsc::UnboundedSender<(
-        deno_core::ModuleSpecifier,
-        tokio::sync::mpsc::Sender<String>,
-    )>,
 }
 
 impl DynamicManager {
     pub fn new(
         db: DBManager,
+        js_thread_count: u16,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
     ) -> DynamicManager {
+        // web_task channel is used to send tasks to the js threads
         let (web_task_sx, web_task_rx) =
             async_channel::unbounded::<Box<nino_structures::WebTask>>();
-        let (module_sx, mut module_rx) = tokio::sync::mpsc::unbounded_channel::<(
-            deno_core::ModuleSpecifier,
-            tokio::sync::mpsc::Sender<String>,
-        )>();
         let this = Self {
             db,
+            js_thread_count,
             web_task_sx,
             web_task_rx,
-            module_sx,
         };
         let thizz = this.clone();
         tokio::spawn(async move {
             thizz.invalidator(db_subscribe).await;
         });
-        let thizzz = this.clone();
-        tokio::spawn(async move {
-            loop {
-                match module_rx.recv().await {
-                    Some((path, sender)) => {
-                        let path = crate::nino_functions::normalize_path(path.path().to_string());
-                        let mut code = thizzz.get_module_js(&path).await;
-                        if code.is_none() {
-                            code = Some(String::from(""));
-                        }
-                        loop {
-                            if sender.send(code.clone().unwrap()).await.is_ok() {
-                                break;
-                            }
-                        }
-                    }
-                    None => {}
-                }
-            }
-        });
-        // let (sender, receiver) = spmc::channel::<String>();
-        // let _r = this.get_module_js_channel(String::from("test_servlet"), sender);
-        // let code = receiver.recv();
-        // eprintln!("code: {}", code.unwrap());
         this
     }
 
@@ -84,6 +55,20 @@ impl DynamicManager {
                 }
                 Ok(message) => {
                     println!("got message: {}", message.json);
+                    // send invalidation messages to the js threads
+                    let web_task = Box::new(nino_structures::WebTask {
+                        is_request: false,
+                        js_module: None,
+                        request: None,
+                        stream: None,
+                        is_invalidate: true,
+                        message: Some(message.json),
+                    });
+                    for _ in 0..self.js_thread_count {
+                        if let Err(error) = self.web_task_sx.send(web_task.clone()).await {
+                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                        }
+                    }
                 }
             }
         }
@@ -134,20 +119,14 @@ impl DynamicManager {
         None
     }
 
-    pub async fn serve_dynamic(
-        &self,
-        path: &str,
-        mut stream: Box<TcpStream>,
-    ) -> bool {
+    pub async fn serve_dynamic(&self, path: &str, mut stream: Box<TcpStream>) -> bool {
         // look for matching path
         if let Some(js_module) = self.get_matching_path(path).await {
             let mut response = Response::new(StatusCode::Ok);
             response.set_content_type(Mime::from_str("application/javascript").unwrap());
             response.set_body(http_types::Body::from(js_module));
             match nino_functions::send_response_to_stream(stream.as_mut(), &mut response).await {
-                Ok(_) => {
-                     true
-                }
+                Ok(_) => true,
                 Err(error) => {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                     false
@@ -168,9 +147,12 @@ impl DynamicManager {
         if let Some(js_module) = self.get_matching_path(path).await {
             //send new task to the javascript threads
             let web_task = Box::new(nino_structures::WebTask {
-                js_module,
-                request,
-                stream,
+                is_request: true,
+                js_module: Some(js_module),
+                request: Some(request),
+                stream: Some(stream),
+                is_invalidate: false,
+                message: None,
             });
             match self.web_task_sx.send(web_task).await {
                 Ok(_) => true,

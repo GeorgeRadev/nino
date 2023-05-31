@@ -69,7 +69,7 @@ pub async fn send_response_to_stream(
     const HTTP: &str = "HTTP/1.1";
     const CRLF: &str = "\r\n";
     const SEPARATOR: &str = ": ";
-    const CONTENT_TYPE: &str = "Content-Type";
+    //const CONTENT_TYPE: &str = "Content-Type";
     const CONTENT_LENGTH: &str = "Content-Length";
 
     let body = match response.body_bytes().await {

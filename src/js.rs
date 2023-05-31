@@ -7,7 +7,7 @@ use deno_core::{
     ModuleLoader, ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState,
     RuntimeOptions,
 };
-use deno_core::{v8, FastString, ResolutionKind};
+use deno_core::{FastString, ResolutionKind};
 use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
 use deno_runtime::deno_web::BlobStore;
 use deno_runtime::inspector_server::InspectorServer;
@@ -34,28 +34,45 @@ pub struct JavaScriptManager {
 static JS_INSTANCE: Mutex<Option<JavaScriptManager>> = Mutex::new(None);
 
 impl JavaScriptManager {
+    /**
+     * Greate and initialize Singleton Manager instance.
+     * use start() to begin listening.
+     */
     pub fn instance(
         thread_count: u16,
         inspector_port: u16,
         db: Option<DBManager>,
+        //db_subscribe: Option<tokio::sync::broadcast::Receiver<nino_structures::Message>>,
         dynamics: Option<Arc<DynamicManager>>,
     ) -> JavaScriptManager {
         {
             let mut inst = JS_INSTANCE.lock().unwrap();
             if inst.is_none() {
                 init_platform(thread_count);
+
                 let this = JavaScriptManager {
                     thread_count,
                     inspector_port,
                     db: db.unwrap(),
                     dynamics: dynamics.unwrap().clone(),
                 };
+                /*
+                if let Some(db_subscribe) = db_subscribe {
+                    let thizz = this.clone();
+                    tokio::spawn(async move {
+                        thizz.invalidator(db_subscribe).await;
+                    });
+                }
+                */
                 inst.replace(this);
             }
         }
         JS_INSTANCE.lock().unwrap().as_mut().unwrap().clone()
     }
 
+    // start all js processing threads
+    // inspector port is attached only to the first js instance
+    // for developing purposes use single js instance and debugger will attach to it
     pub async fn start() {
         let (thread_count, inspector_port) = {
             let instance = Self::instance(0, 0, None, None);
@@ -103,6 +120,10 @@ impl JavaScriptManager {
         */
     }
 
+    /**
+     * Creates the js thread context with sequential id, and attach all managers inside.
+     * Allocating resources to the thread and releasing them must be handled in the main javascript try finaly block.
+     */
     fn create_js_context_state(state: &mut OpState) -> () {
         static JS_THREAD_ID: std::sync::atomic::AtomicUsize =
             std::sync::atomic::AtomicUsize::new(0);
@@ -115,11 +136,16 @@ impl JavaScriptManager {
             id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
             db: inst.db.clone(),
             web_task_rx: inst.dynamics.get_web_task_rx(),
+            //request defaults
+            is_request: false,
             web_task: None,
             response: Response::new(200),
             dynamics: js.dynamics.clone(),
             module: String::from(""),
             closed: false,
+            //invalidate defaults
+            is_invalidate: false,
+            message: None,
         });
     }
     /*
@@ -252,6 +278,7 @@ impl ModuleLoader for FNModuleLoader {
     }
 }
 
+/*
 pub struct Task {
     pub id: u32,
 }
@@ -269,7 +296,7 @@ pub enum RetrievedV8Value<'s> {
 
 // This is done as a macro so that Rust can reuse the borrow on the scope,
 // instead of treating the returned value's reference to the scope as a new mutable borrow.
-/*
+
 macro_rules! extract_promise {
     ($scope: expr, $v: expr) => {
         // If it's a promise, try to get the value out.
@@ -288,6 +315,7 @@ macro_rules! extract_promise {
 */
 
 // old one using the deno runtime
+#[allow(dead_code)]
 pub fn run_deno_thread(
     cx: &mut Context,
     module_loader: Rc<dyn ModuleLoader>,
