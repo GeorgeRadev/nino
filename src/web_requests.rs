@@ -37,7 +37,7 @@ impl RequestManager {
                 }
                 Ok(message) => {
                     // todo! innvalidate cache
-                    println!("got message: {}", message.json);
+                    println!("web got message: {}", message.json);
                 }
             }
         }

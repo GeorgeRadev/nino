@@ -54,7 +54,7 @@ impl DynamicManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("got message: {}", message.json);
+                    println!("dymnamics got message: {}", message.json);
                     // send invalidation messages to the js threads
                     let web_task = Box::new(nino_structures::WebTask {
                         is_request: false,

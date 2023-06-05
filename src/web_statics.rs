@@ -32,7 +32,7 @@ impl StaticManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("got message: {}", message.json);
+                    println!("statics got message: {}", message.json);
                 }
             }
         }

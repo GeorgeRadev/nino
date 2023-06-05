@@ -57,13 +57,6 @@
     ],
     "requests": [
         {
-            "path": "favicon.ico",
-            "name": "favicon.ico",
-            "dynamic": false,
-            "authorize": false,
-            "execute": false
-        },
-        {
             "path": "/",
             "name": "index.html",
             "dynamic": false,
@@ -71,8 +64,22 @@
             "execute": false
         },
         {
-            "path": "test_rest.json",
-            "name": "test_rest",
+            "path": "favicon.ico",
+            "name": "favicon.ico",
+            "dynamic": false,
+            "authorize": false,
+            "execute": false
+        },
+        {
+            "path": "static.json",
+            "name": "static.json",
+            "dynamic": false,
+            "authorize": false,
+            "execute": false
+        },
+        {
+            "path": "dynamic.json",
+            "name": "dynamic_json",
             "dynamic": true,
             "authorize": true,
             "execute": true
@@ -87,14 +94,19 @@
     ],
     "statics": [
         {
+            "name": "index.html",
+            "mime": "text/html; charset=UTF-8",
+            "file": "./index.html"
+        },
+        {
             "name": "favicon.ico",
             "mime": "image/x-icon",
             "file": "./favicon.ico"
         },
         {
-            "name": "index.html",
-            "mime": "text/html; charset=UTF-8",
-            "file": "./index.html"
+            "name": "static.json",
+            "mime": "application/json",
+            "file": "./static.json"
         }
     ],
     "dynamics": [
@@ -103,8 +115,8 @@
             "file": "main.js"
         },
         {
-            "name": "test_rest",
-            "file": "./test_rest.js"
+            "name": "dynamic_json",
+            "file": "./dynamic_json.js"
         },
         {
             "name": "test_servlet",
