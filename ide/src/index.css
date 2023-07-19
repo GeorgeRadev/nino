@@ -1,0 +1,131 @@
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 42px;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+span.size-20 {
+  font-size: 20px;
+}
+
+span.size-32 {
+  font-size: 32px;
+}
+
+span.size-48 {
+  font-size: 48px;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+#nino-ide,
+#nino-ide-contaner {
+  width: 100%;
+  height: 100%;
+  white-space: nowrap;
+  position: relative;
+  white-space: normal;
+  position: absolute;
+  background-color: #082773;
+}
+
+#nino-ide-actions {
+  left: 0px;
+  width: 48px;
+  height: 100%;
+  white-space: normal;
+  position: absolute;
+  background-color: #082773;
+  color: #FFFFFF;
+  overflow: hidden;
+}
+
+
+#nino-ide-actions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-top: 8px;
+}
+
+#nino-ide-actions ul li a {
+  color: #FFFFFF;
+}
+
+#nino-ide-actions ul li {
+  opacity: 50%;
+  border-left: 2px solid #082773;
+}
+
+#nino-ide-actions ul li.active {
+  opacity: 100%;
+  border-left: 2px solid #0d98fe;
+}
+
+#nino-ide-selectors {
+  left: 48px;
+  width: 300px;
+  height: 100%;
+  white-space: normal;
+  position: absolute;
+  background-color: #F2F2F2;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#nino-ide-viewers {
+  left: 348px;
+  width: calc(100% - 348px);
+  height: 100%;
+  white-space: normal;
+  position: absolute;
+  background-color: #FBFBFB;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#nino-ide-viewer-tabs {
+  left: 348px;
+  width: calc(100% - 348px);
+  height: 40px;
+}
+
+#nino-ide-viewer {
+  left: 348px;
+  width: calc(100% - 348px);
+  height: calc(100% - 40px);
+}
+
+
+
+#nino-ide-selector-title {
+  width: 300px;
+  font-size: 11px;
+  cursor: default;
+  font-weight: 400;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 20px;
+}
