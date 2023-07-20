@@ -1,24 +1,8 @@
 import React from 'react';
+import SelectorDB from './SelectorDB';
+import SelectorRequests from './SelectorRequests';
 
-function RequestsSelector({ IDEContext }) {
-  return (
-    <div>
-      <div className='nino-ide-selector-title'>RequestsSelector</div>
-      <div >RequestsSelector body</div>
-    </div>
-  );
-}
-
-function DBSelector({ IDEContext }) {
-  return (
-    <div>
-      <div className='nino-ide-selector-title'>DB EXPLORER AN SOMETHING LONGER THAN THE LENGTH</div>
-      <div >DBSelector</div>
-    </div>
-  );
-}
-
-function ToggableSelector({ name, IDEContext, children }) {
+function SelectorToggable({ name, IDEContext, children }) {
   const selectedAction = IDEContext.selectedAction;
   return (
     <div style={{ display: selectedAction === name ? "block" : "none" }}>
@@ -27,19 +11,20 @@ function ToggableSelector({ name, IDEContext, children }) {
   );
 }
 
-export default function Viewers({ IDEContext }) {
+export default function Selectors({ IDEContext }) {
   const [repaint, repaintViewers] = React.useState();
   IDEContext.repaintViewers = repaintViewers
   IDEContext.repaint = repaint
+
   return (
     <div id='nino-ide-selectors'>
-      <ToggableSelector name="requests" IDEContext={IDEContext}>
-        <RequestsSelector IDEContext={IDEContext} />
-      </ToggableSelector>
+      <SelectorToggable name="requests" IDEContext={IDEContext}>
+        <SelectorRequests IDEContext={IDEContext} />
+      </SelectorToggable>
 
-      <ToggableSelector name="databases" IDEContext={IDEContext}>
-        <DBSelector IDEContext={IDEContext} />
-      </ToggableSelector>
+      <SelectorToggable name="databases" IDEContext={IDEContext}>
+        <SelectorDB IDEContext={IDEContext} />
+      </SelectorToggable>
     </div>
   );
 };
