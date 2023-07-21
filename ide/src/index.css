@@ -59,6 +59,12 @@ code {
   overflow-y: auto;
 }
 
+#nino-ide-actions::-webkit-scrollbar {
+  background: #082773;
+  width: 1px;
+  height: 1px;
+}
+
 #nino-ide-actions ul {
   list-style: none;
   margin: 0;
@@ -92,6 +98,11 @@ code {
   overflow-y: auto;
   white-space: nowrap;
 }
+#nino-ide-selectors::-webkit-scrollbar {
+  background: #F2F2F2;
+  width: 1px;
+  height: 1px;
+}
 
 #nino-ide-selector-title {
   font-size: 11px;
@@ -114,9 +125,9 @@ code {
   background-color: #FBFBFB;
 }
 
-.nino-ide-editor-tabs-background{
+.nino-ide-editor-tabs-background {
   width: 100%;
-  height: 39px;
+  height: 34px;
   position: absolute;
   background-color: #FBFBFB;
   border-bottom: 1px solid #082773;
@@ -125,7 +136,7 @@ code {
 .nino-ide-editor-tabs {
   transform: rotateX(180deg);
   width: 100%;
-  height: 40px;
+  height: 35px;
   position: absolute;
   background-color: transparent;
   overflow-x: auto;
@@ -133,13 +144,26 @@ code {
   white-space: nowrap;
 }
 
+.nino-ide-editor-tabs::-webkit-scrollbar {
+  background: transparent;
+  width: 1px;
+  height: 1px;
+}
+
 .nino-ide-editor-tab {
   transform: rotateX(180deg);
-  height: 32px;
+  height: 26px;
   border-bottom: 1px solid #FFF;
   background-color: #FBFBFB;
   overflow: hidden;
   display: inline-block;
+}
+
+.tab-text {
+  padding: 1px;
+}
+.tab-close {
+  color: #999;
 }
 
 .tab-active {
@@ -154,7 +178,7 @@ code {
 }
 
 .nino-ide-editor-container {
-  top: 41px;
+  top: 36px;
   width: 100%;
   height: calc(100% - 41px);
   background-color: #FFFFFF;

@@ -45,9 +45,9 @@ function EditorTabs({ IDEContext }) {
   function mapTabs(tab) {
     return <div key={tab.objectID} className={"nino-ide-editor-tab" + (tab.objectID === IDEContext.tabSelected ? " tab-active" : "")}>
       &nbsp;&nbsp;
-      <div className='tab-link' onClick={() => activateTab(tab.objectID)}>{tab.objectID}</div>
+      <div className='tab-link tab-text' onClick={() => activateTab(tab.objectID)}>{tab.objectID}</div>
       &nbsp;&nbsp;
-      <div className='tab-link' onClick={() => closeTab(tab.objectID)}>X</div>
+      <div className='tab-link tab-close' onClick={() => closeTab(tab.objectID)}>x</div>
       &nbsp;&nbsp;
     </div>
   }
