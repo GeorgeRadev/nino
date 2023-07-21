@@ -70,7 +70,9 @@ function EditorToggable({ IDEContext }) {
   }
   return (
     <div className='nino-ide-editor-container'>
-      {IDEContext.tabs.map(mapTabsToggle)}
+      <div style={{ padding: "10px" }}>
+        {IDEContext.tabs.map(mapTabsToggle)}
+      </div>
     </div>
   );
 }
@@ -93,6 +95,8 @@ export default function Editors({ IDEContext }) {
 
   return (
     <div id='nino-ide-editors'>
+      <div className='nino-ide-editor-tabs-background'>
+      </div>
       <EditorTabs IDEContext={IDEContext} />
       <EditorToggable IDEContext={IDEContext} />
 

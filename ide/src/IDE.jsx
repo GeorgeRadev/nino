@@ -3,8 +3,6 @@ import Actions from './Actions';
 import Selectors from './Selectors';
 import Editors from './Editors';
 
-// https://fonts.google.com/icons?icon.set=Material+Symbols
-
 export default function IDE() {
   const IDEContext = {
     setSelectedAction: null,

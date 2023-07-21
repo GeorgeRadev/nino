@@ -1,5 +1,7 @@
 import React from 'react';
 
+// https://fonts.google.com/icons?icon.set=Material+Symbols
+
 export const ActionDetails = [
   { name: "separator1" },
   { name: 'requests', image: 'rebase', alt: "request paths" },
@@ -9,6 +11,8 @@ export const ActionDetails = [
   { name: 'databases', image: 'database', alt: "database" },
   { name: 'schedules', image: 'update', alt: "schedule" },
   { name: "separator2" },
+  { name: 'user', image: 'face', alt: "user acount" },
+  { name: 'transports', image: 'local_shipping', alt: "transports" },
   { name: 'settings', image: 'settings', alt: "settings" },
 ]
 

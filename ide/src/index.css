@@ -50,16 +50,14 @@ code {
 }
 
 #nino-ide-actions {
-  left: 0px;
+  position: absolute;
   width: 48px;
   height: 100%;
-  white-space: normal;
-  position: absolute;
-  background-color: #082773;
   color: #FFFFFF;
-  overflow: hidden;
+  background-color: #082773;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
-
 
 #nino-ide-actions ul {
   list-style: none;
@@ -74,30 +72,31 @@ code {
 
 #nino-ide-actions ul li {
   opacity: 50%;
-  border-left: 2px solid #082773;
+  border-left: 3px solid #082773;
 }
 
 #nino-ide-actions ul li.active {
   opacity: 100%;
-  border-left: 2px solid #0d98fe;
+  border-left: 3px solid #0d98fe;
 }
 
 #nino-ide-selectors {
+  position: absolute;
   left: 48px;
   width: 300px;
   height: 100%;
   white-space: normal;
-  position: absolute;
   background-color: #F2F2F2;
-  box-sizing: border-box;
-  overflow: hidden;
+  border-right: 1px solid #082773;
+  overflow-x: hidden;
+  overflow-y: auto;
+  white-space: nowrap;
 }
 
 #nino-ide-selector-title {
-  width: 300px;
   font-size: 11px;
   cursor: default;
-  font-weight: 400;
+  font-weight: bold;
   margin: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -107,30 +106,37 @@ code {
 
 
 #nino-ide-editors {
-  left: 348px;
-  width: calc(100% - 348px);
-  height: 100%;
-  white-space: normal;
   position: absolute;
+  left: 349px;
+  height: 100%;
+  width: calc(100% - 349px);
+  white-space: normal;
   background-color: #FBFBFB;
-  box-sizing: border-box;
 }
 
-
-.nino-ide-editor-tabs {
+.nino-ide-editor-tabs-background{
   width: 100%;
-  height: 40px;
-  background-color: #FBFBFB;
-  overflow: hidden;
+  height: 39px;
   position: absolute;
+  background-color: #FBFBFB;
   border-bottom: 1px solid #082773;
 }
 
+.nino-ide-editor-tabs {
+  transform: rotateX(180deg);
+  width: 100%;
+  height: 40px;
+  position: absolute;
+  background-color: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
 
 .nino-ide-editor-tab {
-  height: 40px;
-  padding-top: 8px;
-  border: 1px solid #F2F2F2;
+  transform: rotateX(180deg);
+  height: 32px;
+  border-bottom: 1px solid #FFF;
   background-color: #FBFBFB;
   overflow: hidden;
   display: inline-block;
@@ -153,4 +159,5 @@ code {
   height: calc(100% - 41px);
   background-color: #FFFFFF;
   position: absolute;
+  overflow: auto;
 }

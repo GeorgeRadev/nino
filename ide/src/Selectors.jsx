@@ -18,13 +18,15 @@ export default function Selectors({ IDEContext }) {
 
   return (
     <div id='nino-ide-selectors'>
-      <SelectorToggable name="requests" IDEContext={IDEContext}>
-        <SelectorRequests IDEContext={IDEContext} />
-      </SelectorToggable>
+      <div style={{ padding: "6px" }}>
+        <SelectorToggable name="requests" IDEContext={IDEContext}>
+          <SelectorRequests IDEContext={IDEContext} />
+        </SelectorToggable>
 
-      <SelectorToggable name="databases" IDEContext={IDEContext}>
-        <SelectorDB IDEContext={IDEContext} />
-      </SelectorToggable>
+        <SelectorToggable name="databases" IDEContext={IDEContext}>
+          <SelectorDB IDEContext={IDEContext} />
+        </SelectorToggable>
+      </div>
     </div>
   );
 };
