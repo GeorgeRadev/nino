@@ -68,7 +68,7 @@ impl TransportManager {
                     log_level,
                     file!(),
                     line!(),
-                    result.err().unwrap().to_string()
+                    result.err().unwrap()
                 );
                 eprintln!("{}", err_str);
                 if break_on_error {
@@ -198,7 +198,7 @@ impl TransportManager {
                 "ERROR:{}:{}:{} after query: {}",
                 file!(),
                 line!(),
-                result.err().unwrap().to_string(),
+                result.err().unwrap(),
                 query
             );
             eprintln!("{}", err_str);
@@ -210,7 +210,7 @@ impl TransportManager {
 
     fn get_object<'a>(obj_name: &'a str, obj: &'a Value, ix: usize) -> &'a Map<String, Value> {
         obj.as_object()
-            .expect(&format!("'{}'[{}] is not an object", obj_name, ix))
+            .unwrap_or_else(|| panic!("'{}'[{}] is not an object", obj_name, ix))
     }
 
     fn get_string<'a>(
@@ -219,10 +219,8 @@ impl TransportManager {
         ix: usize,
         field_name: &'a str,
     ) -> &'a str {
-        Self::get_object_string(obj, field_name).expect(&format!(
-            "'{}'[{}] does not contain string value for key '{}'",
-            obj_name, ix, field_name
-        ))
+        Self::get_object_string(obj, field_name).unwrap_or_else(|_| panic!("'{}'[{}] does not contain string value for key '{}'",
+            obj_name, ix, field_name))
     }
 
     fn get_bool(obj: &Map<String, Value>, field_name: &str, default: bool) -> bool {

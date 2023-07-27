@@ -9,7 +9,7 @@ use crate::nino_constants;
 pub fn get_connection_string() -> Result<String, String> {
     use std::env;
 
-    let mut args_iter = env::args().into_iter();
+    let mut args_iter = env::args();
     // program name is usiality the zero parameter
     match args_iter.next() {
         Some(_) => {
@@ -39,24 +39,26 @@ pub fn normalize_path(path: String) -> String {
     let mut prev: char = '\0';
     for b in path.to_lowercase().chars() {
         let is_special_char = b == '_' || b == '/' || b == '.';
-        if (b >= 'a' && b <= 'z') || is_special_char {
-            if (b == prev) && is_special_char {
-                //do not duplicate these chars
-            } else if prev == '/' && b == '.' {
-                //do not allow adding relative paths
+        if b.is_ascii_lowercase() || is_special_char {
+            if 
+            //do not duplicate these chars
+            (b == prev) && is_special_char
+            //do not allow adding relative paths
+            && prev == '/' && b == '.' {
+                //skip
             } else {
                 result.push(b);
                 prev = b;
             }
         }
     }
-    while result.len() > 0 && (*result.get(result.len() - 1).unwrap() == '/') {
+    while !result.is_empty() && (*result.last().unwrap() == '/') {
         result.pop();
     }
-    while result.len() > 0 && (*result.get(0).unwrap() == '/') {
+    while !result.is_empty() && (*result.first().unwrap() == '/') {
         result.remove(0);
     }
-    if result.len() == 0 {
+    if result.is_empty() {
         result.push('/');
     }
     result.into_iter().collect()
@@ -78,7 +80,7 @@ pub async fn send_response_to_stream(
             let err = error.to_string();
             return match stream.shutdown(std::net::Shutdown::Both) {
                 Ok(_) => Err(err),
-                Err(error) => Err(format!("{}\n{}", err, error.to_string())),
+                Err(error) => Err(format!("{}\n{}", err, error)),
             };
         }
     };
@@ -89,7 +91,7 @@ pub async fn send_response_to_stream(
 
     let mut header_string = String::with_capacity(1024);
     //write status
-    header_string.push_str(&HTTP);
+    header_string.push_str(HTTP);
     header_string.push(' ');
     header_string.push_str(&format!("{}", response.status()));
     header_string.push(' ');
@@ -105,7 +107,7 @@ pub async fn send_response_to_stream(
     //write separtor
     header_string.push_str(CRLF);
 
-    eprintln!("header:\n{}", header_string.to_string());
+    eprintln!("header:\n{}", header_string);
 
     //write http
     {
@@ -113,7 +115,7 @@ pub async fn send_response_to_stream(
         match async_std::io::copy(&mut http_bytes, &mut stream.clone()).await {
             Ok(_bytes_written) => {}
             Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error.to_string());
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             }
         }
     }
@@ -123,13 +125,13 @@ pub async fn send_response_to_stream(
         match async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await {
             Ok(_bytes_written) => {}
             Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error.to_string());
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             }
         }
     }
     //close socket
     if let Err(error) = stream.shutdown(std::net::Shutdown::Both) {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error.to_string());
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
     Ok(())
 }

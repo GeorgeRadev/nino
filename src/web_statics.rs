@@ -52,7 +52,7 @@ impl StaticManager {
                 for row in rows {
                     let mime = row.get(0);
                     let content: Vec<u8> = row.get(1);
-                    if content.len() > 0 {
+                    if !content.is_empty() {
                         return Some((mime, content));
                     }
                 }

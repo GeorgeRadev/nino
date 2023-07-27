@@ -81,7 +81,7 @@ impl WebManager {
         let from_addres = match stream.peer_addr() {
             Ok(address) => address,
             Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error.to_string());
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 return;
             }
         };
@@ -109,13 +109,12 @@ impl WebManager {
                 }
             }
             Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error.to_string());
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             }
         }
         //invalid/unrecognized request
         //close connection
         let _r = stream.shutdown(std::net::Shutdown::Both);
-        return;
     }
 
     async fn dispatch_request(

@@ -88,7 +88,7 @@ impl DynamicManager {
             Ok(rows) => {
                 for row in rows {
                     let path: String = row.get(0);
-                    if path.len() > 0 {
+                    if !path.is_empty() {
                         return Some(path);
                     }
                 }
@@ -111,7 +111,7 @@ impl DynamicManager {
             Ok(row) => {
                 let js_bytes: Vec<u8> = row.get(0);
                 let js = String::from_utf8(js_bytes).unwrap();
-                if js.len() > 0 {
+                if !js.is_empty() {
                     return Some(js);
                 }
             }

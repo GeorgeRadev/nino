@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::js::{init_platform, run_deno_main_thread};
+    use deno_core::Op;
     use deno_core::futures::FutureExt;
     use deno_core::{anyhow::Error, op, OpDecl, OpState};
     use std::{future::Future, sync::Mutex};
@@ -8,7 +9,7 @@ mod tests {
 
     const MODULE_MAIN: &str = "main";
 
-    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
+    static TEST_MAIN_MODULE_SOURCE: &str = r#"
     async function main() {
         const core = Deno[Deno.internal].core;
         let result = "";
@@ -53,7 +54,7 @@ mod tests {
         id: u32,
     }
     fn get_ops() -> Vec<OpDecl> {
-        vec![op_sync::decl(), op_id::decl(), op_set_result::decl()]
+        vec![op_sync::DECL, op_id::DECL, op_set_result::DECL]
     }
 
     #[op]
@@ -91,7 +92,7 @@ mod tests {
         init_platform(2);
         {
             let mut results = TEST_RESULTS.lock().unwrap();
-            *results = Some(Box::new(String::new()));
+            *results = Some(Box::default());
         }
 
         let r = tokio::try_join!(
@@ -122,7 +123,7 @@ mod tests {
         );
         match r {
             Err(e) => {
-                panic!("JS ERROR: {}", e.to_string());
+                panic!("JS ERROR: {}", e);
             }
             Ok(_v) => {
                 let mut res = TEST_RESULTS.lock().unwrap();

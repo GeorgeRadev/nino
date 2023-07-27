@@ -22,7 +22,7 @@ mod tests {
         ) -> Result<ModuleSpecifier, Error> {
             let url;
             if specifier.starts_with(MODULE_URI) {
-                url = Url::parse(&specifier)?;
+                url = Url::parse(specifier)?;
             } else {
                 let url_str = format!("{}{}", MODULE_URI, specifier);
                 url = Url::parse(&url_str)?;
@@ -97,7 +97,7 @@ mod tests {
         Ok(v)
     }
 
-    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
+    static TEST_MAIN_MODULE_SOURCE: &str = r#"
     async function main() {
         let result = "";
         try{
@@ -129,7 +129,7 @@ mod tests {
         init_platform(2);
         {
             let mut results = TEST_RESULTS.lock().unwrap();
-            *results = Some(Box::new(String::new()));
+            *results = Some(Box::default());
         }
 
         let r = tokio::try_join!(
@@ -140,7 +140,7 @@ mod tests {
                     get_ops,
                     |state| {
                         state.put(TestTask { id: 0 });
-                        ()
+                        
                     },
                     TEST_MAIN_MODULE_SOURCE,
                     None,
@@ -153,7 +153,7 @@ mod tests {
                     get_ops,
                     |state| {
                         state.put(TestTask { id: 0 });
-                        ()
+                        
                     },
                     TEST_MAIN_MODULE_SOURCE,
                     None,
@@ -162,7 +162,7 @@ mod tests {
         );
         match r {
             Err(e) => {
-                panic!("JS ERROR: {}", e.to_string());
+                panic!("JS ERROR: {}", e);
             }
             Ok(_v) => {
                 let mut res = TEST_RESULTS.lock().unwrap();

@@ -90,7 +90,7 @@ fn op_begin_task(op_state: &mut OpState) -> Result<String, Error> {
                 function!(),
                 line!(),
                 inner_state.id,
-                error.to_string()
+                error
             );
         }
     }
@@ -108,7 +108,7 @@ async fn aop_end_task(state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
 
     let web_task = inner_state.web_task.as_mut().unwrap();
     if let Err(error) = nino_functions::send_response_to_stream(
-        &mut web_task.stream.as_mut().unwrap(),
+        web_task.stream.as_mut().unwrap(),
         &mut inner_state.response,
     )
     .await
@@ -269,7 +269,7 @@ fn op_get_invalidation_message(state: &mut OpState) -> String {
             return message;
         }
     }
-    return String::from("");
+    String::from("")
 }
 
 #[op]

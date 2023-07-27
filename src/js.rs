@@ -48,12 +48,7 @@ impl JavaScriptManager {
             JS_INSTANCE.get_or_init(|| {
                 init_platform(thread_count);
 
-                let this = JavaScriptManager {
-                    thread_count,
-                    inspector_port,
-                    db: db.unwrap(),
-                    dynamics: dynamics.unwrap().clone(),
-                };
+                
                 /*
                 if let Some(db_subscribe) = db_subscribe {
                     let thizz = this.clone();
@@ -62,7 +57,12 @@ impl JavaScriptManager {
                     });
                 }
                 */
-                this
+                JavaScriptManager {
+                    thread_count,
+                    inspector_port,
+                    db: db.unwrap(),
+                    dynamics: dynamics.unwrap().clone(),
+                }
             });
         }
         JS_INSTANCE.get().unwrap().clone()
@@ -99,7 +99,7 @@ impl JavaScriptManager {
                     )
                     .await
                     {
-                        println!("ERROR: {}", e.to_string());
+                        println!("ERROR: {}", e);
                     }
                 })
             });
@@ -236,7 +236,7 @@ impl FNModuleLoader {
 
         let module_type = ModuleType::JavaScript;
         // ModuleType::Json
-        let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
+        let code = FastString::from(code); //code.as_bytes().to_vec().into_boxed_slice();
         let module_string =
             Url::parse(format!("{}{}", nino_constants::MODULE_URI, module_name).as_str())?;
         let module = ModuleSource::new(module_type, code, &module_string);
@@ -253,7 +253,7 @@ impl ModuleLoader for FNModuleLoader {
     ) -> Result<ModuleSpecifier, Error> {
         let url;
         if specifier.starts_with(nino_constants::MODULE_URI) {
-            url = Url::parse(&specifier)?;
+            url = Url::parse(specifier)?;
         } else {
             let url_str = format!("{}{}", nino_constants::MODULE_URI, specifier);
             url = Url::parse(&url_str)?;

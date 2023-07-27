@@ -42,7 +42,7 @@ impl SettingsManager {
     pub async fn get_setting_i32(&self, settings_key: &str, def_value: i32) -> i32 {
         match self.get_setting(settings_key).await {
             Ok(value_string) => {
-                if value_string.len() > 0 {
+                if !value_string.is_empty() {
                     match value_string.parse::<i32>() {
                         Ok(v) => v,
                         Err(_) => def_value,

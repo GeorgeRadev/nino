@@ -112,7 +112,7 @@ impl DBNotificationManager {
 fn escape_single_quotes(value: &str) -> String {
     let quote = '\'';
     let len = value.len();
-    if len <= 0 {
+    if len == 0 {
         return "NULL".to_string();
     }
     let mut result = Vec::with_capacity(2 + 2 * len);

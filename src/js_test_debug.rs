@@ -5,7 +5,6 @@ mod tests {
     use deno_core::futures::FutureExt;
     use deno_core::*;
     use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
-    use deno_runtime::deno_web::BlobStore;
     use deno_runtime::inspector_server::InspectorServer;
     use deno_runtime::permissions::PermissionsContainer;
     use deno_runtime::worker::MainWorker;
@@ -20,9 +19,9 @@ mod tests {
         id: i32,
     }
 
-    fn create_state(state: &mut OpState) -> () {
+    fn create_state(state: &mut OpState) {
         state.put(TestState { id: 0 });
-        ()
+        
     }
 
     #[op]
@@ -86,7 +85,7 @@ mod tests {
         vec![ext]
     }
 
-    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
+    static TEST_MAIN_MODULE_SOURCE: &str = r#"
     async function main() {
         const core = Deno[Deno.internal].core;
         try {
@@ -144,7 +143,7 @@ mod tests {
         ) -> Result<ModuleSpecifier, Error> {
             let url;
             if specifier.starts_with(MODULE_URI) {
-                url = Url::parse(&specifier)?;
+                url = Url::parse(specifier)?;
             } else {
                 let url_str = format!("{}{}", MODULE_URI, specifier);
                 url = Url::parse(&url_str)?;
@@ -241,7 +240,7 @@ mod tests {
         worker.execute_main_module(&main_module).await?;
         worker.run_event_loop(false).await?;
 
-        inspector_server.host;
+        drop(inspector_server);
         Ok(())
     }
 
