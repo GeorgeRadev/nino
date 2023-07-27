@@ -20,13 +20,12 @@ mod tests {
             _referrer: &str,
             _kind: ResolutionKind,
         ) -> Result<ModuleSpecifier, Error> {
-            let url;
-            if specifier.starts_with(MODULE_URI) {
-                url = Url::parse(specifier)?;
+            let url = if specifier.starts_with(MODULE_URI) {
+                Url::parse(specifier)?
             } else {
                 let url_str = format!("{}{}", MODULE_URI, specifier);
-                url = Url::parse(&url_str)?;
-            }
+                Url::parse(&url_str)?
+            };
             Ok(url)
         }
 
@@ -44,12 +43,11 @@ mod tests {
                 // ))
                 let module_path = &module_specifier.path()[1..];
                 println!("load module: {}", module_path);
-                let code;
-                if MODULE_MAIN == module_path {
-                    code = TEST_MAIN_MODULE_SOURCE;
+                let code = if MODULE_MAIN == module_path {
+                    TEST_MAIN_MODULE_SOURCE
                 } else {
-                    code = "export default async function() { return 42; }";
-                }
+                    "export default async function() { return 42; }"
+                };
 
                 let module_type = ModuleType::JavaScript;
                 // ModuleType::Json
@@ -81,7 +79,7 @@ mod tests {
             let mut res = TEST_RESULTS.lock().unwrap();
             let v = res.as_mut().unwrap();
             println!("old res: {}", v);
-            *res = Some(Box::new(result.clone()));
+            *res = Some(result.clone());
         }
         Ok(())
     }
@@ -121,7 +119,7 @@ mod tests {
     })();
     "#;
 
-    static TEST_RESULTS: Mutex<Option<Box<String>>> = Mutex::new(None);
+    static TEST_RESULTS: Mutex<Option<String>> = Mutex::new(None);
 
     async fn test_js() {
         init_platform(2);
@@ -129,7 +127,7 @@ mod tests {
         init_platform(2);
         {
             let mut results = TEST_RESULTS.lock().unwrap();
-            *results = Some(Box::default());
+            *results = Some(String::new());
         }
 
         let r = tokio::try_join!(
@@ -140,7 +138,6 @@ mod tests {
                     get_ops,
                     |state| {
                         state.put(TestTask { id: 0 });
-                        
                     },
                     TEST_MAIN_MODULE_SOURCE,
                     None,
@@ -153,7 +150,6 @@ mod tests {
                     get_ops,
                     |state| {
                         state.put(TestTask { id: 0 });
-                        
                     },
                     TEST_MAIN_MODULE_SOURCE,
                     None,
@@ -168,7 +164,7 @@ mod tests {
                 let mut res = TEST_RESULTS.lock().unwrap();
                 let str = (*res).as_mut().unwrap().as_mut();
                 println!("result: {}", str);
-                assert_eq!(*str, "0OK42");
+                assert_eq!(str, "0OK42");
             }
         };
     }

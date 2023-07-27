@@ -2,7 +2,7 @@ use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
 use async_channel::Receiver;
-use deno_core::{Op, op, anyhow::Error, OpDecl, OpState};
+use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
 use http_types::headers::CONTENT_TYPE;
 use http_types::{Response, StatusCode};
 use std::sync::Arc;
@@ -107,12 +107,10 @@ async fn aop_end_task(state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
     }
 
     let web_task = inner_state.web_task.as_mut().unwrap();
-    if let Err(error) = nino_functions::send_response_to_stream(
-        web_task.stream.as_mut().unwrap(),
-        &mut inner_state.response,
-    )
-    .await
-    {
+    let stream = web_task.stream.as_mut().unwrap();
+    let response = &mut inner_state.response;
+
+    if let Err(error) = nino_functions::send_response_to_stream(stream, response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
     inner_state.closed = true;

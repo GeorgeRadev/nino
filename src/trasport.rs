@@ -256,7 +256,7 @@ impl TransportManager {
         None
     }
 
-    fn get_object_boolean<'b>(object: &Map<String, Value>, key: &str, default: bool) -> bool {
+    fn get_object_boolean(object: &Map<String, Value>, key: &str, default: bool) -> bool {
         if object.contains_key(key) {
             if let Some(v) = object.get(key) {
                 if v.is_boolean() {

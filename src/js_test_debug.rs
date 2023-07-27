@@ -21,7 +21,6 @@ mod tests {
 
     fn create_state(state: &mut OpState) {
         state.put(TestState { id: 0 });
-        
     }
 
     #[op]
@@ -141,13 +140,12 @@ mod tests {
             _referrer: &str,
             _kind: ResolutionKind,
         ) -> Result<ModuleSpecifier, Error> {
-            let url;
-            if specifier.starts_with(MODULE_URI) {
-                url = Url::parse(specifier)?;
+            let url = if specifier.starts_with(MODULE_URI) {
+                Url::parse(specifier)?
             } else {
                 let url_str = format!("{}{}", MODULE_URI, specifier);
-                url = Url::parse(&url_str)?;
-            }
+                Url::parse(&url_str)?
+            };
             Ok(url)
         }
 
@@ -165,12 +163,11 @@ mod tests {
                 // ))
                 let module_path = &module_specifier.path()[1..];
                 println!("load module: {}", module_path);
-                let code;
-                if MODULE_MAIN == module_path {
-                    code = TEST_MAIN_MODULE_SOURCE;
+                let code = if MODULE_MAIN == module_path {
+                    TEST_MAIN_MODULE_SOURCE
                 } else {
-                    code = "export default async function() { return 'b'; }";
-                }
+                    "export default async function() { return 'b'; }"
+                };
 
                 let module_type = ModuleType::JavaScript;
                 // ModuleType::Json
@@ -231,7 +228,8 @@ mod tests {
 
         let main_uri = format!("{}{}", MODULE_URI, MODULE_MAIN).to_owned();
         let main_module = Url::parse(main_uri.as_str())?;
-        let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
+        let permissions =
+            PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
 
         let mut worker =
             MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);

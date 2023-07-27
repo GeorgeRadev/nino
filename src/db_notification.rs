@@ -52,7 +52,7 @@ impl DBNotificationManager {
     }
 
     fn start_listening_for_messages(
-        connection_string: &String,
+        connection_string: &str,
         broadcast_sx: tokio::sync::broadcast::Sender<nino_structures::Message>,
     ) -> ! {
         use postgres::fallible_iterator::FallibleIterator;
@@ -80,8 +80,8 @@ impl DBNotificationManager {
                 let mut it = notifications.blocking_iter();
                 let msg_result = it.next();
                 match msg_result {
-                    Ok(msg) => match msg {
-                        Some(c) => {
+                    Ok(msg) => {
+                        if let Some(c) = msg {
                             println!("message: {:?}", c);
                             // broad cast message to listeners
                             if let Err(error) = broadcast_sx.send(nino_structures::Message {
@@ -95,10 +95,7 @@ impl DBNotificationManager {
                                 );
                             }
                         }
-                        _ => {
-                            // no message
-                        }
-                    },
+                    }
                     Err(error) => {
                         eprintln!("ERROR {}:{}:sending message {}", file!(), line!(), error);
                         break;

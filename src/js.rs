@@ -16,7 +16,7 @@ use deno_runtime::BootstrapOptions;
 use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
 //use tokio::macros::support::poll_fn;
@@ -213,21 +213,18 @@ fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Err
 /// used for loading js modules
 pub struct FNModuleLoader {}
 
-static FNMODULE_LOADER_FUNCTION: Mutex<Option<ModuleLoadingFunction>> = Mutex::new(None);
+static FNMODULE_LOADER_FUNCTION: OnceLock<ModuleLoadingFunction> = OnceLock::new();
 
 impl FNModuleLoader {
     fn new(module_loader: ModuleLoadingFunction) -> FNModuleLoader {
-        {
-            let mut fn_holder = FNMODULE_LOADER_FUNCTION.lock().unwrap();
-            *fn_holder = Some(module_loader);
-        }
+        FNMODULE_LOADER_FUNCTION.get_or_init(|| module_loader);
         FNModuleLoader {}
     }
 
     async fn async_load(module_name: String) -> Result<ModuleSource, Error> {
         let code = {
-            let fn_holder = FNMODULE_LOADER_FUNCTION.lock().unwrap();
-            if let Some(func) = *fn_holder {
+            let fn_holder = FNMODULE_LOADER_FUNCTION.get();
+            if let Some(func) = fn_holder {
                 func(module_name.clone()).boxed_local().await?
             } else {
                 return Err(Error::msg("No loading function in FNModuleLoaderFunction"));
@@ -251,13 +248,13 @@ impl ModuleLoader for FNModuleLoader {
         _referrer: &str,
         _kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, Error> {
-        let url;
+        let url = 
         if specifier.starts_with(nino_constants::MODULE_URI) {
-            url = Url::parse(specifier)?;
+            Url::parse(specifier)?
         } else {
             let url_str = format!("{}{}", nino_constants::MODULE_URI, specifier);
-            url = Url::parse(&url_str)?;
-        }
+            Url::parse(&url_str)?
+        };
         Ok(url)
     }
 

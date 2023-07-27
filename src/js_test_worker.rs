@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod tests {
     use crate::js::{init_platform, run_deno_main_thread};
-    use deno_core::Op;
     use deno_core::futures::FutureExt;
+    use deno_core::Op;
     use deno_core::{anyhow::Error, op, OpDecl, OpState};
-    use std::{future::Future, sync::Mutex};
     use std::pin::Pin;
+    use std::{future::Future, sync::Mutex};
 
     const MODULE_MAIN: &str = "main";
 
@@ -68,7 +68,7 @@ mod tests {
             let mut res = TEST_RESULTS.lock().unwrap();
             let v = res.as_mut().unwrap();
             println!("old res: {}", v);
-            *res = Some(Box::new(result.clone()));
+            *res = Some(result.clone());
         }
         Ok(())
     }
@@ -84,7 +84,7 @@ mod tests {
         Ok(v)
     }
 
-    static TEST_RESULTS: Mutex<Option<Box<String>>> = Mutex::new(None);
+    static TEST_RESULTS: Mutex<Option<String>> = Mutex::new(None);
 
     async fn test_js() {
         init_platform(2);
@@ -92,7 +92,7 @@ mod tests {
         init_platform(2);
         {
             let mut results = TEST_RESULTS.lock().unwrap();
-            *results = Some(Box::default());
+            *results = Some(String::new());
         }
 
         let r = tokio::try_join!(
@@ -129,7 +129,7 @@ mod tests {
                 let mut res = TEST_RESULTS.lock().unwrap();
                 let str = (*res).as_mut().unwrap().as_mut();
                 println!("result: {}", str);
-                assert_eq!(*str, "1OK42");
+                assert_eq!(str, "1OK42");
             }
         };
     }
