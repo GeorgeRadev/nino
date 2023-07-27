@@ -2,7 +2,7 @@ use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
 use async_channel::Receiver;
-use deno_core::{anyhow::Error, op, OpDecl, OpState};
+use deno_core::{Op, op, anyhow::Error, OpDecl, OpState};
 use http_types::headers::CONTENT_TYPE;
 use http_types::{Response, StatusCode};
 use std::sync::Arc;
@@ -10,17 +10,17 @@ use std::{cell::RefCell, rc::Rc};
 
 pub fn get_javascript_ops() -> Vec<OpDecl> {
     vec![
-        aop_sleep::decl(),
-        op_begin_task::decl(),
-        aop_end_task::decl(),
-        op_get_request::decl(),
-        op_set_response_status::decl(),
-        op_set_response_header::decl(),
-        aop_set_response_send_text::decl(),
-        aop_set_response_send_json::decl(),
-        aop_set_response_send_buf::decl(),
-        op_get_invalidation_message::decl(),
-        op_get_thread_id::decl(),
+        aop_sleep::DECL,
+        op_begin_task::DECL,
+        aop_end_task::DECL,
+        op_get_request::DECL,
+        op_set_response_status::DECL,
+        op_set_response_header::DECL,
+        aop_set_response_send_text::DECL,
+        aop_set_response_send_json::DECL,
+        aop_set_response_send_buf::DECL,
+        op_get_invalidation_message::DECL,
+        op_get_thread_id::DECL,
     ]
 }
 

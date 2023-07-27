@@ -75,13 +75,13 @@ mod tests {
     fn get_extensions() -> Vec<Extension> {
         let ext = Extension::builder("nino_extentions")
             .ops(vec![
-                op_get::decl(),
-                op_set::decl(),
-                op_async::decl(),
-                op_a_sleep::decl(),
+                op_get::DECL,
+                op_set::DECL,
+                op_async::DECL,
+                op_a_sleep::DECL,
             ])
             .state(create_state)
-            .force_op_registration()
+            //.force_op_registration()
             .build();
         vec![ext]
     }
@@ -210,7 +210,6 @@ mod tests {
             extensions,
             startup_snapshot: None,
             unsafely_ignore_certificate_errors: None,
-            root_cert_store: None,
             seed: None,
             source_map_getter: None,
             format_js_error_fn: None,
@@ -222,14 +221,13 @@ mod tests {
             get_error_class_fn: Some(&get_error_class_name),
             cache_storage_dir: None,
             origin_storage_dir: None,
-            blob_store: BlobStore::default(),
             broadcast_channel: InMemoryBroadcastChannel::default(),
             shared_array_buffer_store: None,
             compiled_wasm_module_store: None,
             maybe_inspector_server: Some(inspector_server.clone()),
             should_break_on_first_statement: false,
             should_wait_for_inspector_session: false,
-            stdio: Default::default(),
+            ..Default::default()
         };
 
         let main_uri = format!("{}{}", MODULE_URI, MODULE_MAIN).to_owned();

@@ -5,9 +5,9 @@ import EditorDB from './EditorDB';
 function instantiateObjectID(objectID) {
   var component;
   if (objectID.startsWith("db:")) {
-    component = <EditorDB />;
+    component = <EditorDB objectID={objectID} />;
   } else if (objectID.startsWith("path:")) {
-    component = <EditorRequests />;
+    component = <EditorRequests objectID={objectID} />;
   }
   return component;
 }
@@ -62,8 +62,6 @@ function EditorToggable({ IDEContext }) {
   function mapTabsToggle(tab) {
     return (
       <div key={tab.objectID} style={{ display: tab.objectID === IDEContext.tabSelected ? "block" : "none" }}>
-        objectID: {tab.objectID}<br />
-        selectedTab: {IDEContext.tabSelected}<br />
         {tab.component}
       </div>
     );

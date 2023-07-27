@@ -4,7 +4,7 @@ mod tests {
     use crate::js::{init_platform, run_deno_thread};
     use deno_core::{
         anyhow::Error, futures::FutureExt, op, FastString, ModuleLoader, ModuleSource,
-        ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState, ResolutionKind,
+        ModuleSourceFuture, ModuleSpecifier, ModuleType, Op, OpDecl, OpState, ResolutionKind,
     };
     use http_types::Url;
     use std::{pin::Pin, rc::Rc, sync::Mutex};
@@ -67,7 +67,7 @@ mod tests {
     }
 
     fn get_ops() -> Vec<OpDecl> {
-        vec![op_sync::decl(), op_id::decl(), op_set_result::decl()]
+        vec![op_sync::DECL, op_id::DECL, op_set_result::DECL]
     }
 
     #[op]

@@ -98,6 +98,7 @@ code {
   overflow-y: auto;
   white-space: nowrap;
 }
+
 #nino-ide-selectors::-webkit-scrollbar {
   background: #F2F2F2;
   width: 1px;
@@ -162,6 +163,7 @@ code {
 .tab-text {
   padding: 1px;
 }
+
 .tab-close {
   color: #999;
 }
@@ -184,4 +186,18 @@ code {
   background-color: #FFFFFF;
   position: absolute;
   overflow: auto;
+}
+
+
+.nono-ide-ui-container-50 {
+  width: 50%;
+  display: inline-block;
+}
+
+@media (max-width: 1024px) {
+  .nono-ide-ui-container-50 {
+    width: 100%;
+    display: inline-block;
+  }
+
 }

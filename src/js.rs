@@ -183,7 +183,6 @@ pub fn init_platform(thread_count: u16) {
                 v8_platform: platform,
                 module_loader: Some(loader),
                 extensions: vec![ext],
-                will_snapshot: false,
                 inspector: false,
                 ..Default::default()
             });
@@ -332,7 +331,6 @@ pub fn run_deno_thread(
             .ops(get_ops())
             .state(create_state)
             .build()],
-        will_snapshot: false,
         inspector: need_inspector,
         ..Default::default()
     });
@@ -370,7 +368,6 @@ pub async fn run_deno_main_thread(
         let ext = Extension::builder("nino_extentions")
             .ops(get_ops())
             .state(create_state)
-            .force_op_registration()
             .build();
         vec![ext]
     };
@@ -393,7 +390,6 @@ pub async fn run_deno_main_thread(
         extensions,
         startup_snapshot: None,
         unsafely_ignore_certificate_errors: None,
-        root_cert_store: None,
         seed: None,
         source_map_getter: None,
         format_js_error_fn: None,
@@ -405,14 +401,13 @@ pub async fn run_deno_main_thread(
         get_error_class_fn: Some(&get_error_class_name),
         cache_storage_dir: None,
         origin_storage_dir: None,
-        blob_store: BlobStore::default(),
         broadcast_channel: InMemoryBroadcastChannel::default(),
         shared_array_buffer_store: None,
         compiled_wasm_module_store: None,
         maybe_inspector_server: maybe_inspector_server.clone(),
         should_break_on_first_statement: false,
         should_wait_for_inspector_session: false,
-        stdio: Default::default(),
+        ..Default::default()
     };
 
     let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
