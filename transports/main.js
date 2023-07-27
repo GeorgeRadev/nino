@@ -3,18 +3,11 @@ async function main() {
     const core = Deno[Deno.internal].core;
     for (; ;) {
         try {
-            core.print('try\n');
-            const module = core.ops.op_begin_task();
+            core.print('js try\n');
             debugger;
-            const invalidation_json = core.ops.op_get_invalidation_message();
+            const module = core.ops.op_begin_task();
 
-            if (invalidation_json) {
-                //request for cache invalidation
-                const invalidationMessage = JSON.parse();
-                const threadId = core.ops.op_get_thread_id();
-                core.print('js got message (' + threadId + '): ' + JSON.stringify(invalidationMessage) + '\n');
-
-            } else if (module) {
+            if (module) {
                 // request for module execution
                 core.print('module ' + module + '\n');
                 const mod = await import(module);
@@ -72,6 +65,17 @@ async function main() {
 
                 } else {
                     throw Exception("module '" + module + "' default async function should take 1 or 2 parameters for rest and servlet modes");
+                }
+
+            } else {
+                const invalidation_message = core.ops.op_get_invalidation_message();
+                if (invalidation_message) {
+                    //request for cache invalidation
+                    const threadId = core.ops.op_get_thread_id();
+                    core.print('js got invalidation message (' + threadId + '): ' + invalidation_message + '\n');
+
+                } else {
+                    throw Exception("Should never get this");
                 }
             }
         } catch (e) {

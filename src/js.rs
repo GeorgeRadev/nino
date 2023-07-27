@@ -47,8 +47,6 @@ impl JavaScriptManager {
         {
             JS_INSTANCE.get_or_init(|| {
                 init_platform(thread_count);
-
-                
                 /*
                 if let Some(db_subscribe) = db_subscribe {
                     let thizz = this.clone();
@@ -135,14 +133,15 @@ impl JavaScriptManager {
             web_task_rx: inst.dynamics.get_web_task_rx(),
             //request defaults
             is_request: false,
-            web_task: None,
             response: Response::new(200),
             dynamics: js.dynamics.clone(),
-            module: String::from(""),
-            closed: false,
+            module: String::new(),
+            request: None,
+            stream: None,
+            closed: true,
             //invalidate defaults
             is_invalidate: false,
-            message: None,
+            message: String::new(),
         });
     }
     /*
@@ -248,8 +247,7 @@ impl ModuleLoader for FNModuleLoader {
         _referrer: &str,
         _kind: ResolutionKind,
     ) -> Result<ModuleSpecifier, Error> {
-        let url = 
-        if specifier.starts_with(nino_constants::MODULE_URI) {
+        let url = if specifier.starts_with(nino_constants::MODULE_URI) {
             Url::parse(specifier)?
         } else {
             let url_str = format!("{}{}", nino_constants::MODULE_URI, specifier);

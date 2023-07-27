@@ -62,7 +62,7 @@ impl DynamicManager {
                         request: None,
                         stream: None,
                         is_invalidate: true,
-                        message: Some(message.json),
+                        message: message.json,
                     });
                     for _ in 0..self.js_thread_count {
                         if let Err(error) = self.web_task_sx.send(web_task.clone()).await {
@@ -152,7 +152,7 @@ impl DynamicManager {
                 request: Some(request),
                 stream: Some(stream),
                 is_invalidate: false,
-                message: None,
+                message: String::new(),
             });
             match self.web_task_sx.send(web_task).await {
                 Ok(_) => true,

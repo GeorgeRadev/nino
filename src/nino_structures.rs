@@ -20,7 +20,7 @@ pub struct WebTask {
     pub stream: Option<Box<TcpStream>>,
     // invalidate task
     pub is_invalidate: bool,
-    pub message: Option<String>,
+    pub message: String,
 }
 
 #[derive(Clone)]

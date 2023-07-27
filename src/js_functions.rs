@@ -2,9 +2,10 @@ use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
 use async_channel::Receiver;
+use async_std::net::TcpStream;
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
 use http_types::headers::CONTENT_TYPE;
-use http_types::{Response, StatusCode};
+use http_types::{Request, Response, StatusCode};
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
 
@@ -27,17 +28,33 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
 pub struct JSTask {
     pub id: u32,
     pub db: DBManager,
+    pub dynamics: Arc<DynamicManager>,
     pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
-    pub web_task: Option<Box<nino_structures::WebTask>>,
     // response
     pub is_request: bool,
-    pub response: Response,
-    pub dynamics: Arc<DynamicManager>,
     pub module: String,
+    pub request: Option<Request>,
+    pub response: Response,
+    pub stream: Option<Box<TcpStream>>,
     pub closed: bool,
     // invalidate
     pub is_invalidate: bool,
-    pub message: Option<String>,
+    pub message: String,
+}
+
+impl JSTask {
+    pub fn close(&mut self) {
+        // response
+        self.is_request = false;
+        self.module = String::new();
+        self.request = None;
+        self.response = Response::new(200);
+        self.stream = None;
+        self.closed = true;
+        // invalidate
+        self.is_invalidate = false;
+        self.message = String::new();
+    }
 }
 
 macro_rules! function {
@@ -59,27 +76,30 @@ macro_rules! function {
 #[op]
 fn op_begin_task(op_state: &mut OpState) -> Result<String, Error> {
     let inner_state = op_state.borrow_mut::<JSTask>();
-    //return Ok(inner_state.module.clone());
+    let mut module = String::new();
     let result = inner_state.web_task_rx.recv_blocking();
-    let mut module = String::from("");
     match result {
         Ok(web_task) => {
-            // request
-            inner_state.is_request = web_task.is_request;
-            if web_task.js_module.is_some() {
-                module = web_task.js_module.clone().unwrap();
-            }
-            inner_state.response = Response::new(200);
-            // invalidate
-            inner_state.is_request = web_task.is_invalidate;
-            if web_task.is_invalidate {
-                inner_state.message = web_task.message.clone();
+            if web_task.is_request {
+                // request
+                inner_state.is_request = true;
+                if web_task.js_module.is_some() {
+                    module = web_task.js_module.clone().unwrap();
+                }
+                inner_state.module = module.clone();
+                inner_state.request = web_task.request;
+                inner_state.response = Response::new(200);
+                inner_state.stream = web_task.stream;
+                inner_state.closed = false;
+            } else if web_task.is_invalidate {
+                // invalidate message
+                inner_state.is_invalidate = web_task.is_invalidate;
+                inner_state.message = web_task.message;
                 inner_state.closed = true;
             } else {
-                inner_state.message = None;
-                inner_state.closed = false;
+                // should not  get here
+                panic!("should not get here")
             }
-            inner_state.web_task = Some(web_task);
 
             println!("new js task");
         }
@@ -106,14 +126,13 @@ async fn aop_end_task(state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
         return Ok(false);
     }
 
-    let web_task = inner_state.web_task.as_mut().unwrap();
-    let stream = web_task.stream.as_mut().unwrap();
+    let stream = inner_state.stream.as_mut().unwrap();
     let response = &mut inner_state.response;
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
-    inner_state.closed = true;
+    inner_state.close();
     Ok(true)
 }
 
@@ -131,11 +150,10 @@ pub struct HttpRequest {
 #[op]
 fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
     let task = state.borrow_mut::<JSTask>();
-    let web_task = task.web_task.as_mut().unwrap();
-    if !web_task.is_request {
+    if !task.is_request {
         return Err(Error::msg("task is not a request"));
     }
-    let request = web_task.request.as_mut().unwrap();
+    let request = task.request.as_mut().unwrap();
     let url = request.url();
     let url_str = url.to_string();
 
@@ -198,12 +216,11 @@ async fn aop_set_response_send(
         response.insert_header(CONTENT_TYPE, mime);
     }
 
-    let web_task = inner_state.web_task.as_mut().unwrap().as_mut();
-    if !web_task.is_request {
+    if !inner_state.is_request {
         return Err(Error::msg("task is not a request"));
     }
     if let Err(error) = nino_functions::send_response_to_stream(
-        web_task.stream.as_mut().unwrap(),
+        inner_state.stream.as_mut().unwrap(),
         &mut inner_state.response,
     )
     .await
@@ -229,12 +246,11 @@ async fn aop_set_response_send_buf(
         response.insert_header(CONTENT_TYPE, "text/html;charset=UTF-8");
     }
 
-    let web_task = inner_state.web_task.as_mut().unwrap().as_mut();
-    if !web_task.is_request {
+    if !inner_state.is_request {
         return Err(Error::msg("task is not a request"));
     }
     if let Err(error) = nino_functions::send_response_to_stream(
-        web_task.stream.as_mut().unwrap(),
+        inner_state.stream.as_mut().unwrap(),
         &mut inner_state.response,
     )
     .await
@@ -263,11 +279,9 @@ async fn aop_sleep(state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Error
 fn op_get_invalidation_message(state: &mut OpState) -> String {
     let task = state.borrow_mut::<JSTask>();
     if task.is_invalidate {
-        if let Some(message) = task.message.clone() {
-            return message;
-        }
+        return task.message.clone();
     }
-    String::from("")
+    String::new()
 }
 
 #[op]
