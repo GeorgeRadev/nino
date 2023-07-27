@@ -34,7 +34,7 @@ impl DBNotificationManager {
         DBNotificationManager {
             //listener,
             broadcast_sx,
-            db: db,
+            db,
         }
     }
 
@@ -58,7 +58,7 @@ impl DBNotificationManager {
         use postgres::fallible_iterator::FallibleIterator;
         use std::time::Duration;
         loop {
-            let mut db = match postgres::Client::connect(&connection_string, postgres::NoTls) {
+            let mut db = match postgres::Client::connect(connection_string, postgres::NoTls) {
                 Ok(db) => db,
                 Err(error) => {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);

@@ -24,7 +24,7 @@ impl DBManager {
                 "ERROR:{}:{}:{}",
                 file!(),
                 line!(),
-                db.err().unwrap().to_string()
+                db.err().unwrap()
             );
             eprintln!("{}", err_str);
             return Err(err_str);

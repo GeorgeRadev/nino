@@ -9,7 +9,6 @@ use deno_core::{
 };
 use deno_core::{FastString, ResolutionKind};
 use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
-use deno_runtime::deno_web::BlobStore;
 use deno_runtime::inspector_server::InspectorServer;
 use deno_runtime::permissions::PermissionsContainer;
 use deno_runtime::worker::{MainWorker, WorkerOptions};
@@ -17,7 +16,7 @@ use deno_runtime::BootstrapOptions;
 use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
 //use tokio::macros::support::poll_fn;
@@ -31,7 +30,7 @@ pub struct JavaScriptManager {
     dynamics: Arc<DynamicManager>,
 }
 
-static JS_INSTANCE: Mutex<Option<JavaScriptManager>> = Mutex::new(None);
+static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
 
 impl JavaScriptManager {
     /**
@@ -46,8 +45,7 @@ impl JavaScriptManager {
         dynamics: Option<Arc<DynamicManager>>,
     ) -> JavaScriptManager {
         {
-            let mut inst = JS_INSTANCE.lock().unwrap();
-            if inst.is_none() {
+            JS_INSTANCE.get_or_init(|| {
                 init_platform(thread_count);
 
                 let this = JavaScriptManager {
@@ -64,10 +62,10 @@ impl JavaScriptManager {
                     });
                 }
                 */
-                inst.replace(this);
-            }
+                this
+            });
         }
-        JS_INSTANCE.lock().unwrap().as_mut().unwrap().clone()
+        JS_INSTANCE.get().unwrap().clone()
     }
 
     // start all js processing threads
@@ -124,14 +122,13 @@ impl JavaScriptManager {
      * Creates the js thread context with sequential id, and attach all managers inside.
      * Allocating resources to the thread and releasing them must be handled in the main javascript try finaly block.
      */
-    fn create_js_context_state(state: &mut OpState) -> () {
+    fn create_js_context_state(state: &mut OpState) {
         static JS_THREAD_ID: std::sync::atomic::AtomicUsize =
             std::sync::atomic::AtomicUsize::new(0);
 
         let js = JavaScriptManager::instance(0, 0, None, None);
 
-        let mut bunding = JS_INSTANCE.lock().unwrap();
-        let inst = bunding.as_mut().unwrap();
+        let inst = JS_INSTANCE.get().unwrap();
         state.put(js_functions::JSTask {
             id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
             db: inst.db.clone(),
@@ -198,7 +195,7 @@ type ModuleLoadingFunction =
 
 fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
     async move {
-        let instance = JS_INSTANCE.lock().unwrap().as_mut().unwrap().clone();
+        let instance = JS_INSTANCE.get().unwrap();
         match instance.dynamics.get_module_js(name.clone().as_str()).await {
             Some(code) => Ok(code),
             None => {
