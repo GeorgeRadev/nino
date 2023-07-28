@@ -3,15 +3,15 @@ async function main() {
     const core = Deno[Deno.internal].core;
     for (; ;) {
         try {
-            core.print('js try\n');
-            debugger;
+            // core.print('js try\n');
+            // debugger;
             const module = core.ops.op_begin_task();
 
             if (module) {
                 // request for module execution
-                core.print('module ' + module + '\n');
+                // core.print('module ' + module + '\n');
                 const mod = await import(module);
-                core.print('after import ' + (typeof mod) + '\n');
+                // core.print('after import ' + (typeof mod) + '\n');
                 let handler = mod.default;
                 if (!handler) {
                     throw Exception("module '" + module + "' has no export default async function");
@@ -21,11 +21,11 @@ async function main() {
                 }
 
                 const handler_arguments_count = handler.length;
-                core.print('default handler with ' + handler_arguments_count + ' arguments\n');
+                // core.print('default handler with ' + handler_arguments_count + ' arguments\n');
 
                 const request = core.ops.op_get_request();
                 const send_response = async function (response) {
-                    core.print('response typeof ' + (typeof response) + '\n');
+                    // core.print('response typeof ' + (typeof response) + '\n');
                     if (typeof response === 'string') {
                         await core.opAsync('aop_set_response_send_text', response);
                     } else if (response instanceof Number) {
@@ -39,9 +39,9 @@ async function main() {
 
                 if (handler_arguments_count == 1) {
                     // rest handler with request param
-                    core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
+                    // core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
                     let response = await handler(request);
-                    core.print('after handler response' + response + '\n');
+                    // core.print('after handler response' + response + '\n');
                     await send_response(response);
 
                 } else if (handler_arguments_count == 2) {

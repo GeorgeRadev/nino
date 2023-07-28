@@ -1,3 +1,4 @@
+use crate::db_notification::Notifier;
 use crate::nino_functions;
 use crate::{
     db::DBManager,
@@ -9,19 +10,22 @@ use async_std::net::TcpStream;
 use http_types::Request;
 use http_types::{Mime, Response, StatusCode};
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct DynamicManager {
-    db: DBManager,
+    db: Arc<DBManager>,
     js_thread_count: u16,
     web_task_sx: Sender<Box<nino_structures::WebTask>>,
     web_task_rx: Receiver<Box<nino_structures::WebTask>>,
+    notifier: Arc<Notifier>,
 }
 
 impl DynamicManager {
     pub fn new(
-        db: DBManager,
+        db: Arc<DBManager>,
         js_thread_count: u16,
+        notifier: Arc<Notifier>,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
     ) -> DynamicManager {
         // web_task channel is used to send tasks to the js threads
@@ -32,12 +36,17 @@ impl DynamicManager {
             js_thread_count,
             web_task_sx,
             web_task_rx,
+            notifier,
         };
         let thizz = this.clone();
         tokio::spawn(async move {
             thizz.invalidator(db_subscribe).await;
         });
         this
+    }
+
+    pub fn get_notifier(&self) -> Arc<Notifier> {
+        self.notifier.clone()
     }
 
     pub fn get_web_task_rx(&self) -> Receiver<Box<WebTask>> {

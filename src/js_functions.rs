@@ -1,3 +1,4 @@
+use crate::db_notification::Notifier;
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
@@ -22,13 +23,15 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         aop_set_response_send_buf::DECL,
         op_get_invalidation_message::DECL,
         op_get_thread_id::DECL,
+        aop_broadcast_message::DECL,
     ]
 }
 
 pub struct JSTask {
     pub id: u32,
-    pub db: DBManager,
+    pub db: Arc<DBManager>,
     pub dynamics: Arc<DynamicManager>,
+    pub notifier: Arc<Notifier>,
     pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
     // response
     pub is_request: bool,
@@ -288,6 +291,22 @@ fn op_get_invalidation_message(state: &mut OpState) -> String {
 fn op_get_thread_id(state: &mut OpState) -> u32 {
     let task = state.borrow_mut::<JSTask>();
     task.id
+}
+
+#[op]
+async fn aop_broadcast_message(
+    state: Rc<RefCell<OpState>>,
+    message: String,
+) -> Result<bool, Error> {
+    let notifier = {
+        let mut op_state = state.borrow_mut();
+        let inner_state = op_state.borrow_mut::<JSTask>();
+        inner_state.notifier.clone()
+    };
+    match notifier.notify(message).await {
+        Ok(_) => Ok(true),
+        Err(error) => Err(Error::msg(error)),
+    }
 }
 
 // #[op]

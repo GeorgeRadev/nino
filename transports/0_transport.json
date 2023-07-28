@@ -40,7 +40,7 @@
         },
         {
             "key": "nino_js_thread_count",
-            "value": "1"
+            "value": "2"
         },
         {
             "key": "nino_web_server_port",
@@ -90,6 +90,13 @@
             "dynamic": true,
             "authorize": true,
             "execute": true
+        },
+        {
+            "path": "notify_servlet",
+            "name": "notify_servlet",
+            "dynamic": true,
+            "authorize": true,
+            "execute": true
         }
     ],
     "statics": [
@@ -113,6 +120,9 @@
         {
             "name": "_main",
             "file": "main.js"
+        },{
+            "name": "notifier",
+            "file": "notifier.js"
         },
         {
             "name": "dynamic_json",
@@ -121,6 +131,10 @@
         {
             "name": "test_servlet",
             "file": "./test_servlet.js"
+        },
+        {
+            "name": "notify_servlet",
+            "file": "./notify_servlet.js"
         }
     ]
 }

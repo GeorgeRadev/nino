@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Arc};
 
 use crate::{db::DBManager, nino_constants, nino_functions, nino_structures};
 use async_std::net::TcpStream;
@@ -6,12 +6,12 @@ use http_types::{Method, Mime, Request, Response, StatusCode};
 
 #[derive(Clone)]
 pub struct StaticManager {
-    db: DBManager,
+    db: Arc<DBManager>,
 }
 
 impl StaticManager {
     pub fn new(
-        db: DBManager,
+        db: Arc<DBManager>,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
     ) -> StaticManager {
         let this = Self { db };

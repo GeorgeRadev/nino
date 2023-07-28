@@ -7,14 +7,6 @@ pub struct SettingsManager {
     db: DBManager,
 }
 
-impl Clone for SettingsManager {
-    fn clone(&self) -> Self {
-        Self {
-            db: self.db.clone(),
-        }
-    }
-}
-
 impl SettingsManager {
     /// Create DB Manager and connection pool
     pub fn new(db: DBManager) -> SettingsManager {
@@ -33,7 +25,13 @@ impl SettingsManager {
                 Ok(value)
             }
             Err(error) => {
-                eprintln!("WARNING missing setting for key '{}' :{}:{}:{}", settings_key, file!(), line!(), error);
+                eprintln!(
+                    "WARNING missing setting for key '{}' :{}:{}:{}",
+                    settings_key,
+                    file!(),
+                    line!(),
+                    error
+                );
                 Err(error.to_string())
             }
         }

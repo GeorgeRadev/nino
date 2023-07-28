@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{db::DBManager, nino_structures};
 
 macro_rules! PKG_NAME {
@@ -6,17 +8,32 @@ macro_rules! PKG_NAME {
     };
 }
 
+#[derive(Clone)]
+pub struct Notifier {
+    db_notifier: Arc<DBNotificationManager>,
+}
+
+impl Notifier {
+    pub fn new(db_notifier: Arc<DBNotificationManager>) -> Notifier {
+        Notifier { db_notifier }
+    }
+    /// send message to all (local and global) subscribers through the db
+    pub async fn notify(&self, msg: String) -> Result<u64, String> {
+        self.db_notifier.notify(msg).await
+    }
+}
+
 /// A Postgres DB connector and listener
 /// plus a connection pool for executing transaction
 pub struct DBNotificationManager {
     //listener: std::thread::JoinHandle<bool>,
     broadcast_sx: tokio::sync::broadcast::Sender<nino_structures::Message>,
-    db: DBManager,
+    db: Arc<DBManager>,
 }
 
 impl DBNotificationManager {
     /// Create a thread for listening broadcast notifications
-    pub fn new(db: DBManager) -> DBNotificationManager {
+    pub fn new(db: Arc<DBManager>) -> DBNotificationManager {
         // 1 - * subscribe message - broadcast messages from DB broadcast
         let (broadcast_sx, _broadcast_rx) =
             tokio::sync::broadcast::channel::<nino_structures::Message>(64);
@@ -44,7 +61,7 @@ impl DBNotificationManager {
     }
 
     /// send message to all (local and global) subscribers through the db
-    pub async fn notify(&mut self, msg: String) -> Result<u64, String> {
+    pub async fn notify(&self, msg: String) -> Result<u64, String> {
         let db = self.db.get_connection().await?;
         let statement = format!("NOTIFY {}, {}", PKG_NAME!(), escape_single_quotes(&msg));
         let result = db.execute(&statement, &[]).await;

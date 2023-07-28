@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use crate::{db::DBManager, nino_constants, nino_structures};
 
 #[derive(Clone)]
 pub struct RequestManager {
-    db: DBManager,
+    db: Arc<DBManager>,
 }
 
 #[derive(Clone)]
@@ -15,7 +17,7 @@ pub struct RequestInfo {
 
 impl RequestManager {
     pub fn new(
-        db: DBManager,
+        db: Arc<DBManager>,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
     ) -> RequestManager {
         let this = Self { db };

@@ -18,6 +18,8 @@ mod web_statics;
 use nino_structures::InitialSettings;
 use std::sync::Arc;
 
+use crate::db_notification::Notifier;
+
 fn main() {
     setup_panic_hook();
 
@@ -84,10 +86,13 @@ async fn get_db_settings(connection_string: &String) -> InitialSettings {
 }
 
 async fn main_async(settings: InitialSettings) {
-    let db = db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size)
-        .await
-        .unwrap();
-    let mut db_notifier = db_notification::DBNotificationManager::new(db.clone());
+    let db = Arc::new(
+        db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size)
+            .await
+            .unwrap(),
+    );
+
+    let db_notifier = db_notification::DBNotificationManager::new(db.clone());
     {
         // transport initial db content
         let transport = trasport::TransportManager::new(db.clone());
@@ -104,23 +109,26 @@ async fn main_async(settings: InitialSettings) {
         db_notifier.get_subscriber(),
     ));
 
+    let subscriber = db_notifier.get_subscriber();
+    let notifier = Arc::new(Notifier::new(Arc::new(db_notifier)));
+
     let dynamics = Arc::new(web_dynamics::DynamicManager::new(
         db.clone(),
         settings.js_thread_count,
-        db_notifier.get_subscriber(),
+        notifier.clone(),
+        subscriber,
     ));
 
     let _js_engine = js::JavaScriptManager::instance(
         settings.js_thread_count,
         settings.debug_port,
         Some(db.clone()),
-        //Some(db_notifier.get_subscriber()),
         Some(dynamics.clone()),
     );
     // start js threads
     js::JavaScriptManager::start().await;
 
-    await_and_exit_on_error!(db_notifier.notify("string message".to_string()));
+    await_and_exit_on_error!(notifier.notify("string message".to_string()));
 
     let web = web::WebManager::new(
         settings.server_port,

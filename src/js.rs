@@ -1,4 +1,5 @@
 use crate::db::DBManager;
+use crate::db_notification::Notifier;
 use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
 use deno_core::error::AnyError;
@@ -26,8 +27,9 @@ use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
 pub struct JavaScriptManager {
     thread_count: u16,
     inspector_port: u16,
-    db: DBManager,
+    db: Arc<DBManager>,
     dynamics: Arc<DynamicManager>,
+    notifier : Arc<Notifier>,
 }
 
 static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
@@ -40,7 +42,7 @@ impl JavaScriptManager {
     pub fn instance(
         thread_count: u16,
         inspector_port: u16,
-        db: Option<DBManager>,
+        db: Option<Arc<DBManager>>,
         //db_subscribe: Option<tokio::sync::broadcast::Receiver<nino_structures::Message>>,
         dynamics: Option<Arc<DynamicManager>>,
     ) -> JavaScriptManager {
@@ -55,11 +57,13 @@ impl JavaScriptManager {
                     });
                 }
                 */
+                let d = dynamics.unwrap();
                 JavaScriptManager {
                     thread_count,
                     inspector_port,
                     db: db.unwrap(),
-                    dynamics: dynamics.unwrap().clone(),
+                    notifier: d.get_notifier(),
+                    dynamics: d.clone(),
                 }
             });
         }
@@ -135,6 +139,7 @@ impl JavaScriptManager {
             is_request: false,
             response: Response::new(200),
             dynamics: js.dynamics.clone(),
+            notifier: js.notifier,
             module: String::new(),
             request: None,
             stream: None,

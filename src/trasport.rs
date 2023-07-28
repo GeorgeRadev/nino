@@ -2,14 +2,14 @@ use deno_core::serde_json::{self, Map, Value};
 
 use crate::{db::DBManager, nino_constants};
 use postgres::types::ToSql;
-use std::{collections::HashMap, fs, io::Read, path::Path};
+use std::{collections::HashMap, fs, io::Read, path::Path, sync::Arc};
 
 pub struct TransportManager {
-    db: DBManager,
+    db: Arc<DBManager>,
 }
 
 impl TransportManager {
-    pub fn new(db: DBManager) -> TransportManager {
+    pub fn new(db: Arc<DBManager>) -> TransportManager {
         TransportManager { db }
     }
 
