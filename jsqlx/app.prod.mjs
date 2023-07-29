@@ -11,7 +11,7 @@ const html = <><h><span>{sql[0]}</span></h></>;
 console.log("----------------");
 console.log(code);
 
-code = jsqlx.default.default(code);
+code = jsqlx.default(code);
 console.log("----------------");
 console.log(code);
 console.log("----------------");

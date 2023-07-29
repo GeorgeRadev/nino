@@ -2,27 +2,19 @@
   "name": "jsqlx",
   "version": "1.0.0",
   "description": "Babel based jsx and sql transpiling to js",
-  "main": "index.js",
+  "type": "module",
+  "main": "src/jsqlx.mjs",
   "scripts": {
-    "run": "node src/index.js",
+    "run": "node app.mjs",
     "pack": "webpack --mode production --config webpack.config.js"
   },
-  "author": "",
-  "license": "ISC",
-  "_______type": "module",
   "dependencies": {
-    "@babel/core": "^7.21.8",
-    "@babel/plugin-transform-react-jsx": "^7.21.5",
-    "@babel/preset-typescript": "^7.21.5",
+    "@babel/standalone": "^7.22.9",
     "moo": "^0.5.2"
   },
   "devDependencies": {
     "@webpack-cli/generators": "^3.0.4",
     "webpack": "^5.84.1",
     "webpack-cli": "^5.1.1"
-  },
-  "browser": {
-    "path": false,
-    "stream": false
   }
 }

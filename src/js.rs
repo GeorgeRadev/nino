@@ -29,7 +29,7 @@ pub struct JavaScriptManager {
     inspector_port: u16,
     db: Arc<DBManager>,
     dynamics: Arc<DynamicManager>,
-    notifier : Arc<Notifier>,
+    notifier: Arc<Notifier>,
 }
 
 static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
@@ -267,7 +267,6 @@ impl ModuleLoader for FNModuleLoader {
         _maybe_referrer: std::option::Option<&deno_core::url::Url>,
         _is_dyn_import: bool,
     ) -> Pin<Box<ModuleSourceFuture>> {
-        //let module_specifier = module_specifier.clone();
         let module_path = &module_specifier.path()[1..];
         println!("load module: {}", &module_path);
         Self::async_load(String::from(module_path)).boxed_local()
@@ -361,14 +360,6 @@ pub async fn run_deno_main_thread(
         todo!("Web workers are not supported in the example");
     });
 
-    let extensions = {
-        let ext = Extension::builder("nino_extentions")
-            .ops(get_ops())
-            .state(create_state)
-            .build();
-        vec![ext]
-    };
-
     let maybe_inspector_server: Option<Arc<InspectorServer>> = {
         if inspector_port != 0 {
             let inspector_str = format!("127.0.0.1:{}", inspector_port);
@@ -382,38 +373,49 @@ pub async fn run_deno_main_thread(
         }
     };
 
-    let options = WorkerOptions {
-        bootstrap: BootstrapOptions::default(),
-        extensions,
-        startup_snapshot: None,
-        unsafely_ignore_certificate_errors: None,
-        seed: None,
-        source_map_getter: None,
-        format_js_error_fn: None,
-        web_worker_preload_module_cb: web_worker_event_cb.clone(),
-        web_worker_pre_execute_module_cb: web_worker_event_cb,
-        create_web_worker_cb,
-        module_loader: Rc::new(FNModuleLoader::new(module_loader)),
-        npm_resolver: None,
-        get_error_class_fn: Some(&get_error_class_name),
-        cache_storage_dir: None,
-        origin_storage_dir: None,
-        broadcast_channel: InMemoryBroadcastChannel::default(),
-        shared_array_buffer_store: None,
-        compiled_wasm_module_store: None,
-        maybe_inspector_server: maybe_inspector_server.clone(),
-        should_break_on_first_statement: false,
-        should_wait_for_inspector_session: false,
-        ..Default::default()
-    };
+    loop {
+        let extensions = {
+            let ext = Extension::builder("nino_extentions")
+                .ops(get_ops())
+                .state(create_state)
+                .build();
+            vec![ext]
+        };
 
-    let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
+        let options = WorkerOptions {
+            bootstrap: BootstrapOptions::default(),
+            extensions,
+            module_loader: Rc::new(FNModuleLoader::new(module_loader)),
+            create_web_worker_cb: create_web_worker_cb.clone(),
+            web_worker_preload_module_cb: web_worker_event_cb.clone(),
+            web_worker_pre_execute_module_cb: web_worker_event_cb.clone(),
+            get_error_class_fn: Some(&get_error_class_name),
+            broadcast_channel: InMemoryBroadcastChannel::default(),
+            maybe_inspector_server: maybe_inspector_server.clone(),
+            seed: None,
+            npm_resolver: None,
+            startup_snapshot: None,
+            cache_storage_dir: None,
+            source_map_getter: None,
+            format_js_error_fn: None,
+            origin_storage_dir: None,
+            shared_array_buffer_store: None,
+            compiled_wasm_module_store: None,
+            unsafely_ignore_certificate_errors: None,
+            should_break_on_first_statement: false,
+            should_wait_for_inspector_session: false,
+            ..Default::default()
+        };
 
-    let mut worker = MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
+        let permissions =
+            PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
 
-    worker.execute_main_module(&main_module).await?;
-    worker.run_event_loop(false).await?;
+        let mut worker =
+            MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
 
-    maybe_inspector_server.unwrap();
-    Ok(())
+        worker.execute_main_module(&main_module).await?;
+        worker.run_event_loop(false).await?;
+    }
+    // maybe_inspector_server.unwrap();
+    // Ok(())
 }

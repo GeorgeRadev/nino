@@ -1,17 +1,15 @@
-import babel from '@babel/core';
-import babel_jsx from '@babel/plugin-transform-react-jsx';
+import babel from '@babel/standalone';
 import { sqlToArray } from "./jsql.mjs";
 
 export default function jsqlx(code) {
     code = sqlToArray(code);
-    const output = babel.transformSync(code, {
-        plugins: [
-            [babel_jsx, {
-                runtime: "classic",
-                pragma: "_jsx",
-                pragmaFrag: "_Fragment"
-            }]
-        ]
+    const output = babel.transform(code, {
+        presets: [
+            ['react', {
+                runtime: "automatic",
+                //  pragma: "_jsx",
+                //  pragmaFrag: "_Fragment"
+            }]]
     });
     return output.code
 }

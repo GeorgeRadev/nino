@@ -1,18 +1,20 @@
-const path = require('path')
+import path from "path";
 
 const dist = path.resolve("./dist");
 
-module.exports = {
+export default {
     mode: "production",
     entry: {
-        //app: './src/app.mjs',
         jsqlx: './src/jsqlx.mjs',
     },
     output: {
         path: dist,
         filename: "[name].min.js",
-        libraryTarget: "commonjs-module"
+        library: {
+            type: "module",
+        }
     },
-    target: "node",
-}
-
+    experiments: {
+        outputModule: true,
+    },
+};

@@ -24,6 +24,9 @@ async function main() {
                 // core.print('default handler with ' + handler_arguments_count + ' arguments\n');
 
                 const request = core.ops.op_get_request();
+                request.set = function (key, value) {
+                    core.ops.op_set_response_header(key, value);
+                };
                 const send_response = async function (response) {
                     // core.print('response typeof ' + (typeof response) + '\n');
                     if (typeof response === 'string') {
@@ -73,7 +76,7 @@ async function main() {
                     //request for cache invalidation
                     const threadId = core.ops.op_get_thread_id();
                     core.print('js got invalidation message (' + threadId + '): ' + invalidation_message + '\n');
-
+                    break;
                 } else {
                     throw Exception("Should never get this");
                 }

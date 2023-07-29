@@ -40,7 +40,7 @@
         },
         {
             "key": "nino_js_thread_count",
-            "value": "2"
+            "value": "1"
         },
         {
             "key": "nino_web_server_port",
@@ -97,6 +97,34 @@
             "dynamic": true,
             "authorize": true,
             "execute": true
+        },
+        {
+            "path": "jsqlx_servlet",
+            "name": "jsqlx_servlet",
+            "dynamic": true,
+            "authorize": true,
+            "execute": true
+        },
+        {
+            "path": "ide",
+            "name": "ide/index.html",
+            "dynamic": false,
+            "authorize": true,
+            "execute": false
+        },
+        {
+            "path": "ide/ide.css",
+            "name": "ide/ide.css",
+            "dynamic": false,
+            "authorize": false,
+            "execute": false
+        },
+        {
+            "path": "ide/ide.js",
+            "name": "ide/ide.js",
+            "dynamic": false,
+            "authorize": true,
+            "execute": false
         }
     ],
     "statics": [
@@ -114,6 +142,21 @@
             "name": "static.json",
             "mime": "application/json",
             "file": "./static.json"
+        },
+        {
+            "name": "ide/index.html",
+            "mime": "text/html; charset=UTF-8",
+            "file": "./ide/index.html"
+        },
+        {
+            "name": "ide/ide.css",
+            "mime": "text/css",
+            "file": "./ide/ide.css"
+        },
+        {
+            "name": "ide/ide.js",
+            "mime": "text/javascript",
+            "file": "./ide/ide.js"
         }
     ],
     "dynamics": [
@@ -135,6 +178,14 @@
         {
             "name": "notify_servlet",
             "file": "./notify_servlet.js"
+        },
+        {
+            "name": "jsqlx_core",
+            "file": "./jsqlx.min.js"
+        },
+        {
+            "name": "jsqlx_servlet",
+            "file": "./jsqlx_servlet.js"
         }
     ]
 }
