@@ -131,7 +131,7 @@ impl JavaScriptManager {
         let js = JavaScriptManager::instance(0, 0, None, None);
 
         let inst = JS_INSTANCE.get().unwrap();
-        state.put(js_functions::JSTask {
+        state.put(js_functions::JSContext {
             id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
             db: inst.db.clone(),
             web_task_rx: inst.dynamics.get_web_task_rx(),

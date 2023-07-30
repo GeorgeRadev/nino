@@ -27,7 +27,7 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
     ]
 }
 
-pub struct JSTask {
+pub struct JSContext {
     pub id: u32,
     pub db: Arc<DBManager>,
     pub dynamics: Arc<DynamicManager>,
@@ -45,7 +45,7 @@ pub struct JSTask {
     pub message: String,
 }
 
-impl JSTask {
+impl JSContext {
     pub fn close(&mut self) {
         // response
         self.is_request = false;
@@ -77,28 +77,28 @@ macro_rules! function {
 }
 
 #[op]
-fn op_begin_task(op_state: &mut OpState) -> Result<String, Error> {
-    let inner_state = op_state.borrow_mut::<JSTask>();
+fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
+    let context = state.borrow_mut::<JSContext>();
     let mut module = String::new();
-    let result = inner_state.web_task_rx.recv_blocking();
+    let result = context.web_task_rx.recv_blocking();
     match result {
         Ok(web_task) => {
             if web_task.is_request {
                 // request
-                inner_state.is_request = true;
+                context.is_request = true;
                 if web_task.js_module.is_some() {
                     module = web_task.js_module.clone().unwrap();
                 }
-                inner_state.module = module.clone();
-                inner_state.request = web_task.request;
-                inner_state.response = Response::new(200);
-                inner_state.stream = web_task.stream;
-                inner_state.closed = false;
+                context.module = module.clone();
+                context.request = web_task.request;
+                context.response = Response::new(200);
+                context.stream = web_task.stream;
+                context.closed = false;
             } else if web_task.is_invalidate {
                 // invalidate message
-                inner_state.is_invalidate = web_task.is_invalidate;
-                inner_state.message = web_task.message;
-                inner_state.closed = true;
+                context.is_invalidate = web_task.is_invalidate;
+                context.message = web_task.message;
+                context.closed = true;
             } else {
                 // should not  get here
                 panic!("should not get here")
@@ -107,12 +107,12 @@ fn op_begin_task(op_state: &mut OpState) -> Result<String, Error> {
             println!("new js task");
         }
         Err(error) => {
-            inner_state.closed = true;
+            context.closed = true;
             println!(
                 "{}:{}:{} new js task ERROR: {}",
                 function!(),
                 line!(),
-                inner_state.id,
+                context.id,
                 error
             );
         }
@@ -121,21 +121,21 @@ fn op_begin_task(op_state: &mut OpState) -> Result<String, Error> {
 }
 
 #[op]
-async fn aop_end_task(state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
-    let mut op_state = state.borrow_mut();
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    if inner_state.closed {
+async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
+    let mut state = op_state.borrow_mut();
+    let context = state.borrow_mut::<JSContext>();
+    if context.closed {
         //task already closed
         return Ok(false);
     }
 
-    let stream = inner_state.stream.as_mut().unwrap();
-    let response = &mut inner_state.response;
+    let stream = context.stream.as_mut().unwrap();
+    let response = &mut context.response;
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
-    inner_state.close();
+    context.close();
     Ok(true)
 }
 
@@ -152,11 +152,11 @@ pub struct HttpRequest {
 
 #[op]
 fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
-    let task = state.borrow_mut::<JSTask>();
-    if !task.is_request {
+    let context = state.borrow_mut::<JSContext>();
+    if !context.is_request {
         return Err(Error::msg("task is not a request"));
     }
-    let request = task.request.as_mut().unwrap();
+    let request = context.request.as_mut().unwrap();
     let url = request.url();
     let url_str = url.to_string();
 
@@ -174,44 +174,45 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
 
 #[op]
 fn op_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
-    let task = state.borrow_mut::<JSTask>();
-    task.response
+    let context = state.borrow_mut::<JSContext>();
+    context
+        .response
         .set_status(StatusCode::try_from(status).unwrap());
     Ok(())
 }
 
 #[op]
 fn op_set_response_header(state: &mut OpState, key: String, value: String) -> Result<(), Error> {
-    let task = state.borrow_mut::<JSTask>();
-    task.response.remove_header(&*key);
-    task.response.append_header(&*key, &*value);
+    let context = state.borrow_mut::<JSContext>();
+    context.response.remove_header(&*key);
+    context.response.append_header(&*key, &*value);
     Ok(())
 }
 
 #[op]
 async fn aop_set_response_send_text(
-    state: Rc<RefCell<OpState>>,
+    op_state: Rc<RefCell<OpState>>,
     body: String,
 ) -> Result<(), Error> {
-    aop_set_response_send(state, "plain/text;charset=UTF-8", body).await
+    aop_set_response_send(op_state, "plain/text;charset=UTF-8", body).await
 }
 
 #[op]
 async fn aop_set_response_send_json(
-    state: Rc<RefCell<OpState>>,
+    op_state: Rc<RefCell<OpState>>,
     body: String,
 ) -> Result<(), Error> {
-    aop_set_response_send(state, "application/json", body).await
+    aop_set_response_send(op_state, "application/json", body).await
 }
 
 async fn aop_set_response_send(
-    state: Rc<RefCell<OpState>>,
+    op_state: Rc<RefCell<OpState>>,
     mime: &str,
     body: String,
 ) -> Result<(), Error> {
-    let mut op_state = state.borrow_mut();
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    let response = &mut inner_state.response;
+    let mut state = op_state.borrow_mut();
+    let context = state.borrow_mut::<JSContext>();
+    let response = &mut context.response;
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
     response.set_body(body);
@@ -219,29 +220,29 @@ async fn aop_set_response_send(
         response.insert_header(CONTENT_TYPE, mime);
     }
 
-    if !inner_state.is_request {
+    if !context.is_request {
         return Err(Error::msg("task is not a request"));
     }
     if let Err(error) = nino_functions::send_response_to_stream(
-        inner_state.stream.as_mut().unwrap(),
-        &mut inner_state.response,
+        context.stream.as_mut().unwrap(),
+        &mut context.response,
     )
     .await
     {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     };
-    inner_state.closed = true;
+    context.closed = true;
     Ok(())
 }
 
 #[op]
 async fn aop_set_response_send_buf(
-    state: Rc<RefCell<OpState>>,
+    op_state: Rc<RefCell<OpState>>,
     buffer: Vec<u8>,
 ) -> Result<(), Error> {
-    let mut op_state = state.borrow_mut();
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    let response = &mut inner_state.response;
+    let mut state = op_state.borrow_mut();
+    let context = state.borrow_mut::<JSContext>();
+    let response = &mut context.response;
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
     response.set_body(buffer);
@@ -249,29 +250,29 @@ async fn aop_set_response_send_buf(
         response.insert_header(CONTENT_TYPE, "text/html;charset=UTF-8");
     }
 
-    if !inner_state.is_request {
+    if !context.is_request {
         return Err(Error::msg("task is not a request"));
     }
     if let Err(error) = nino_functions::send_response_to_stream(
-        inner_state.stream.as_mut().unwrap(),
-        &mut inner_state.response,
+        context.stream.as_mut().unwrap(),
+        &mut context.response,
     )
     .await
     {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     };
-    inner_state.closed = true;
+    context.closed = true;
     Ok(())
 }
 
 #[op]
-async fn aop_sleep(state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Error> {
+async fn aop_sleep(op_state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Error> {
     // Future must be Poll::Pending on first call
     let v;
     {
-        let op_state = state.borrow();
-        let task = op_state.borrow::<JSTask>();
-        v = task.id;
+        let state = op_state.borrow();
+        let context = state.borrow::<JSContext>();
+        v = context.id;
     }
     println!("{} waiting", v);
     tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
@@ -280,28 +281,28 @@ async fn aop_sleep(state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Error
 
 #[op]
 fn op_get_invalidation_message(state: &mut OpState) -> String {
-    let task = state.borrow_mut::<JSTask>();
-    if task.is_invalidate {
-        return task.message.clone();
+    let context = state.borrow_mut::<JSContext>();
+    if context.is_invalidate {
+        return context.message.clone();
     }
     String::new()
 }
 
 #[op]
 fn op_get_thread_id(state: &mut OpState) -> u32 {
-    let task = state.borrow_mut::<JSTask>();
-    task.id
+    let context = state.borrow_mut::<JSContext>();
+    context.id
 }
 
 #[op]
 async fn aop_broadcast_message(
-    state: Rc<RefCell<OpState>>,
+    op_state: Rc<RefCell<OpState>>,
     message: String,
 ) -> Result<bool, Error> {
     let notifier = {
-        let mut op_state = state.borrow_mut();
-        let inner_state = op_state.borrow_mut::<JSTask>();
-        inner_state.notifier.clone()
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        context.notifier.clone()
     };
     match notifier.notify(message).await {
         Ok(_) => Ok(true),
