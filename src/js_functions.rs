@@ -1,4 +1,5 @@
-use crate::db_notification::Notifier;
+use crate::db_notification::{Notifier, self};
+use crate::js_dbs::JSDBManager;
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
@@ -24,12 +25,14 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_get_invalidation_message::DECL,
         op_get_thread_id::DECL,
         aop_broadcast_message::DECL,
+        op_get_module_invalidation_prefix::DECL,
     ]
 }
 
 pub struct JSContext {
     pub id: u32,
     pub db: Arc<DBManager>,
+    pub jsdb: Arc<JSDBManager>,
     pub dynamics: Arc<DynamicManager>,
     pub notifier: Arc<Notifier>,
     pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
@@ -57,6 +60,7 @@ impl JSContext {
         // invalidate
         self.is_invalidate = false;
         self.message = String::new();
+        self.jsdb.cleanup();
     }
 }
 
@@ -75,6 +79,16 @@ macro_rules! function {
         }
     }};
 }
+
+// sync to async
+// #[op]
+// async fn op_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
+//     let future = tokio::task::spawn_blocking(move || {
+//         // do some job here
+//     });
+//     future.await?;
+//     Ok(())
+// }
 
 #[op]
 fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
@@ -121,7 +135,7 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 }
 
 #[op]
-async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
+async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<bool, Error> {
     let mut state = op_state.borrow_mut();
     let context = state.borrow_mut::<JSContext>();
     if context.closed {
@@ -134,6 +148,11 @@ async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+    }
+    if error {
+        // rollback
+    } else {
+        //commit dbs
     }
     context.close();
     Ok(true)
@@ -310,11 +329,7 @@ async fn aop_broadcast_message(
     }
 }
 
-// #[op]
-// async fn op_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
-//     let future = tokio::task::spawn_blocking(move || {
-//         // do some job here
-//     });
-//     future.await?;
-//     Ok(())
-// }
+#[op]
+fn op_get_module_invalidation_prefix() -> String {
+    String::from(db_notification::NOTIFICATION_PREFIX_DYNAMICS)
+}

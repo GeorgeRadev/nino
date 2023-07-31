@@ -1,5 +1,6 @@
 use crate::db::DBManager;
 use crate::db_notification::Notifier;
+use crate::js_dbs::JSDBManager;
 use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
 use deno_core::error::AnyError;
@@ -25,9 +26,10 @@ use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
 /// need to call start() to begin js threads
 #[derive(Clone)]
 pub struct JavaScriptManager {
-    thread_count: u16,
+    thread_count: usize,
     inspector_port: u16,
     db: Arc<DBManager>,
+    jsdb: Arc<JSDBManager>,
     dynamics: Arc<DynamicManager>,
     notifier: Arc<Notifier>,
 }
@@ -40,10 +42,10 @@ impl JavaScriptManager {
      * use start() to begin listening.
      */
     pub fn instance(
-        thread_count: u16,
+        thread_count: usize,
         inspector_port: u16,
         db: Option<Arc<DBManager>>,
-        //db_subscribe: Option<tokio::sync::broadcast::Receiver<nino_structures::Message>>,
+        jsdb: Option<Arc<JSDBManager>>,
         dynamics: Option<Arc<DynamicManager>>,
     ) -> JavaScriptManager {
         {
@@ -62,6 +64,7 @@ impl JavaScriptManager {
                     thread_count,
                     inspector_port,
                     db: db.unwrap(),
+                    jsdb: jsdb.unwrap(),
                     notifier: d.get_notifier(),
                     dynamics: d.clone(),
                 }
@@ -75,7 +78,7 @@ impl JavaScriptManager {
     // for developing purposes use single js instance and debugger will attach to it
     pub async fn start() {
         let (thread_count, inspector_port) = {
-            let instance = Self::instance(0, 0, None, None);
+            let instance = Self::instance(0, 0, None, None, None);
             (instance.thread_count, instance.inspector_port)
         };
 
@@ -94,7 +97,7 @@ impl JavaScriptManager {
                         Self::create_js_context_state,
                         nino_constants::MAIN_MODULE,
                         if inspector_port > 0 {
-                            inspector_port + i
+                            inspector_port + i as u16
                         } else {
                             0
                         },
@@ -128,12 +131,13 @@ impl JavaScriptManager {
         static JS_THREAD_ID: std::sync::atomic::AtomicUsize =
             std::sync::atomic::AtomicUsize::new(0);
 
-        let js = JavaScriptManager::instance(0, 0, None, None);
+        let js = JavaScriptManager::instance(0, 0, None, None, None);
 
         let inst = JS_INSTANCE.get().unwrap();
         state.put(js_functions::JSContext {
             id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
             db: inst.db.clone(),
+            jsdb: inst.jsdb.clone(),
             web_task_rx: inst.dynamics.get_web_task_rx(),
             //request defaults
             is_request: false,
@@ -166,7 +170,7 @@ impl JavaScriptManager {
 
 /// this is used to create the v8 runtime :
 /// it is intilaized only once and lives through the livetime of the applocation
-pub fn init_platform(thread_count: u16) {
+pub fn init_platform(thread_count: usize) {
     static INIT_PLATFORM: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
     {
         //init platform once
@@ -339,7 +343,7 @@ pub fn run_deno_thread(
 }
 
 fn get_error_class_name(e: &AnyError) -> &'static str {
-    deno_runtime::errors::get_error_class_name(e).unwrap_or("Error")
+    deno_runtime::errors::get_error_class_name(e).unwrap_or("JSError")
 }
 
 // new one using deno MainWorker

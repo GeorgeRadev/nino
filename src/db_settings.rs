@@ -82,12 +82,12 @@ impl SettingsManager {
         .await
     }
 
-    pub async fn get_js_thread_count(&self) -> u16 {
-        self.get_setting_i32(
+    pub async fn get_js_thread_count(&self) -> usize {
+        self.get_setting_usize(
             nino_constants::SETTINGS_JS_THREAD_COUNT,
             nino_constants::SETTINGS_JS_THREAD_COUNT_DEFAULT,
         )
-        .await as u16
+        .await
     }
 
     pub async fn get_debug_port(&self) -> u16 {

@@ -10,9 +10,12 @@ macro_rules! PKG_VERSION {
     };
 }
 
-///program name
+/// program name
 pub const PROGRAM_NAME: &str = PKG_NAME!();
 pub const PROGRAM_VERSION: &str = PKG_VERSION!();
+
+/// use cache parameters
+pub static USE_REQUEST_CACHE: bool = true;
 
 /// SETTINGS table name
 pub const SETTINGS_TABLE: &str = concat!(PKG_NAME!(), "_setting");
@@ -22,9 +25,11 @@ pub const REQUESTS_TABLE: &str = concat!(PKG_NAME!(), "_request");
 pub const STATICS_TABLE: &str = concat!(PKG_NAME!(), "_static");
 /// DYNAMICS table name
 pub const DYNAMICS_TABLE: &str = concat!(PKG_NAME!(), "_dynamic");
+/// DATABASE table name with connection strings
+pub const DATABASE_TABLE: &str = concat!(PKG_NAME!(), "_database");
 
 /// JS settings
-/// 
+///
 pub const MODULE_URI: &str = "http://nino.db/";
 pub const MAIN_MODULE: &str = "_main";
 
@@ -44,11 +49,8 @@ pub const SETTINGS_NINO_WEB_SERVER_PORT_DEFAULT: i32 = 8080;
 
 /// defines how many connections to be in each connection pool
 pub const SETTINGS_DB_CONNECTION_POOL_SIZE: &str = "nino_db_connection_pool_size";
-pub const SETTINGS_DB_CONNECTION_POOL_SIZE_DEFAULT: i32 = 4;
+pub const SETTINGS_DB_CONNECTION_POOL_SIZE_DEFAULT: i32 = 0;
 
 /// debug port
 pub const SETTINGS_NINO_DEBUG_PORT: &str = "nino_debug_port";
 pub const SETTINGS_NINO_DEBUG_PORT_DEFAULT: i32 = 0;
-
-
-

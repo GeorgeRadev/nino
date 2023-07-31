@@ -31,6 +31,22 @@
         {
             "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_dynamic (name VARCHAR(1024) PRIMARY KEY, code_length INT, js_length INT, code BYTEA, js BYTEA)"
+        },
+        {
+            "break_on_error": true,
+            "query": "DROP TABLE IF EXISTS nino_database"
+        },
+        {
+            "break_on_error": true,
+            "query": "CREATE TABLE IF NOT EXISTS nino_database (db_name VARCHAR(1024) PRIMARY KEY, db_type VARCHAR(256) NOT NULL, db_connection_string VARCHAR(4096) NOT NULL)"
+        },
+        {
+            "break_on_error": true,
+            "query": "INSERT INTO nino_database (db_name, db_type, db_connection_string) VALUES ('_main', 'postgres', 'just a name for referencing the application connection')"
+        },
+        {
+            "break_on_error": true,
+            "query": "INSERT INTO nino_database (db_name, db_type, db_connection_string) VALUES ('test', 'postgres', 'postgresql://dead_one@localhost/postgres?connect_timeout=10')"
         }
     ],
     "settings": [
@@ -125,6 +141,13 @@
             "dynamic": false,
             "authorize": true,
             "execute": false
+        },
+        {
+            "path": "db_servlet",
+            "name": "db_servlet",
+            "dynamic": true,
+            "authorize": true,
+            "execute": true
         }
     ],
     "statics": [
@@ -186,6 +209,14 @@
         {
             "name": "jsqlx_servlet",
             "file": "./jsqlx_servlet.js"
+        },
+        {
+            "name": "db",
+            "file": "./db.js"
+        },
+        {
+            "name": "db_servlet",
+            "file": "./db_servlet.js"
         }
     ]
 }

@@ -6,7 +6,7 @@ pub struct InitialSettings {
     pub connection_string: String,
     pub thread_count: usize,
     pub db_pool_size: usize,
-    pub js_thread_count: u16,
+    pub js_thread_count: usize,
     pub server_port: u16,
     pub debug_port: u16,
 }
@@ -25,5 +25,5 @@ pub struct WebTask {
 
 #[derive(Clone)]
 pub struct Message {
-    pub json: String,
+    pub text: String,
 }

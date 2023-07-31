@@ -2,11 +2,11 @@ use crate::{db::DBManager, nino_structures};
 use std::sync::Arc;
 
 // notification prefixes for resource invalidation:
-pub const NOTIFICATION_PREFIX_REQUESTS: &str = "path:";
+pub const NOTIFICATION_PREFIX_REQUESTS: &str = "request:";
 pub const NOTIFICATION_PREFIX_DYNAMICS: &str = "dynamic:";
 pub const NOTIFICATION_PREFIX_STATICS: &str = "static:";
 pub const NOTIFICATION_PREFIX_SETTINGS: &str = "setting:";
-pub const NOTIFICATION_PREFIX_DBNAME: &str = "dbname:";
+pub const NOTIFICATION_PREFIX_DBNAME: &str = "database:";
 
 macro_rules! PKG_NAME {
     () => {
@@ -108,7 +108,7 @@ impl DBNotificationManager {
                             println!("message: {:?}", c);
                             // broad cast message to listeners
                             if let Err(error) = broadcast_sx.send(nino_structures::Message {
-                                json: c.payload().to_string(),
+                                text: c.payload().to_string(),
                             }) {
                                 eprintln!(
                                     "ERROR {}:{}:sending message {}",

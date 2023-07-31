@@ -74,20 +74,24 @@ async function main() {
                 const invalidation_message = core.ops.op_get_invalidation_message();
                 if (invalidation_message) {
                     //request for cache invalidation
-                    const threadId = core.ops.op_get_thread_id();
-                    core.print('js got invalidation message (' + threadId + '): ' + invalidation_message + '\n');
-                    break;
+                    if (invalidation_message.startsWith(core.ops.op_get_module_invalidation_prefix())) {
+                        // modules has been changed
+                        const threadId = core.ops.op_get_thread_id();
+                        core.print('js got invalidation message (' + threadId + '): ' + invalidation_message + '\n');
+                        break;
+                    }
                 } else {
                     throw Exception("Should never get this");
                 }
             }
+            await core.opAsync('aop_end_task', false);
+
         } catch (e) {
             let errorMessage = 'JS_ERROR: ' + e + '\n' + e.stack;
             core.print(errorMessage + '\n');
             core.ops.op_set_response_status(500);
             await core.opAsync('aop_set_response_send_text', errorMessage);
-        } finally {
-            await core.opAsync('aop_end_task');
+            await core.opAsync('aop_end_task', true);
         }
     }
 }

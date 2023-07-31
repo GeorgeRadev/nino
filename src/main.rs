@@ -2,6 +2,7 @@ mod db;
 mod db_notification;
 mod db_settings;
 mod js;
+mod js_dbs;
 mod js_functions;
 mod js_test;
 mod js_test_debug;
@@ -17,8 +18,6 @@ mod web_statics;
 
 use nino_structures::InitialSettings;
 use std::sync::Arc;
-
-use crate::db_notification::Notifier;
 
 fn main() {
     setup_panic_hook();
@@ -73,7 +72,11 @@ async fn get_db_settings(connection_string: &String) -> InitialSettings {
     let js_thread_count = settings.get_js_thread_count().await;
     let server_port = settings.get_server_port().await;
     let debug_port = settings.get_debug_port().await;
-    let db_pool_size = settings.get_db_pool_size().await;
+    let mut db_pool_size = settings.get_db_pool_size().await;
+    if db_pool_size == 0 {
+        // match db pool to serving threads + js threads
+        db_pool_size = thread_count + js_thread_count;
+    }
 
     InitialSettings {
         connection_string: connection_string.clone(),
@@ -109,20 +112,26 @@ async fn main_async(settings: InitialSettings) {
         db_notifier.get_subscriber(),
     ));
 
-    let subscriber = db_notifier.get_subscriber();
-    let notifier = Arc::new(Notifier::new(Arc::new(db_notifier)));
+    let jsdb = Arc::new(js_dbs::JSDBManager::new(
+        db.clone(),
+        db_notifier.get_subscriber(),
+    ));
+
+    let dyn_subscriber = db_notifier.get_subscriber();
+    let notifier = Arc::new(db_notification::Notifier::new(Arc::new(db_notifier)));
 
     let dynamics = Arc::new(web_dynamics::DynamicManager::new(
         db.clone(),
         settings.js_thread_count,
         notifier.clone(),
-        subscriber,
+        dyn_subscriber,
     ));
 
     let _js_engine = js::JavaScriptManager::instance(
         settings.js_thread_count,
         settings.debug_port,
         Some(db.clone()),
+        Some(jsdb.clone()),
         Some(dynamics.clone()),
     );
     // start js threads

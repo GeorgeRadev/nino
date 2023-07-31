@@ -133,7 +133,7 @@ impl WebManager {
         println!("REQUEST: {} {} {}", method, from_address, url);
 
         // check if requests is servable
-        let request_info = match requests.get_request(path).await {
+        let request_info = match requests.get_request(&String::from(path)).await {
             None => {
                 Self::response_404(stream, url).await;
                 return;

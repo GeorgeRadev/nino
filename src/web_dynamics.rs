@@ -15,7 +15,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct DynamicManager {
     db: Arc<DBManager>,
-    js_thread_count: u16,
+    js_thread_count: usize,
     web_task_sx: Sender<Box<nino_structures::WebTask>>,
     web_task_rx: Receiver<Box<nino_structures::WebTask>>,
     notifier: Arc<Notifier>,
@@ -24,7 +24,7 @@ pub struct DynamicManager {
 impl DynamicManager {
     pub fn new(
         db: Arc<DBManager>,
-        js_thread_count: u16,
+        js_thread_count: usize,
         notifier: Arc<Notifier>,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
     ) -> DynamicManager {
@@ -63,7 +63,7 @@ impl DynamicManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("dymnamics got message: {}", message.json);
+                    println!("dymnamics got message: {}", message.text);
                     // send invalidation messages to the js threads
                     let web_task = Box::new(nino_structures::WebTask {
                         is_request: false,
@@ -71,7 +71,7 @@ impl DynamicManager {
                         request: None,
                         stream: None,
                         is_invalidate: true,
-                        message: message.json,
+                        message: message.text,
                     });
                     for _ in 0..self.js_thread_count {
                         if let Err(error) = self.web_task_sx.send(web_task.clone()).await {
