@@ -61,7 +61,7 @@ impl StaticManager {
         }
     }
 
-    pub async fn serve_static(&self, path: &str, request: Request, mut stream: Box<TcpStream>) -> bool {
+    pub async fn serve_static(&self, path: &str, request: Request, stream: Box<TcpStream>) -> bool {
         let method = request.method();
         if Method::Get != method {
             // handle only GET static requests
@@ -74,7 +74,7 @@ impl StaticManager {
             let mut response = Response::new(StatusCode::Ok);
             response.set_content_type(Mime::from_str(&mime).unwrap());
             response.set_body(http_types::Body::from(content));
-            match nino_functions::send_response_to_stream(stream.as_mut(), &mut response).await {
+            match nino_functions::send_response_to_stream(stream, &mut response).await {
                 Ok(_) => {
                     result = true;
                 }

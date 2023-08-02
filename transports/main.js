@@ -1,10 +1,9 @@
-
 async function main() {
-    const core = Deno[Deno.internal].core;
     for (; ;) {
+        const core = Deno[Deno.internal].core;
         try {
             // core.print('js try\n');
-            // debugger;
+            debugger;
             const module = core.ops.op_begin_task();
 
             if (module) {
@@ -28,7 +27,7 @@ async function main() {
                     core.ops.op_set_response_header(key, value);
                 };
                 const send_response = async function (response) {
-                    // core.print('response typeof ' + (typeof response) + '\n');
+                    core.print('response typeof ' + (typeof response) + '\n');
                     if (typeof response === 'string') {
                         await core.opAsync('aop_set_response_send_text', response);
                     } else if (response instanceof Number) {
@@ -51,10 +50,21 @@ async function main() {
                     // servlet handler with request and response params
                     const response = {
                         set: function (key, value) {
-                            core.ops.op_set_response_header(key, value);
+                            if (key instanceof String && value instanceof String) {
+                                core.ops.op_set_response_header(key, value);
+                            } else {
+                                throw Exception("response.set() parameters needs to be both strings not "
+                                    + JSON.stringify(key) + ", "
+                                    + JSON.stringify(value)
+                                );
+                            }
                         },
                         status: function (status) {
-                            core.ops.op_set_response_status(status);
+                            if (status instanceof Number) {
+                                core.ops.op_set_response_status(status);
+                            } else {
+                                throw Exception("response.status() needs to be a number not " + JSON.stringify(status));
+                            }
                         },
                         send: async function (response) {
                             await send_response(response);
@@ -62,8 +72,9 @@ async function main() {
                     };
 
                     core.print('before handler 2\n');
-                    let result = await handler(request, response);
-                    core.print('result = ' + (result) + '\n');
+                    // let result = 
+                    await handler(request, response);
+                    // core.print('result = ' + (result) + '\n');
                     core.print('after handler 2\n');
 
                 } else {
@@ -87,11 +98,17 @@ async function main() {
             await core.opAsync('aop_end_task', false);
 
         } catch (e) {
-            let errorMessage = 'JS_ERROR: ' + e + '\n' + e.stack;
-            core.print(errorMessage + '\n');
-            core.ops.op_set_response_status(500);
-            await core.opAsync('aop_set_response_send_text', errorMessage);
-            await core.opAsync('aop_end_task', true);
+            try {
+                let errorMessage = 'JS_ERROR: ' + e + '\n' + e.stack;
+                core.print(errorMessage + '\n');
+                core.ops.op_set_response_status(500);
+                core.ops.op_set_response_header('Content-Type', 'text/plain;charset=UTF-8');
+                await core.opAsync('aop_set_response_send_text', errorMessage);
+                await core.opAsync('aop_end_task', true);
+            } catch (ex) {
+                let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
+                core.print(errorMessage + '\n');
+            }
         }
     }
 }

@@ -32,7 +32,7 @@ fn main() {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(get_db_settings(&connection_string))
+            .block_on(get_db_settings(connection_string))
     };
 
     // async functionalities goes here
@@ -53,7 +53,7 @@ macro_rules! await_and_exit_on_error {
     };
 }
 
-async fn get_db_settings(connection_string: &String) -> InitialSettings {
+async fn get_db_settings(connection_string: String) -> InitialSettings {
     let db;
     loop {
         match db::DBManager::instance(connection_string.clone(), 2).await {

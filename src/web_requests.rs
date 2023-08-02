@@ -75,6 +75,7 @@ impl RequestManager {
             }
             Ok(rows) => {
                 let mut map = REQUEST_CACHE.get().unwrap().write().unwrap();
+                map.clear();
                 for row in rows {
                     let path: String = row.get(0);
                     let name: String = row.get(1);

@@ -38,15 +38,15 @@
         },
         {
             "break_on_error": true,
-            "query": "CREATE TABLE IF NOT EXISTS nino_database (db_name VARCHAR(1024) PRIMARY KEY, db_type VARCHAR(256) NOT NULL, db_connection_string VARCHAR(4096) NOT NULL)"
+            "query": "CREATE TABLE IF NOT EXISTS nino_database (db_alias VARCHAR(1024) PRIMARY KEY, db_type VARCHAR(256) NOT NULL, db_connection_string VARCHAR(4096) NOT NULL)"
         },
         {
             "break_on_error": true,
-            "query": "INSERT INTO nino_database (db_name, db_type, db_connection_string) VALUES ('_main', 'postgres', 'just a name for referencing the application connection')"
+            "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('_main', 'postgres', 'just a name for referencing the application connection')"
         },
         {
             "break_on_error": true,
-            "query": "INSERT INTO nino_database (db_name, db_type, db_connection_string) VALUES ('test', 'postgres', 'postgresql://dead_one@localhost/postgres?connect_timeout=10')"
+            "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('test', 'postgres', 'postgresql://dead_one@localhost/postgres?connect_timeout=10')"
         }
     ],
     "settings": [

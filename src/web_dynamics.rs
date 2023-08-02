@@ -128,13 +128,13 @@ impl DynamicManager {
         None
     }
 
-    pub async fn serve_dynamic(&self, path: &str, mut stream: Box<TcpStream>) -> bool {
+    pub async fn serve_dynamic(&self, path: &str, stream: Box<TcpStream>) -> bool {
         // look for matching path
         if let Some(js_module) = self.get_matching_path(path).await {
             let mut response = Response::new(StatusCode::Ok);
             response.set_content_type(Mime::from_str("application/javascript").unwrap());
             response.set_body(http_types::Body::from(js_module));
-            match nino_functions::send_response_to_stream(stream.as_mut(), &mut response).await {
+            match nino_functions::send_response_to_stream(stream, &mut response).await {
                 Ok(_) => true,
                 Err(error) => {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);

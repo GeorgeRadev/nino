@@ -32,6 +32,8 @@ pub const DATABASE_TABLE: &str = concat!(PKG_NAME!(), "_database");
 ///
 pub const MODULE_URI: &str = "http://nino.db/";
 pub const MAIN_MODULE: &str = "_main";
+pub const MAIN_DB: &str = "_main";
+pub const DB_TYPE_POSTGRES : &str = "postgres";
 
 /// SETTINGS table constants
 

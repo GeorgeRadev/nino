@@ -36,7 +36,7 @@ pub struct JavaScriptManager {
 
 static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
 
-impl JavaScriptManager {
+impl JavaScriptManager{
     /**
      * Greate and initialize Singleton Manager instance.
      * use start() to begin listening.
@@ -51,22 +51,15 @@ impl JavaScriptManager {
         {
             JS_INSTANCE.get_or_init(|| {
                 init_platform(thread_count);
-                /*
-                if let Some(db_subscribe) = db_subscribe {
-                    let thizz = this.clone();
-                    tokio::spawn(async move {
-                        thizz.invalidator(db_subscribe).await;
-                    });
-                }
-                */
-                let d = dynamics.unwrap();
+              
+                let dynamics = dynamics.unwrap();
                 JavaScriptManager {
                     thread_count,
                     inspector_port,
                     db: db.unwrap(),
                     jsdb: jsdb.unwrap(),
-                    notifier: d.get_notifier(),
-                    dynamics: d.clone(),
+                    notifier: dynamics.get_notifier(),
+                    dynamics: dynamics.clone(),
                 }
             });
         }
@@ -134,6 +127,7 @@ impl JavaScriptManager {
         let js = JavaScriptManager::instance(0, 0, None, None, None);
 
         let inst = JS_INSTANCE.get().unwrap();
+        
         state.put(js_functions::JSContext {
             id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
             db: inst.db.clone(),
@@ -141,7 +135,7 @@ impl JavaScriptManager {
             web_task_rx: inst.dynamics.get_web_task_rx(),
             //request defaults
             is_request: false,
-            response: Response::new(200),
+            response: Some(Response::new(200)),
             dynamics: js.dynamics.clone(),
             notifier: js.notifier,
             module: String::new(),

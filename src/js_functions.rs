@@ -1,4 +1,4 @@
-use crate::db_notification::{Notifier, self};
+use crate::db_notification::{self, Notifier};
 use crate::js_dbs::JSDBManager;
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
@@ -26,6 +26,8 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_get_thread_id::DECL,
         aop_broadcast_message::DECL,
         op_get_module_invalidation_prefix::DECL,
+        aop_jsdb_get_connection_name::DECL,
+        aop_jsdb_execute_query::DECL,
     ]
 }
 
@@ -40,7 +42,7 @@ pub struct JSContext {
     pub is_request: bool,
     pub module: String,
     pub request: Option<Request>,
-    pub response: Response,
+    pub response: Option<Response>,
     pub stream: Option<Box<TcpStream>>,
     pub closed: bool,
     // invalidate
@@ -54,13 +56,13 @@ impl JSContext {
         self.is_request = false;
         self.module = String::new();
         self.request = None;
-        self.response = Response::new(200);
+        self.response = Some(Response::new(200));
         self.stream = None;
         self.closed = true;
         // invalidate
         self.is_invalidate = false;
         self.message = String::new();
-        self.jsdb.cleanup();
+        self.jsdb.cleanup(false);
     }
 }
 
@@ -105,7 +107,7 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
                 }
                 context.module = module.clone();
                 context.request = web_task.request;
-                context.response = Response::new(200);
+                context.response = Some(Response::new(200));
                 context.stream = web_task.stream;
                 context.closed = false;
             } else if web_task.is_invalidate {
@@ -135,26 +137,33 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 }
 
 #[op]
-async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<bool, Error> {
-    let mut state = op_state.borrow_mut();
-    let context = state.borrow_mut::<JSContext>();
-    if context.closed {
-        //task already closed
-        return Ok(false);
+async fn aop_end_task(op_state: Rc<RefCell<OpState>>, _error: bool) -> Result<bool, Error> {
+    let stream;
+    let mut response;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        /*
+        if error {
+            // rollback
+        } else {
+            //commit dbs
+        }
+        */
+
+        if context.closed {
+            //task already closed
+            return Ok(false);
+        }
+
+        stream = context.stream.take().unwrap();
+        response = context.response.take().unwrap();
+
+        context.close();
     }
-
-    let stream = context.stream.as_mut().unwrap();
-    let response = &mut context.response;
-
-    if let Err(error) = nino_functions::send_response_to_stream(stream, response).await {
+    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
-    if error {
-        // rollback
-    } else {
-        //commit dbs
-    }
-    context.close();
     Ok(true)
 }
 
@@ -194,17 +203,17 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
 #[op]
 fn op_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
     let context = state.borrow_mut::<JSContext>();
-    context
-        .response
-        .set_status(StatusCode::try_from(status).unwrap());
+    let status = StatusCode::try_from(status).unwrap();
+    context.response.as_mut().unwrap().set_status(status);
     Ok(())
 }
 
 #[op]
 fn op_set_response_header(state: &mut OpState, key: String, value: String) -> Result<(), Error> {
     let context = state.borrow_mut::<JSContext>();
-    context.response.remove_header(&*key);
-    context.response.append_header(&*key, &*value);
+    let res = context.response.as_mut().unwrap();
+    res.remove_header(&*key);
+    res.append_header(&*key, &*value);
     Ok(())
 }
 
@@ -229,9 +238,23 @@ async fn aop_set_response_send(
     mime: &str,
     body: String,
 ) -> Result<(), Error> {
-    let mut state = op_state.borrow_mut();
-    let context = state.borrow_mut::<JSContext>();
-    let response = &mut context.response;
+    let stream;
+    let mut response;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        if context.closed {
+            //task already closed
+            return Ok(());
+        }
+        if !context.is_request {
+            return Err(Error::msg("task is not a request"));
+        }
+
+        stream = context.stream.take().unwrap();
+        response = context.response.take().unwrap();
+        context.close();
+    }
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
     response.set_body(body);
@@ -239,18 +262,9 @@ async fn aop_set_response_send(
         response.insert_header(CONTENT_TYPE, mime);
     }
 
-    if !context.is_request {
-        return Err(Error::msg("task is not a request"));
-    }
-    if let Err(error) = nino_functions::send_response_to_stream(
-        context.stream.as_mut().unwrap(),
-        &mut context.response,
-    )
-    .await
-    {
+    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     };
-    context.closed = true;
     Ok(())
 }
 
@@ -259,9 +273,23 @@ async fn aop_set_response_send_buf(
     op_state: Rc<RefCell<OpState>>,
     buffer: Vec<u8>,
 ) -> Result<(), Error> {
-    let mut state = op_state.borrow_mut();
-    let context = state.borrow_mut::<JSContext>();
-    let response = &mut context.response;
+    let stream;
+    let mut response;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        if context.closed {
+            //task already closed
+            return Ok(());
+        }
+        if !context.is_request {
+            return Err(Error::msg("task is not a request"));
+        }
+
+        stream = context.stream.take().unwrap();
+        response = context.response.take().unwrap();
+        context.close();
+    }
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
     response.set_body(buffer);
@@ -269,18 +297,9 @@ async fn aop_set_response_send_buf(
         response.insert_header(CONTENT_TYPE, "text/html;charset=UTF-8");
     }
 
-    if !context.is_request {
-        return Err(Error::msg("task is not a request"));
-    }
-    if let Err(error) = nino_functions::send_response_to_stream(
-        context.stream.as_mut().unwrap(),
-        &mut context.response,
-    )
-    .await
-    {
+    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     };
-    context.closed = true;
     Ok(())
 }
 
@@ -332,4 +351,33 @@ async fn aop_broadcast_message(
 #[op]
 fn op_get_module_invalidation_prefix() -> String {
     String::from(db_notification::NOTIFICATION_PREFIX_DYNAMICS)
+}
+
+#[op]
+async fn aop_jsdb_get_connection_name(
+    op_state: Rc<RefCell<OpState>>,
+    db_alias: String,
+) -> Result<String, Error> {
+    let jsdb;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        jsdb = context.jsdb.clone();
+    }
+    jsdb.create_db_connection(db_alias).await
+}
+
+#[op]
+async fn aop_jsdb_execute_query(
+    op_state: Rc<RefCell<OpState>>,
+    db_alias: String,
+    query: Vec<String>,
+) -> Result<Vec<Vec<String>>, Error> {
+    let jsdb;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        jsdb = context.jsdb.clone();
+    }
+    jsdb.execute_query(db_alias, query).await
 }

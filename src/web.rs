@@ -183,9 +183,7 @@ impl WebManager {
         let mut response = Response::new(StatusCode::NotFound);
         let content = format!("url not found: {} ", url);
         response.set_body(http_types::Body::from_string(content));
-        if let Err(error) =
-            nino_functions::send_response_to_stream(stream.clone().as_mut(), &mut response).await
-        {
+        if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
     }

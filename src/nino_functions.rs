@@ -40,11 +40,12 @@ pub fn normalize_path(path: String) -> String {
     for b in path.to_lowercase().chars() {
         let is_special_char = b == '_' || b == '/' || b == '.';
         if b.is_ascii_lowercase() || is_special_char {
-            if 
+            if
             //do not duplicate these chars
             (b == prev) && is_special_char
             //do not allow adding relative paths
-            && prev == '/' && b == '.' {
+            && prev == '/' && b == '.'
+            {
                 //skip
             } else {
                 result.push(b);
@@ -64,72 +65,67 @@ pub fn normalize_path(path: String) -> String {
     result.into_iter().collect()
 }
 
+const HTTP: &str = "HTTP/1.1";
+const CRLF: &str = "\r\n";
+const SEPARATOR: &str = ": ";
+const CONTENT_LENGTH: &str = "Content-Length";
+
 pub async fn send_response_to_stream(
-    stream: &mut TcpStream,
+    stream: Box<TcpStream>,
     response: &mut Response,
 ) -> Result<(), String> {
-    const HTTP: &str = "HTTP/1.1";
-    const CRLF: &str = "\r\n";
-    const SEPARATOR: &str = ": ";
-    //const CONTENT_TYPE: &str = "Content-Type";
-    const CONTENT_LENGTH: &str = "Content-Length";
-
-    let body = match response.body_bytes().await {
-        Ok(v) => v,
+    match response.body_bytes().await {
         Err(error) => {
-            let err = error.to_string();
-            return match stream.shutdown(std::net::Shutdown::Both) {
-                Ok(_) => Err(err),
-                Err(error) => Err(format!("{}\n{}", err, error)),
-            };
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        }
+        Ok(body) => {
+            if response.header(CONTENT_LENGTH).is_none() {
+                response.insert_header(CONTENT_LENGTH, format!("{}", body.len()));
+            }
+
+            //write status
+            let mut header_string = String::with_capacity(1024);
+            header_string.push_str(HTTP);
+            header_string.push(' ');
+            header_string.push_str(&format!("{}", response.status()));
+            header_string.push(' ');
+            header_string.push_str(response.status().canonical_reason());
+            header_string.push_str(CRLF);
+
+            // write header
+            for (header_key, header_value) in response.iter() {
+                header_string.push_str(header_key.as_str());
+                header_string.push_str(SEPARATOR);
+                header_string.push_str(header_value.as_str());
+                header_string.push_str(CRLF);
+            }
+
+            //write separtor
+            header_string.push_str(CRLF);
+
+            //write body
+            {
+                let mut http_bytes = header_string.as_bytes();
+                match async_std::io::copy(&mut http_bytes, &mut stream.clone()).await {
+                    Ok(_bytes_written) => {
+                        // eprintln!("body:\n{}", String::from_utf8(body.clone()).unwrap());
+                        
+                        //write body
+                        if let Err(error) =
+                        async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await
+                        {
+                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                        }
+                    }
+                    Err(error) => {
+                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                    }
+                }
+            }
         }
     };
 
-    if response.header(CONTENT_LENGTH).is_none() {
-        response.insert_header(CONTENT_LENGTH, format!("{}", body.len()));
-    }
-
-    let mut header_string = String::with_capacity(1024);
-    //write status
-    header_string.push_str(HTTP);
-    header_string.push(' ');
-    header_string.push_str(&format!("{}", response.status()));
-    header_string.push(' ');
-    header_string.push_str(response.status().canonical_reason());
-    header_string.push_str(CRLF);
-    // write header
-    for (header_key, header_value) in response.iter() {
-        header_string.push_str(header_key.as_str());
-        header_string.push_str(SEPARATOR);
-        header_string.push_str(header_value.as_str());
-        header_string.push_str(CRLF);
-    }
-    //write separtor
-    header_string.push_str(CRLF);
-
-    eprintln!("header:\n{}", header_string);
-
-    //write http
-    {
-        let mut http_bytes = header_string.as_bytes();
-        match async_std::io::copy(&mut http_bytes, &mut stream.clone()).await {
-            Ok(_bytes_written) => {}
-            Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            }
-        }
-    }
-
-    //write body
-    {
-        match async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await {
-            Ok(_bytes_written) => {}
-            Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            }
-        }
-    }
-    //close socket
+    //close socket - always
     if let Err(error) = stream.shutdown(std::net::Shutdown::Both) {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
