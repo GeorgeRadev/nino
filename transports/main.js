@@ -13,10 +13,10 @@ async function main() {
                 // core.print('after import ' + (typeof mod) + '\n');
                 let handler = mod.default;
                 if (!handler) {
-                    throw Exception("module '" + module + "' has no export default async function");
+                    throw new Error("module '" + module + "' has no export default async function");
                 }
                 if (typeof handler !== "function") {
-                    throw Exception("module '" + module + "' export default async function is not a function");
+                    throw new Error("module '" + module + "' export default async function is not a function");
                 }
 
                 const handler_arguments_count = handler.length;
@@ -50,20 +50,20 @@ async function main() {
                     // servlet handler with request and response params
                     const response = {
                         set: function (key, value) {
-                            if (key instanceof String && value instanceof String) {
+                            if (typeof key === 'string' && typeof value === 'string') {
                                 core.ops.op_set_response_header(key, value);
                             } else {
-                                throw Exception("response.set() parameters needs to be both strings not "
+                                throw new Error("response.set() parameters needs to be both strings not "
                                     + JSON.stringify(key) + ", "
                                     + JSON.stringify(value)
                                 );
                             }
                         },
                         status: function (status) {
-                            if (status instanceof Number) {
+                            if (typeof status == 'number') {
                                 core.ops.op_set_response_status(status);
                             } else {
-                                throw Exception("response.status() needs to be a number not " + JSON.stringify(status));
+                                throw new Error("response.status() needs to be a number not " + JSON.stringify(status));
                             }
                         },
                         send: async function (response) {
@@ -78,7 +78,7 @@ async function main() {
                     core.print('after handler 2\n');
 
                 } else {
-                    throw Exception("module '" + module + "' default async function should take 1 or 2 parameters for rest and servlet modes");
+                    throw new Error("module '" + module + "' default async function should take 1 or 2 parameters for rest and servlet modes");
                 }
 
             } else {
@@ -92,7 +92,7 @@ async function main() {
                         break;
                     }
                 } else {
-                    throw Exception("Should never get this");
+                    throw new Error("Should never get this");
                 }
             }
             await core.opAsync('aop_end_task', false);

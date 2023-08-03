@@ -75,7 +75,6 @@ export default async function db_servlet(request) {
         result += "<hr/>";
     }
     */
-    request.set('Content-Type', 'text/html;charset=UTF-8');
     
     return result;
 }

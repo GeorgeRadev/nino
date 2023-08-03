@@ -121,7 +121,7 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
                 panic!("should not get here")
             }
 
-            println!("new js task");
+            // println!("new js task");
         }
         Err(error) => {
             context.closed = true;
@@ -223,7 +223,7 @@ async fn aop_set_response_send_text(
     op_state: Rc<RefCell<OpState>>,
     body: String,
 ) -> Result<(), Error> {
-    aop_set_response_send(op_state, "plain/text;charset=UTF-8", body).await
+    aop_set_response_send(op_state, "text/html;charset=UTF-8", body).await
 }
 
 #[op]
@@ -231,7 +231,7 @@ async fn aop_set_response_send_json(
     op_state: Rc<RefCell<OpState>>,
     body: String,
 ) -> Result<(), Error> {
-    aop_set_response_send(op_state, "application/json", body).await
+    aop_set_response_send(op_state, "application/json;charset=UTF-8", body).await
 }
 
 async fn aop_set_response_send(
@@ -258,10 +258,10 @@ async fn aop_set_response_send(
     }
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
-    response.set_body(body);
     if has_no_type {
         response.insert_header(CONTENT_TYPE, mime);
     }
+    response.set_body(body);
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
