@@ -72,7 +72,7 @@ async function main() {
                     };
 
                     core.print('before handler 2\n');
-                    // let result = 
+                    core.ops.op_set_response_header('Content-Type', 'text/html;charset=UTF-8');
                     await handler(request, response);
                     // core.print('result = ' + (result) + '\n');
                     core.print('after handler 2\n');

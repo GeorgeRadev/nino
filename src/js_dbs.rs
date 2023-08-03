@@ -4,6 +4,7 @@ use core::fmt;
 use deno_core::anyhow::Error;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use tokio_postgres::types::ToSql;
 use tokio_postgres::{Client, Config};
 
 // organize db connections in a map by alias to connections
@@ -204,45 +205,177 @@ impl JSDBManager {
             }
         }
     }
-/*
-async fn alias_commit(conn: &mut DatabaseConnection) {
-    match conn {
-            DatabaseConnection::Postgres(_) => {
-                // todo
+    /*
+    async fn alias_commit(conn: &mut DatabaseConnection) {
+        match conn {
+                DatabaseConnection::Postgres(_) => {
+                    // todo
+                }
             }
         }
-    }
-    
-    pub async fn commit_all(&self) {
-        /*
-        let mut map = self.pool_map.lock().unwrap();
-        for conn in map.values_mut() {
-            Self::alias_commit(conn).await;
+
+        pub async fn commit_all(&self) {
+            /*
+            let mut map = self.pool_map.lock().unwrap();
+            for conn in map.values_mut() {
+                Self::alias_commit(conn).await;
+            }
+            */
+        }
+
+        pub async fn rollback_all(&self) {
+            // todo
         }
         */
+
+    fn query_convert_parameters(
+        query: &Vec<String>,
+        query_types: &Vec<i16>,
+        i64vec: &mut Vec<Box<dyn ToSql + Sync>>,
+    ) -> Result<(), Error> {
+        let qlen = query.len();
+
+        // try convert string to number
+        for ix in 1..qlen {
+            let val = query.get(ix).unwrap();
+            if query_types[ix] == 0 {
+                //boolean
+                let b = val.eq_ignore_ascii_case("true") || val.eq("1");
+                i64vec.push(Box::new(b));
+            } else if query_types[ix] == 1 {
+                //number
+                match val.parse::<i64>() {
+                    Ok(v) => {
+                        i64vec.push(Box::new(v));
+                    }
+                    Err(_) => match val.parse::<f64>() {
+                        Ok(v) => {
+                            i64vec.push(Box::new(v));
+                        }
+                        Err(error) => {
+                            return Err(Error::msg(format!(
+                                "parameter {} `{}` is not number: {}",
+                                ix, val, error
+                            )));
+                        }
+                    },
+                }
+            } else {
+                // use string value
+                let b: Box<String> = Box::new(val.clone());
+                i64vec.push(b);
+            }
+        }
+        Ok(())
     }
-    
-    pub async fn rollback_all(&self) {
-        // todo
-    }
-    */
-    
+
     pub async fn execute_query(
         &self,
-        _db_alias: String,
+        db_alias: String,
         query: Vec<String>,
+        query_types: Vec<i16>,
     ) -> Result<Vec<Vec<String>>, Error> {
-        let mut result: Vec<Vec<String>> = Vec::new();
-        let cols = query.len();
-        result.push(query);
-        for _ in 0..4 {
-            let mut line: Vec<String> = Vec::new();
-            for _ in 0..cols {
-                line.push(String::from("aaaaa"));
-            }
-            result.push(line);
+        let qlen = query.len();
+        if qlen < 1 {
+            return Err(Error::msg("query is an empty array"));
         }
-        
-        Ok(result)
+        let mut i64vec: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(qlen);
+        if let Err(error) = Self::query_convert_parameters(&query, &query_types, &mut i64vec) {
+            return Err(error);
+        }
+
+        let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(qlen);
+        for ix in 0..qlen - 1 {
+            let sqlv: &(dyn ToSql + Sync) = (&i64vec[ix]).as_ref();
+            params.push(sqlv);
+        }
+
+        let query = query[0].clone();
+
+        let pool = self.pool_map.lock().unwrap();
+        match pool.get(&db_alias) {
+            None => {
+                return Err(Error::msg(format!(
+                    "db alias {} got disconnected",
+                    db_alias
+                )))
+            }
+            Some(db_connection) => match db_connection {
+                DatabaseConnection::Postgres(client) => match client.query(&query, &params).await {
+                    Err(error) => {
+                        return Err(Error::msg(format!(
+                            "ERROR: db alias {}: {}",
+                            db_alias, error
+                        )))
+                    }
+                    Ok(rows) => {
+                        let mut result: Vec<Vec<String>> = Vec::new();
+                        for row in rows {
+                            let mut line: Vec<String> = Vec::new();
+                            for ix in 0..row.len() {
+                                let col_value: String = row.get(ix);
+                                line.push(col_value);
+                            }
+                            result.push(line);
+                        }
+                        Ok(result)
+                    }
+                },
+            },
+        }
+    }
+
+    pub async fn execute_query_one(
+        &self,
+        db_alias: String,
+        query: Vec<String>,
+        query_types: Vec<i16>,
+    ) -> Result<Vec<String>, Error> {
+        let qlen = query.len();
+        if qlen < 1 {
+            return Err(Error::msg("query is an empty array"));
+        }
+        let mut i64vec: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(qlen);
+        if let Err(error) = Self::query_convert_parameters(&query, &query_types, &mut i64vec) {
+            return Err(error);
+        }
+        let mut params: Vec<&(dyn ToSql + Sync)> = Vec::with_capacity(qlen);
+        for ix in 0..qlen - 1 {
+            let sqlv: &(dyn ToSql + Sync) = (&i64vec[ix]).as_ref();
+            params.push(sqlv);
+        }
+
+        let query = query[0].clone();
+
+        let pool = self.pool_map.lock().unwrap();
+        match pool.get(&db_alias) {
+            None => {
+                return Err(Error::msg(format!(
+                    "db alias {} got disconnected",
+                    db_alias
+                )))
+            }
+            Some(db_connection) => match db_connection {
+                DatabaseConnection::Postgres(client) => {
+                    match client.query_one(&query, &params).await {
+                        Err(error) => {
+                            return Err(Error::msg(format!(
+                                "ERROR: db alias {}: {}",
+                                db_alias, error
+                            )))
+                        }
+                        Ok(row) => {
+                            let mut result: Vec<String> = Vec::new();
+                            for ix in 0..row.len() {
+                                let col_value: String = row.get(ix);
+                                result.push(col_value);
+                            }
+
+                            Ok(result)
+                        }
+                    }
+                }
+            },
+        }
     }
 }

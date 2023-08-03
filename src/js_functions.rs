@@ -28,6 +28,7 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_get_module_invalidation_prefix::DECL,
         aop_jsdb_get_connection_name::DECL,
         aop_jsdb_execute_query::DECL,
+        aop_jsdb_execute_query_one::DECL,
     ]
 }
 
@@ -372,6 +373,7 @@ async fn aop_jsdb_execute_query(
     op_state: Rc<RefCell<OpState>>,
     db_alias: String,
     query: Vec<String>,
+    query_types: Vec<i16>,
 ) -> Result<Vec<Vec<String>>, Error> {
     let jsdb;
     {
@@ -379,5 +381,21 @@ async fn aop_jsdb_execute_query(
         let context = state.borrow_mut::<JSContext>();
         jsdb = context.jsdb.clone();
     }
-    jsdb.execute_query(db_alias, query).await
+    jsdb.execute_query(db_alias, query, query_types).await
+}
+
+#[op]
+async fn aop_jsdb_execute_query_one(
+    op_state: Rc<RefCell<OpState>>,
+    db_alias: String,
+    query: Vec<String>,
+    query_types: Vec<i16>,
+) -> Result<Vec<String>, Error> {
+    let jsdb;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        jsdb = context.jsdb.clone();
+    }
+    jsdb.execute_query_one(db_alias, query, query_types).await
 }

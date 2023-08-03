@@ -337,7 +337,7 @@ pub fn run_deno_thread(
 }
 
 fn get_error_class_name(e: &AnyError) -> &'static str {
-    deno_runtime::errors::get_error_class_name(e).unwrap_or("JSError")
+    deno_runtime::errors::get_error_class_name(e).unwrap_or("Error")
 }
 
 // new one using deno MainWorker
