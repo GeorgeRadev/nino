@@ -1,6 +1,6 @@
 use crate::db::DBManager;
 use crate::db_notification::Notifier;
-use crate::js_dbs::JSDBManager;
+use crate::db_transactions::TransactionManager;
 use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
 use deno_core::error::AnyError;
@@ -29,14 +29,14 @@ pub struct JavaScriptManager {
     thread_count: usize,
     inspector_port: u16,
     db: Arc<DBManager>,
-    jsdb: Arc<JSDBManager>,
+    dbtx: Arc<TransactionManager>,
     dynamics: Arc<DynamicManager>,
     notifier: Arc<Notifier>,
 }
 
 static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
 
-impl JavaScriptManager{
+impl JavaScriptManager {
     /**
      * Greate and initialize Singleton Manager instance.
      * use start() to begin listening.
@@ -45,21 +45,21 @@ impl JavaScriptManager{
         thread_count: usize,
         inspector_port: u16,
         db: Option<Arc<DBManager>>,
-        jsdb: Option<Arc<JSDBManager>>,
         dynamics: Option<Arc<DynamicManager>>,
+        tx: Option<Arc<TransactionManager>>,
     ) -> JavaScriptManager {
         {
             JS_INSTANCE.get_or_init(|| {
                 init_platform(thread_count);
-              
+
                 let dynamics = dynamics.unwrap();
                 JavaScriptManager {
                     thread_count,
                     inspector_port,
                     db: db.unwrap(),
-                    jsdb: jsdb.unwrap(),
                     notifier: dynamics.get_notifier(),
                     dynamics: dynamics.clone(),
+                    dbtx: tx.unwrap(),
                 }
             });
         }
@@ -102,18 +102,6 @@ impl JavaScriptManager{
                 })
             });
         }
-
-        /*
-        for _ in 0..thread_count {
-            tokio::spawn(async {
-                let main_module = Self::get_main_module().await;
-                if let Err(e) = poll_fn(|cx| Self::start_deno_thread(cx, main_module.clone())).await
-                {
-                    println!("ERROR: {}", e.to_string());
-                }
-            });
-        }
-        */
     }
 
     /**
@@ -127,12 +115,13 @@ impl JavaScriptManager{
         let js = JavaScriptManager::instance(0, 0, None, None, None);
 
         let inst = JS_INSTANCE.get().unwrap();
-        
+        let dbtx = inst.dbtx.register_transaction_session();
+
         state.put(js_functions::JSContext {
             id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
             db: inst.db.clone(),
-            jsdb: inst.jsdb.clone(),
             web_task_rx: inst.dynamics.get_web_task_rx(),
+            dbtx,
             //request defaults
             is_request: false,
             response: Some(Response::new(200)),
@@ -147,19 +136,6 @@ impl JavaScriptManager{
             message: String::new(),
         });
     }
-    /*
-    fn start_deno_thread(cx: &mut Context, main_module: String) -> Poll<Result<(), Error>> {
-        run_deno_thread(
-            cx,
-            Rc::new(DBModuleLoader {}),
-            js_functions::get_javascript_ops,
-            Self::create_js_context_state,
-            main_module.as_str(),
-            None,
-            None,
-        )
-    }
-    */
 }
 
 /// this is used to create the v8 runtime :
@@ -269,71 +245,6 @@ impl ModuleLoader for FNModuleLoader {
         println!("load module: {}", &module_path);
         Self::async_load(String::from(module_path)).boxed_local()
     }
-}
-
-/*
-pub struct Task {
-    pub id: u32,
-}
-
-fn create_state(state: &mut OpState) -> () {
-    state.put(Task { id: 0 });
-    ()
-}
-
-pub enum RetrievedV8Value<'s> {
-    Value(v8::Local<'s, v8::Value>),
-    Error(v8::Local<'s, v8::Value>),
-    Promise(v8::Local<'s, v8::Promise>),
-}
-
-// This is done as a macro so that Rust can reuse the borrow on the scope,
-// instead of treating the returned value's reference to the scope as a new mutable borrow.
-
-macro_rules! extract_promise {
-    ($scope: expr, $v: expr) => {
-        // If it's a promise, try to get the value out.
-        if $v.is_promise() {
-            let promise = v8::Local::<v8::Promise>::try_from($v).unwrap();
-            match promise.state() {
-                v8::PromiseState::Pending => RetrievedV8Value::Promise(promise),
-                v8::PromiseState::Fulfilled => RetrievedV8Value::Value(promise.result(&mut $scope)),
-                v8::PromiseState::Rejected => RetrievedV8Value::Error(promise.result(&mut $scope)),
-            }
-        } else {
-            RetrievedV8Value::Value($v)
-        }
-    };
-}
-*/
-
-// old one using the deno runtime
-#[allow(dead_code)]
-pub fn run_deno_thread(
-    cx: &mut Context,
-    module_loader: Rc<dyn ModuleLoader>,
-    get_ops: fn() -> Vec<OpDecl>,
-    create_state: fn(state: &mut OpState) -> (),
-    javascript_source_code: &str,
-    inspector_session_sx: Option<InspectorSessionProxy>,
-) -> Poll<Result<(), Error>> {
-    let need_inspector = inspector_session_sx.is_some();
-
-    let mut runtime = JsRuntime::new(RuntimeOptions {
-        module_loader: Some(module_loader),
-        extensions: vec![Extension::builder(nino_constants::PROGRAM_NAME)
-            .ops(get_ops())
-            .state(create_state)
-            .build()],
-        inspector: need_inspector,
-        ..Default::default()
-    });
-
-    let code = FastString::from(String::from(javascript_source_code));
-    let _result = runtime.execute_script("main", code)?;
-    let r = runtime.poll_event_loop(cx, need_inspector);
-    eprintln!("js thread done");
-    r
 }
 
 fn get_error_class_name(e: &AnyError) -> &'static str {

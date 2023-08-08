@@ -30,7 +30,7 @@ async function main() {
                     core.print('response typeof ' + (typeof response) + '\n');
                     if (typeof response === 'string') {
                         await core.opAsync('aop_set_response_send_text', response);
-                    } else if (response instanceof Number) {
+                    } else if (typeof response === "number") {
                         await core.opAsync('aop_set_response_send_text', String.valueOf(response));
                     } else if (response instanceof ArrayBuffer) {
                         await core.opAsync('aop_set_response_send_buf', response);

@@ -3,7 +3,7 @@ export default async function notify(message) {
     const core = Deno[Deno.internal].core;
     if (typeof message === 'string' || message instanceof ArrayBuffer) {
         //ok
-    } else if (message instanceof Number) {
+    } else if (typeof message === "number") {
         message = String.valueOf(message);
     } else {
         message = JSON.stringify(message);

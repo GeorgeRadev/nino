@@ -1,8 +1,8 @@
 mod db;
 mod db_notification;
+mod db_transactions;
 mod db_settings;
 mod js;
-mod js_dbs;
 mod js_functions;
 mod js_test;
 mod js_test_debug;
@@ -17,7 +17,9 @@ mod web_requests;
 mod web_statics;
 
 use nino_structures::InitialSettings;
-use std::sync::Arc; 
+use std::sync::Arc;
+
+use crate::db_transactions::TransactionManager;
 
 fn main() {
     setup_panic_hook();
@@ -112,11 +114,6 @@ async fn main_async(settings: InitialSettings) {
         db_notifier.get_subscriber(),
     ));
 
-    let jsdb = Arc::new(js_dbs::JSDBManager::new(
-        db.clone(),
-        db_notifier.get_subscriber(),
-    ));
-
     let dyn_subscriber = db_notifier.get_subscriber();
     let notifier = Arc::new(db_notification::Notifier::new(Arc::new(db_notifier)));
 
@@ -127,12 +124,14 @@ async fn main_async(settings: InitialSettings) {
         dyn_subscriber,
     ));
 
+    let tx_sessions = Arc::new(TransactionManager::instance(settings.js_thread_count, db.clone()));
+
     let _js_engine = js::JavaScriptManager::instance(
         settings.js_thread_count,
         settings.debug_port,
         Some(db.clone()),
-        Some(jsdb.clone()),
         Some(dynamics.clone()),
+        Some(tx_sessions),
     );
     // start js threads
     js::JavaScriptManager::start().await;

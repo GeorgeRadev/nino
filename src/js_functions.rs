@@ -1,5 +1,5 @@
 use crate::db_notification::{self, Notifier};
-use crate::js_dbs::JSDBManager;
+use crate::db_transactions::TransactionSession;
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
@@ -28,16 +28,16 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_get_module_invalidation_prefix::DECL,
         aop_jsdb_get_connection_name::DECL,
         aop_jsdb_execute_query::DECL,
-        aop_jsdb_execute_query_one::DECL,
+        aop_jsdb_execute_query_resultset::DECL,
     ]
 }
 
 pub struct JSContext {
     pub id: u32,
     pub db: Arc<DBManager>,
-    pub jsdb: Arc<JSDBManager>,
     pub dynamics: Arc<DynamicManager>,
     pub notifier: Arc<Notifier>,
+    pub dbtx: TransactionSession,
     pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
     // response
     pub is_request: bool,
@@ -52,7 +52,7 @@ pub struct JSContext {
 }
 
 impl JSContext {
-    pub fn close(&mut self) {
+    pub fn clear(&mut self) {
         // response
         self.is_request = false;
         self.module = String::new();
@@ -63,7 +63,6 @@ impl JSContext {
         // invalidate
         self.is_invalidate = false;
         self.message = String::new();
-        self.jsdb.cleanup(false);
     }
 }
 
@@ -120,7 +119,6 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
                 // should not  get here
                 panic!("should not get here")
             }
-
             // println!("new js task");
         }
         Err(error) => {
@@ -138,19 +136,13 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 }
 
 #[op]
-async fn aop_end_task(op_state: Rc<RefCell<OpState>>, _error: bool) -> Result<bool, Error> {
+async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<bool, Error> {
     let stream;
     let mut response;
+    let mut dbtx;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        /*
-        if error {
-            // rollback
-        } else {
-            //commit dbs
-        }
-        */
 
         if context.closed {
             //task already closed
@@ -160,7 +152,12 @@ async fn aop_end_task(op_state: Rc<RefCell<OpState>>, _error: bool) -> Result<bo
         stream = context.stream.take().unwrap();
         response = context.response.take().unwrap();
 
-        context.close();
+        dbtx = context.dbtx.clone();
+        context.clear();
+    }
+    // clean up db transactions
+    if let Err(error) = dbtx.close_all(error).await {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -254,7 +251,7 @@ async fn aop_set_response_send(
 
         stream = context.stream.take().unwrap();
         response = context.response.take().unwrap();
-        context.close();
+        context.clear();
     }
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
@@ -289,7 +286,7 @@ async fn aop_set_response_send_buf(
 
         stream = context.stream.take().unwrap();
         response = context.response.take().unwrap();
-        context.close();
+        context.clear();
     }
 
     let has_no_type = response.header(CONTENT_TYPE).is_none();
@@ -359,13 +356,21 @@ async fn aop_jsdb_get_connection_name(
     op_state: Rc<RefCell<OpState>>,
     db_alias: String,
 ) -> Result<String, Error> {
-    let jsdb;
+    let mut dbtx;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        jsdb = context.jsdb.clone();
+        dbtx = context.dbtx.clone();
     }
-    jsdb.create_db_connection(db_alias).await
+    dbtx.create_db_connection(db_alias).await
+}
+
+#[derive(deno_core::serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResult {
+    pub rows: Vec<Vec<String>>,
+    pub row_names: Vec<String>,
+    pub row_types: Vec<String>,
 }
 
 #[op]
@@ -374,28 +379,37 @@ async fn aop_jsdb_execute_query(
     db_alias: String,
     query: Vec<String>,
     query_types: Vec<i16>,
-) -> Result<Vec<Vec<String>>, Error> {
-    let jsdb;
+    limit: usize,
+) -> Result<QueryResult, Error> {
+    let mut dbtx;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        jsdb = context.jsdb.clone();
+        dbtx = context.dbtx.clone();
     }
-    jsdb.execute_query(db_alias, query, query_types).await
+    let result = dbtx.query(db_alias, query, query_types, limit).await?;
+    Ok(QueryResult{rows: result.rows, row_names: result.row_names, row_types: result.row_types})
 }
 
 #[op]
-async fn aop_jsdb_execute_query_one(
+async fn aop_jsdb_execute_query_resultset(
     op_state: Rc<RefCell<OpState>>,
     db_alias: String,
     query: Vec<String>,
     query_types: Vec<i16>,
-) -> Result<Vec<String>, Error> {
-    let jsdb;
+    limit: usize,
+) -> Result<Option<Vec<String>>, Error> {
+    let mut dbtx;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        jsdb = context.jsdb.clone();
+        dbtx = context.dbtx.clone();
     }
-    jsdb.execute_query_one(db_alias, query, query_types).await
+    let result = dbtx.query(db_alias, query, query_types, limit).await?;
+    let rows = result.rows;
+    if rows.len() > 0 {
+        Ok(Some(rows.get(0).unwrap().clone()))
+    } else {
+        Ok(None)
+    }
 }
