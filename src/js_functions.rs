@@ -26,9 +26,11 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_get_thread_id::DECL,
         aop_broadcast_message::DECL,
         op_get_module_invalidation_prefix::DECL,
+        op_get_database_invalidation_prefix::DECL,
+        aop_reload_database_aliases::DECL,
         aop_jsdb_get_connection_name::DECL,
         aop_jsdb_execute_query::DECL,
-        aop_jsdb_execute_query_resultset::DECL,
+        aop_jsdb_execute_upsert::DECL,
     ]
 }
 
@@ -137,9 +139,21 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 
 #[op]
 async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<bool, Error> {
+    {
+        let mut dbtx;
+        {
+            let mut state = op_state.borrow_mut();
+            let context = state.borrow_mut::<JSContext>();
+
+            dbtx = context.dbtx.clone();
+        }
+        // clean up db transactions
+        if let Err(error) = dbtx.close_all(error).await {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        }
+    }
     let stream;
     let mut response;
-    let mut dbtx;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
@@ -149,16 +163,12 @@ async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<boo
             return Ok(false);
         }
 
+        context.clear();
+
         stream = context.stream.take().unwrap();
         response = context.response.take().unwrap();
+    }
 
-        dbtx = context.dbtx.clone();
-        context.clear();
-    }
-    // clean up db transactions
-    if let Err(error) = dbtx.close_all(error).await {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-    }
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
@@ -352,6 +362,24 @@ fn op_get_module_invalidation_prefix() -> String {
 }
 
 #[op]
+fn op_get_database_invalidation_prefix() -> String {
+    String::from(db_notification::NOTIFICATION_PREFIX_DBNAME)
+}
+
+#[op]
+async fn aop_reload_database_aliases(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
+    let mut dbtx = {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        context.dbtx.clone()
+    };
+    match dbtx.reload_database_aliases().await {
+        Ok(_) => Ok(true),
+        Err(error) => Err(Error::msg(error)),
+    }
+}
+
+#[op]
 async fn aop_jsdb_get_connection_name(
     op_state: Rc<RefCell<OpState>>,
     db_alias: String,
@@ -379,7 +407,6 @@ async fn aop_jsdb_execute_query(
     db_alias: String,
     query: Vec<String>,
     query_types: Vec<i16>,
-    limit: usize,
 ) -> Result<QueryResult, Error> {
     let mut dbtx;
     {
@@ -387,29 +414,27 @@ async fn aop_jsdb_execute_query(
         let context = state.borrow_mut::<JSContext>();
         dbtx = context.dbtx.clone();
     }
-    let result = dbtx.query(db_alias, query, query_types, limit).await?;
-    Ok(QueryResult{rows: result.rows, row_names: result.row_names, row_types: result.row_types})
+    let result = dbtx.query(db_alias, query, query_types).await?;
+    Ok(QueryResult {
+        rows: result.rows,
+        row_names: result.row_names,
+        row_types: result.row_types,
+    })
 }
 
 #[op]
-async fn aop_jsdb_execute_query_resultset(
+async fn aop_jsdb_execute_upsert(
     op_state: Rc<RefCell<OpState>>,
     db_alias: String,
     query: Vec<String>,
     query_types: Vec<i16>,
-    limit: usize,
-) -> Result<Option<Vec<String>>, Error> {
+) -> Result<u64, Error> {
     let mut dbtx;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
         dbtx = context.dbtx.clone();
     }
-    let result = dbtx.query(db_alias, query, query_types, limit).await?;
-    let rows = result.rows;
-    if rows.len() > 0 {
-        Ok(Some(rows.get(0).unwrap().clone()))
-    } else {
-        Ok(None)
-    }
+    let result = dbtx.upsert(db_alias, query, query_types).await?;
+    Ok(result)
 }

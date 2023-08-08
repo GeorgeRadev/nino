@@ -1,6 +1,8 @@
 async function main() {
+    const core = Deno[Deno.internal].core;
+    const module_invalidation_prefix = core.ops.op_get_module_invalidation_prefix();
+    const database_invalidation_prefix = core.ops.op_get_database_invalidation_prefix();
     for (; ;) {
-        const core = Deno[Deno.internal].core;
         try {
             // core.print('js try\n');
             debugger;
@@ -85,11 +87,15 @@ async function main() {
                 const invalidation_message = core.ops.op_get_invalidation_message();
                 if (invalidation_message) {
                     //request for cache invalidation
-                    if (invalidation_message.startsWith(core.ops.op_get_module_invalidation_prefix())) {
+                    if (invalidation_message.startsWith(module_invalidation_prefix)) {
                         // modules has been changed
                         const threadId = core.ops.op_get_thread_id();
                         core.print('js got invalidation message (' + threadId + '): ' + invalidation_message + '\n');
                         break;
+                    } else if (invalidation_message.startsWith(database_invalidation_prefix)) {
+                        await core.opAsync('aop_reload_database_aliases');
+                    } else {
+                        // future  js message listeners could be implemented here
                     }
                 } else {
                     throw new Error("Should never get this");

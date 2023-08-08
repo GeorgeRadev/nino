@@ -1,69 +1,58 @@
 #[cfg(test)]
 mod tests {
+    use crate::js::{init_platform, run_deno_main_thread};
+    use deno_core::futures::FutureExt;
+    use deno_core::Op;
+    use deno_core::{anyhow::Error, op, OpDecl, OpState};
+    use std::pin::Pin;
+    use std::{future::Future, sync::Mutex};
 
-    use crate::js::{init_platform, run_deno_thread};
-    use deno_core::{
-        anyhow::Error, futures::FutureExt, op, FastString, ModuleLoader, ModuleSource,
-        ModuleSourceFuture, ModuleSpecifier, ModuleType, Op, OpDecl, OpState, ResolutionKind,
-    };
-    use http_types::Url;
-    use std::{pin::Pin, rc::Rc, sync::Mutex};
-
-    struct TestModuleLoader;
-    const MODULE_URI: &str = "http://nino.db/";
     const MODULE_MAIN: &str = "main";
 
-    impl ModuleLoader for TestModuleLoader {
-        fn resolve(
-            &self,
-            specifier: &str,
-            _referrer: &str,
-            _kind: ResolutionKind,
-        ) -> Result<ModuleSpecifier, Error> {
-            let url = if specifier.starts_with(MODULE_URI) {
-                Url::parse(specifier)?
+    static TEST_MAIN_MODULE_SOURCE: &str = r#"
+    async function main() {
+        const core = Deno[Deno.internal].core;
+        let result = "";
+        try{
+            core.print('-------------------------\ntry\n');
+            const id = core.ops.op_id();
+            core.print('id ' + id + '\n');
+            const value = core.ops.op_sync();
+            core.print('value ' + value + '\n');
+            const mod = await import("b");
+            const modValue = await mod.default();
+            core.print('modValue ' + modValue + '\n');
+            result = '' + id + value + modValue;
+        }catch(e){
+            result = ' error: ' + e;
+        }
+        core.print('RESULT: ' + result + '\n');
+        core.ops.op_set_result(result);
+    }
+    (async () => { 
+        await main();
+    })();
+    "#;
+
+    fn module_loader(
+        module_name: String,
+    ) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
+        async move {
+            // todo : implement DB load module
+            if MODULE_MAIN == module_name {
+                Ok(String::from(TEST_MAIN_MODULE_SOURCE))
             } else {
-                let url_str = format!("{}{}", MODULE_URI, specifier);
-                Url::parse(&url_str)?
-            };
-            Ok(url)
-        }
-
-        fn load(
-            &self,
-            module_specifier: &ModuleSpecifier,
-            _maybe_referrer: std::option::Option<&deno_core::url::Url>,
-            _is_dyn_import: bool,
-        ) -> Pin<Box<ModuleSourceFuture>> {
-            let module_specifier = module_specifier.clone();
-            async move {
-                // generic_error(format!(
-                //     "Provided module specifier \"{}\" is not a file URL.",
-                //     module_specifier
-                // ))
-                let module_path = &module_specifier.path()[1..];
-                println!("load module: {}", module_path);
-                let code = if MODULE_MAIN == module_path {
-                    TEST_MAIN_MODULE_SOURCE
-                } else {
-                    "export default async function() { return 42; }"
-                };
-
-                let module_type = ModuleType::JavaScript;
-                // ModuleType::Json
-                let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
-                let module_string = module_specifier.clone();
-                let module = ModuleSource::new(module_type, code, &module_string);
-                Ok(module)
+                Ok(String::from(
+                    "export default async function() { return 42; }",
+                ))
             }
-            .boxed_local()
         }
+        .boxed_local()
     }
 
     struct TestTask {
         id: u32,
     }
-
     fn get_ops() -> Vec<OpDecl> {
         vec![op_sync::DECL, op_id::DECL, op_set_result::DECL]
     }
@@ -95,30 +84,6 @@ mod tests {
         Ok(v)
     }
 
-    static TEST_MAIN_MODULE_SOURCE: &str = r#"
-    async function main() {
-        let result = "";
-        try{
-            Deno.core.print('-------------------------\ntry\n');
-            const id = Deno.core.ops.op_id();
-            Deno.core.print('id ' + id + '\n');
-            const value = Deno.core.ops.op_sync();
-            Deno.core.print('value ' + value + '\n');
-            const mod = await import("b");
-            const modValue = await mod.default();
-            Deno.core.print('modValue ' + modValue + '\n');
-            result = '' + id + value + modValue;
-        }catch(e){
-            result = ' error: ' + e;
-        }
-        Deno.core.print('RESULT: ' + result + '\n');
-        Deno.core.ops.op_set_result(result);
-    }
-    (async () => { 
-        await main();
-    })();
-    "#;
-
     static TEST_RESULTS: Mutex<Option<String>> = Mutex::new(None);
 
     async fn test_js() {
@@ -131,30 +96,30 @@ mod tests {
         }
 
         let r = tokio::try_join!(
-            poll_fn(|cx| {
-                run_deno_thread(
-                    cx,
-                    Rc::new(TestModuleLoader {}),
+            async {
+                run_deno_main_thread(
+                    module_loader,
                     get_ops,
                     |state| {
-                        state.put(TestTask { id: 0 });
+                        state.put(TestTask { id: 1 });
                     },
-                    TEST_MAIN_MODULE_SOURCE,
-                    None,
+                    "main",
+                    9229,
                 )
-            }),
-            poll_fn(|cx| {
-                run_deno_thread(
-                    cx,
-                    Rc::new(TestModuleLoader {}),
+                .await
+            },
+            async {
+                run_deno_main_thread(
+                    module_loader,
                     get_ops,
                     |state| {
-                        state.put(TestTask { id: 0 });
+                        state.put(TestTask { id: 1 });
                     },
-                    TEST_MAIN_MODULE_SOURCE,
-                    None,
+                    "main",
+                    0,
                 )
-            }),
+                .await
+            },
         );
         match r {
             Err(e) => {
@@ -164,7 +129,7 @@ mod tests {
                 let mut res = TEST_RESULTS.lock().unwrap();
                 let str = (*res).as_mut().unwrap().as_mut();
                 println!("result: {}", str);
-                assert_eq!(str, "0OK42");
+                assert_eq!(str, "1OK42");
             }
         };
     }

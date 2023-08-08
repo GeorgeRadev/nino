@@ -5,9 +5,8 @@ use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
 use deno_core::error::AnyError;
 use deno_core::{
-    anyhow::Error, futures::FutureExt, url::Url, Extension, InspectorSessionProxy, JsRuntime,
-    ModuleLoader, ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState,
-    RuntimeOptions,
+    anyhow::Error, futures::FutureExt, url::Url, Extension, JsRuntime, ModuleLoader, ModuleSource,
+    ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState, RuntimeOptions,
 };
 use deno_core::{FastString, ResolutionKind};
 use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
@@ -20,7 +19,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::thread;
-use std::{pin::Pin, rc::Rc, task::Context, task::Poll};
+use std::{pin::Pin, rc::Rc};
 //use tokio::macros::support::poll_fn;
 
 /// need to call start() to begin js threads

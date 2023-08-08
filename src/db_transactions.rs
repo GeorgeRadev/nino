@@ -8,8 +8,8 @@ use std::thread;
 
 use postgres::types::ToSql;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
-use tokio::sync::mpsc;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::{mpsc, Mutex};
 
 // organize db connections per js instance in a map by alias to connections
 // free all open aliases exept the first for keep it as pool
@@ -61,14 +61,14 @@ impl TransactionSession {
         if let Err(error) = self
             .request_in
             .lock()
-            .unwrap()
+            .await
             .send(TransactionSessionRequest::ReloadDBAliases)
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             return Err(Error::msg(error));
         }
-        match self.response_out.lock().unwrap().recv().await {
+        match self.response_out.lock().await.recv().await {
             None => {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
                 Err(Error::msg("should not happen"))
@@ -87,14 +87,14 @@ impl TransactionSession {
         if let Err(error) = self
             .request_in
             .lock()
-            .unwrap()
+            .await
             .send(TransactionSessionRequest::CreateTransaction(db_alias))
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             return Err(Error::msg(error));
         }
-        match self.response_out.lock().unwrap().recv().await {
+        match self.response_out.lock().await.recv().await {
             None => {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
                 Err(Error::msg("should not happen"))
@@ -113,14 +113,14 @@ impl TransactionSession {
         if let Err(error) = self
             .request_in
             .lock()
-            .unwrap()
+            .await
             .send(TransactionSessionRequest::CloseAll(error))
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             return Err(Error::msg(error));
         }
-        match self.response_out.lock().unwrap().recv().await {
+        match self.response_out.lock().await.recv().await {
             None => {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
                 Err(Error::msg("should not happen"))
@@ -140,7 +140,6 @@ impl TransactionSession {
         db_alias: String,
         query: Vec<String>,
         query_types: Vec<i16>,
-        limit: usize,
     ) -> Result<QueryResult, Error> {
         let qlen = query.len();
         if qlen < 1 {
@@ -151,20 +150,19 @@ impl TransactionSession {
             db_alias,
             params: query,
             param_types: query_types,
-            limit,
         };
 
         if let Err(error) = self
             .request_in
             .lock()
-            .unwrap()
+            .await
             .send(TransactionSessionRequest::Query(query_data))
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             return Err(Error::msg(error));
         }
-        match self.response_out.lock().unwrap().recv().await {
+        match self.response_out.lock().await.recv().await {
             None => {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
                 Err(Error::msg("should not happen"))
@@ -173,6 +171,48 @@ impl TransactionSession {
                 TransactionSessionResponse::QueryResult(result) => Ok(result),
                 TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
                 TransactionSessionResponse::UpsertResult(_) => panic!(),
+                TransactionSessionResponse::Transaction(_) => panic!(),
+                TransactionSessionResponse::Ok => panic!(),
+            },
+        }
+    }
+
+    pub async fn upsert(
+        &mut self,
+        db_alias: String,
+        query: Vec<String>,
+        query_types: Vec<i16>,
+    ) -> Result<u64, Error> {
+        let qlen = query.len();
+        if qlen < 1 {
+            return Err(Error::msg("query is an empty array"));
+        }
+
+        let query_data = QueryData {
+            db_alias,
+            params: query,
+            param_types: query_types,
+        };
+
+        if let Err(error) = self
+            .request_in
+            .lock()
+            .await
+            .send(TransactionSessionRequest::Upsert(query_data))
+            .await
+        {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            return Err(Error::msg(error));
+        }
+        match self.response_out.lock().await.recv().await {
+            None => {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
+                Err(Error::msg("should not happen"))
+            }
+            Some(response) => match response {
+                TransactionSessionResponse::UpsertResult(affected) => Ok(affected),
+                TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
+                TransactionSessionResponse::QueryResult(_) => panic!(),
                 TransactionSessionResponse::Transaction(_) => panic!(),
                 TransactionSessionResponse::Ok => panic!(),
             },
@@ -189,7 +229,6 @@ pub struct QueryData {
     // 2 - string
     // 3 - date
     param_types: Vec<i16>,
-    limit: usize,
 }
 
 #[derive(Clone)]
@@ -214,12 +253,11 @@ pub enum TransactionSessionResponse {
     Transaction(String),
     Error(String),
     QueryResult(QueryResult),
-    UpsertResult(i32),
+    UpsertResult(u64),
 }
 
 #[derive(Clone)]
 pub enum TransactionRequest {
-    Drop,
     Commit,
     Rollback,
     Query(QueryData),
@@ -231,7 +269,7 @@ pub enum TransactionResponse {
     Ok,
     Error(String),
     QueryResult(QueryResult),
-    UpsertResult(i32),
+    UpsertResult(u64),
 }
 
 #[derive(Clone)]
@@ -253,10 +291,6 @@ impl fmt::Display for SupportedDatabases {
 struct DBAliasInfo {
     pub db_type: SupportedDatabases,
     pub connection_string: String,
-}
-
-enum DatabaseConnection {
-    Postgres(TransactionPostgres),
 }
 
 pub struct Transaction {
@@ -292,7 +326,9 @@ impl Transaction {
             },
         );
         // add main db to pool
-        self.create_db_transaction(nino_constants::MAIN_DB.to_string());
+        if let Err(error) = self.create_db_transaction(nino_constants::MAIN_DB.to_string()) {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        }
 
         // ait for message and serve
         loop {
@@ -345,9 +381,28 @@ impl Transaction {
                             }
                         }
                     }
-                    TransactionSessionRequest::Upsert(_) => TransactionSessionResponse::Error(
-                        format!("ERROR {}:{}:{}", file!(), line!(), "Not implemented yet"),
-                    ),
+                    TransactionSessionRequest::Upsert(query_data) => {
+                        match self.db_pool.get(&query_data.db_alias) {
+                            None => TransactionSessionResponse::Error(format!(
+                                "ERROR {}:{}: alias {} is missing",
+                                file!(),
+                                line!(),
+                                query_data.db_alias
+                            )),
+                            Some(implementation) => {
+                                let mut implementation = implementation.borrow_mut();
+                                match implementation.upsert(query_data) {
+                                    Ok(result) => TransactionSessionResponse::UpsertResult(result),
+                                    Err(error) => TransactionSessionResponse::Error(format!(
+                                        "ERROR {}:{}:{}",
+                                        file!(),
+                                        line!(),
+                                        error
+                                    )),
+                                }
+                            }
+                        }
+                    }
                 };
                 // send response
                 if let Err(error) = self.response_in.blocking_send(result) {
@@ -367,7 +422,6 @@ impl Transaction {
                     line!(),
                     nino_constants::MAIN_DB
                 );
-                return;
             }
             Some(db) => {
                 let mut db = db.borrow_mut();
@@ -380,7 +434,6 @@ impl Transaction {
                     db_alias: nino_constants::MAIN_DB.to_string(),
                     params: vec![query],
                     param_types: vec![2],
-                    limit: 0,
                 };
                 match db.query(query_data) {
                     Ok(result) => {
@@ -411,20 +464,26 @@ impl Transaction {
     }
 
     fn cleanup(&mut self, error: bool) -> Result<(), Error> {
-        self.db_pool.retain(move |_, db_session| {
-            let mut tx = db_session.borrow_mut();
-            if error {
+        if error {
+            self.db_pool.retain(move |_, db_session| {
+                let mut tx = db_session.borrow_mut();
                 if let Err(error) = tx.rollback() {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
-            } else {
+                // remove all
+                false
+            });
+        } else {
+            self.db_pool.retain(move |_, db_session| {
+                let mut tx = db_session.borrow_mut();
                 if let Err(error) = tx.commit() {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
-            }
-            // remove all
-            true
-        });
+                // remove all
+                false
+            });
+        }
+
         self.create_db_transaction(nino_constants::MAIN_DB.to_string())?;
         Ok(())
     }
@@ -476,6 +535,7 @@ pub trait DBCommand {
     fn commit(&mut self) -> Result<(), Error>;
     fn rollback(&mut self) -> Result<(), Error>;
     fn query(&mut self, query_data: QueryData) -> Result<QueryResult, Error>;
+    fn upsert(&mut self, query_data: QueryData) -> Result<u64, Error>;
 }
 struct TransactionPostgres {
     request_in: mpsc::Sender<TransactionRequest>,
@@ -519,7 +579,6 @@ impl TransactionPostgres {
             if let Some(message) = request_out.blocking_recv() {
                 // process transaction command
                 let response = match message {
-                    TransactionRequest::Drop => return Ok(()),
                     TransactionRequest::Commit => {
                         let response = match tx.commit() {
                             Ok(_) => TransactionResponse::Ok,
@@ -567,8 +626,8 @@ impl TransactionPostgres {
                             Ok(_) => {
                                 let mut qparams: Vec<&(dyn ToSql + Sync)> =
                                     Vec::with_capacity(qlen);
-                                for ix in 0..qlen - 1 {
-                                    let sqlv: &(dyn ToSql + Sync) = (&i64vec[ix]).as_ref();
+                                for value in i64vec.iter().take(qlen - 1) {
+                                    let sqlv: &(dyn ToSql + Sync) = value.as_ref();
                                     qparams.push(sqlv);
                                 }
                                 let query = params.params[0].clone();
@@ -586,7 +645,7 @@ impl TransactionPostgres {
                                         let mut row_names: Vec<String> = Vec::new();
                                         let mut result: Vec<Vec<String>> = Vec::new();
                                         for row in rows {
-                                            if row_types.len() == 0 {
+                                            if row_types.is_empty() {
                                                 for column in row.columns() {
                                                     row_names.push(column.name().to_string());
                                                     let t = column.type_();
@@ -611,8 +670,41 @@ impl TransactionPostgres {
                             }
                         }
                     }
-                    TransactionRequest::Upsert(_) => {
-                        todo!()
+                    TransactionRequest::Upsert(params) => {
+                        let qlen = params.params.len();
+                        let mut i64vec: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(qlen);
+                        match Self::query_convert_parameters(
+                            &params.params,
+                            &params.param_types,
+                            &mut i64vec,
+                        ) {
+                            Err(error) => TransactionResponse::Error(format!(
+                                "ERROR {}:{}:{}",
+                                file!(),
+                                line!(),
+                                error
+                            )),
+                            Ok(_) => {
+                                let mut qparams: Vec<&(dyn ToSql + Sync)> =
+                                    Vec::with_capacity(qlen);
+                                for value in i64vec.iter().take(qlen - 1) {
+                                    let sqlv: &(dyn ToSql + Sync) = value.as_ref();
+                                    qparams.push(sqlv);
+                                }
+                                let query = params.params[0].clone();
+
+                                match tx.execute(&query, &qparams) {
+                                    Err(error) => TransactionResponse::Error(format!(
+                                        "ERROR {}:{}: db alias {} : {}",
+                                        file!(),
+                                        line!(),
+                                        params.db_alias,
+                                        error
+                                    )),
+                                    Ok(affected) => TransactionResponse::UpsertResult(affected),
+                                }
+                            }
+                        }
                     }
                 };
                 if let Err(error) = response_in.blocking_send(response) {
@@ -623,15 +715,12 @@ impl TransactionPostgres {
     }
 
     fn query_convert_parameters(
-        query: &Vec<String>,
-        query_types: &Vec<i16>,
+        query: &[String],
+        query_types: &[i16],
         i64vec: &mut Vec<Box<dyn ToSql + Sync>>,
     ) -> Result<(), Error> {
-        let qlen = query.len();
-
         // try convert string to number
-        for ix in 1..qlen {
-            let val = query.get(ix).unwrap();
+        for (ix, val) in query.iter().enumerate().skip(1) {
             if query_types[ix] == 0 {
                 //boolean
                 let b = val.eq_ignore_ascii_case("true") || val.eq("1");
@@ -725,6 +814,32 @@ impl DBCommand for TransactionPostgres {
                 TransactionResponse::Error(msg) => Err(Error::msg(msg)),
                 TransactionResponse::QueryResult(result) => Ok(result),
                 TransactionResponse::UpsertResult(_) => todo!(),
+            },
+        }
+    }
+
+    fn upsert(&mut self, query_data: QueryData) -> Result<u64, Error> {
+        let qlen = query_data.params.len();
+        if qlen < 1 {
+            return Err(Error::msg("query is an empty array"));
+        }
+        if let Err(error) = self
+            .request_in
+            .blocking_send(TransactionRequest::Upsert(query_data))
+        {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            return Err(Error::msg(error));
+        }
+        match self.response_out.blocking_recv() {
+            None => {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
+                Err(Error::msg("should not happen"))
+            }
+            Some(response) => match response {
+                TransactionResponse::UpsertResult(affected) => Ok(affected),
+                TransactionResponse::Error(msg) => Err(Error::msg(msg)),
+                TransactionResponse::QueryResult(_) => panic!(),
+                TransactionResponse::Ok => panic!(),
             },
         }
     }

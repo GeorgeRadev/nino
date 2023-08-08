@@ -39,19 +39,13 @@ pub fn normalize_path(path: String) -> String {
     let mut prev: char = '\0';
     for b in path.to_lowercase().chars() {
         let is_special_char = b == '_' || b == '/' || b == '.';
-        if b.is_ascii_lowercase() || is_special_char {
-            if
-            //do not duplicate these chars
-            (b == prev) && is_special_char
+        if (is_special_char && (b == prev)) || (prev == '/' && b == '.') {
+            //do not duplicate special chars, and
             //do not allow adding relative paths
-            && prev == '/' && b == '.'
-            {
-                //skip
-            } else {
-                result.push(b);
-                prev = b;
-            }
+        } else {
+            result.push(b);
         }
+        prev = b;
     }
     while !result.is_empty() && (*result.last().unwrap() == '/') {
         result.pop();
@@ -109,10 +103,10 @@ pub async fn send_response_to_stream(
                 match async_std::io::copy(&mut http_bytes, &mut stream.clone()).await {
                     Ok(_bytes_written) => {
                         // eprintln!("body:\n{}", String::from_utf8(body.clone()).unwrap());
-                        
+
                         //write body
                         if let Err(error) =
-                        async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await
+                            async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await
                         {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                         }
@@ -134,37 +128,30 @@ pub async fn send_response_to_stream(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use crate::nino_functions::normalize_path;
 
     #[test]
     fn test_normalize_path() {
         assert_eq!(
-            normalize_path(String::from_str("///////remove//duplicate/////slashes").unwrap()),
-            String::from_str("remove/duplicate/slashes").unwrap(),
+            normalize_path(String::from("///////remove//duplicate/////slashes")),
+            String::from("remove/duplicate/slashes"),
         );
         assert_eq!(
-            normalize_path(String::from_str("/remove/leading/slash").unwrap()),
-            String::from_str("remove/leading/slash").unwrap()
+            normalize_path(String::from("/remove/leading/slash")),
+            String::from("remove/leading/slash")
         );
         assert_eq!(
-            normalize_path(String::from_str("this/one/should/not/change").unwrap()),
-            String::from_str("this/one/should/not/change").unwrap(),
+            normalize_path(String::from("this/one/should/not/change")),
+            String::from("this/one/should/not/change"),
         );
         assert_eq!(
-            normalize_path(String::from_str("/this/one_____should/not.......duplicate").unwrap()),
-            String::from_str("this/one_should/not.duplicate").unwrap(),
+            normalize_path(String::from("/this/one_____should/not.......duplicate")),
+            String::from("this/one_should/not.duplicate"),
         );
         assert_eq!(
-            normalize_path(
-                String::from_str("////...../.exploits/.should.get.normalized/").unwrap()
-            ),
-            String::from_str("exploits/should.get.normalized").unwrap(),
+            normalize_path(String::from("////...../.exploits/.should.get.normalized/")),
+            String::from("exploits/should.get.normalized"),
         );
-        assert_eq!(
-            normalize_path(String::from_str("").unwrap()),
-            String::from_str("/").unwrap(),
-        );
+        assert_eq!(normalize_path(String::from("")), String::from("/"),);
     }
 }
