@@ -30,15 +30,20 @@ export default async function getDB(name) {
     async function _query(queryArray, callback) {
         var { params, paramTypes } = normalizeParams(queryArray);
 
-        const queryResult = await core.opAsync('aop_jsdb_execute_query', name, params, paramTypes);
-        if (callback) {
-            for (var row of queryResult.rows) {
-                if (!callback.call(this, row, queryResult.rowTypes, queryResult.rowNames)) {
-                    break;
+        if (params[0].startsWith("SELECT")) {
+            const queryResult = await core.opAsync('aop_jsdb_execute_query', name, params, paramTypes);
+            if (callback) {
+                for (var row of queryResult.rows) {
+                    if (!callback.call(this, row, queryResult.rowTypes, queryResult.rowNames)) {
+                        break;
+                    }
                 }
+                return undefined;
+            } else {
+                return queryResult;
             }
-            return undefined;
         } else {
+            const queryResult = await core.opAsync('aop_jsdb_execute_upsert', name, params, paramTypes);
             return queryResult;
         }
     }
