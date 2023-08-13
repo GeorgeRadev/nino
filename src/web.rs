@@ -185,7 +185,6 @@ impl WebManager {
     }
 
     async fn response_500(stream: Box<TcpStream>, error: Error) {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         let mut response = Response::new(StatusCode::InternalServerError);
         let content = format!("ERROR: {}", error);
         response.set_body(http_types::Body::from_string(content));

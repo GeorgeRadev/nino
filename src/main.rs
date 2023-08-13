@@ -130,7 +130,7 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     {
         // compile dynamics
         let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
-        js::JavaScriptManager::run(&recompile_dynamics).await;
+        js::JavaScriptManager::run(&recompile_dynamics).await?;
     }
     notifier.notify("string message".to_string()).await?;
 

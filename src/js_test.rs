@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::js::{init_platform, run_code, run_deno_main_thread};
+    use crate::js::{init_platform, run_deno_main_thread};
     use deno_core::futures::FutureExt;
     use deno_core::Op;
     use deno_core::{anyhow::Error, op, OpDecl, OpState};
@@ -32,27 +32,6 @@ mod tests {
     (async () => { 
         await main();
     })();
-    "#;
-
-    static TEST_SOURCE: &str = r#"
-    return new Error("this is intentional");
-    const core = Deno[Deno.internal].core;
-    let result = "";
-    try{
-        core.print('----------RUN---------------\ntry\n');
-        const id = core.ops.op_id();
-        core.print('RUN id ' + id + '\n');
-        const value = core.ops.op_sync();
-        core.print('value ' + value + '\n');
-        const mod = await import("b");
-        const modValue = await mod.default();
-        core.print('modValue ' + modValue + '\n');
-        result = '' + id + value + modValue+"run";
-    }catch(e){
-        result = ' error: ' + e;
-    }
-    core.print('RUN RESULT: ' + result + '\n');
-    core.ops.op_set_result(result);
     "#;
 
     fn module_loader(
@@ -115,6 +94,7 @@ mod tests {
             *results = Some(String::new());
         }
 
+        // run two modules
         let r = tokio::try_join!(
             async {
                 run_deno_main_thread(
@@ -124,6 +104,7 @@ mod tests {
                         state.put(TestTask { id: 1 });
                     },
                     "main",
+                    None,
                     9229,
                     false,
                 )
@@ -137,6 +118,7 @@ mod tests {
                         state.put(TestTask { id: 1 });
                     },
                     "main",
+                    None,
                     0,
                     false,
                 )
@@ -161,23 +143,27 @@ mod tests {
             *results = Some(String::new());
         }
 
-
-        println!("========================================================");
-        let _ = run_code(
+        // run code
+        if let Err(error) = run_deno_main_thread(
             module_loader,
             get_ops,
             |state| {
                 state.put(TestTask { id: 0 });
             },
-            &TEST_SOURCE.to_string(),
+            "main",
+            Some(TEST_MAIN_MODULE_SOURCE),
+            0,
+            false,
         )
-        .await;
-
+        .await
         {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            assert_eq!(0, 1);
+        } else {
             let mut res = TEST_RESULTS.lock().unwrap();
             let str = res.as_mut().unwrap();
             println!("result: {}", str);
-            assert_eq!(str, "1OK42");
+            assert_eq!(str, "0OK42");
         }
     }
 
