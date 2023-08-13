@@ -1,3 +1,5 @@
+use deno_core::anyhow::Error;
+
 use crate::db::DBManager;
 use crate::nino_constants;
 
@@ -13,42 +15,30 @@ impl SettingsManager {
         Self { db }
     }
 
-    async fn get_setting(&self, settings_key: &str) -> Result<String, String> {
+    async fn get_setting(&self, settings_key: &str) -> Result<Option<String>, Error> {
         let query = format!(
             "SELECT setting_value FROM {} WHERE setting_key = $1",
             nino_constants::SETTINGS_TABLE
         );
 
-        match self.db.query_one(&query, &[&settings_key]).await {
-            Ok(row) => {
+        match self.db.query_opt(&query, &[&settings_key]).await? {
+            Some(row) => {
                 let value: String = row.get(0);
-                Ok(value)
+                Ok(Some(value))
             }
-            Err(error) => {
-                eprintln!(
-                    "WARNING missing setting for key '{}' :{}:{}:{}",
-                    settings_key,
-                    file!(),
-                    line!(),
-                    error
-                );
-                Err(error.to_string())
-            }
+            None => Ok(None),
         }
     }
 
     pub async fn get_setting_i32(&self, settings_key: &str, def_value: i32) -> i32 {
         match self.get_setting(settings_key).await {
-            Ok(value_string) => {
-                if !value_string.is_empty() {
-                    match value_string.parse::<i32>() {
-                        Ok(v) => v,
-                        Err(_) => def_value,
-                    }
-                } else {
-                    def_value
-                }
-            }
+            Ok(value_string) => match value_string {
+                Some(value_string) => match value_string.parse::<i32>() {
+                    Ok(v) => v,
+                    Err(_) => def_value,
+                },
+                None => def_value,
+            },
             Err(_) => def_value,
         }
     }

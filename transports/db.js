@@ -10,18 +10,21 @@ export default async function getDB(name) {
         var params = [];
         var paramTypes = [];
         for (var arg of args) {
-            if (typeof arg === 'boolean') {
-                params.push("" + arg);
+            if (  arg === undefined || arg === null) {
+                params.push("NULL");
                 paramTypes.push(0);
-            } else if (typeof arg === 'number') {
+            } else  if (typeof arg === 'boolean') {
                 params.push("" + arg);
                 paramTypes.push(1);
-            } else if (arg instanceof Date) {
-                params.push("" + arg.getUTCMilliseconds());
-                paramTypes.push(3);
-            } else {
+            } else if (typeof arg === 'number') {
                 params.push("" + arg);
                 paramTypes.push(2);
+            } else if (arg instanceof Date) {
+                params.push("" + arg.getUTCMilliseconds());
+                paramTypes.push(4);
+            } else {
+                params.push("" + arg);
+                paramTypes.push(3);
             }
         }
         return { params, paramTypes };

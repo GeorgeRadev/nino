@@ -1,10 +1,11 @@
 use crate::db_notification::{self, Notifier};
-use crate::db_transactions::TransactionSession;
+use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
 use async_channel::Receiver;
 use async_std::net::TcpStream;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
 use http_types::headers::CONTENT_TYPE;
 use http_types::{Request, Response, StatusCode};
@@ -35,12 +36,11 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
 }
 
 pub struct JSContext {
-    pub id: u32,
+    pub id: i16,
     pub db: Arc<DBManager>,
     pub dynamics: Arc<DynamicManager>,
     pub notifier: Arc<Notifier>,
-    pub dbtx: TransactionSession,
-    pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
+    pub web_task_rx: Receiver<Box<nino_structures::JSTask>>,
     // response
     pub is_request: bool,
     pub module: String,
@@ -140,15 +140,10 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 #[op]
 async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<bool, Error> {
     {
-        let mut dbtx;
-        {
-            let mut state = op_state.borrow_mut();
-            let context = state.borrow_mut::<JSContext>();
+        let mut state = op_state.borrow_mut();
+        let tx = state.borrow_mut::<TransactionSession>();
 
-            dbtx = context.dbtx.clone();
-        }
-        // clean up db transactions
-        if let Err(error) = dbtx.close_all(error).await {
+        if let Err(error) = tx.close_all(error).await {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
     }
@@ -335,7 +330,7 @@ fn op_get_invalidation_message(state: &mut OpState) -> String {
 }
 
 #[op]
-fn op_get_thread_id(state: &mut OpState) -> u32 {
+fn op_get_thread_id(state: &mut OpState) -> i16 {
     let context = state.borrow_mut::<JSContext>();
     context.id
 }
@@ -367,16 +362,10 @@ fn op_get_database_invalidation_prefix() -> String {
 }
 
 #[op]
-async fn aop_reload_database_aliases(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
-    let mut dbtx = {
-        let mut state = op_state.borrow_mut();
-        let context = state.borrow_mut::<JSContext>();
-        context.dbtx.clone()
-    };
-    match dbtx.reload_database_aliases().await {
-        Ok(_) => Ok(true),
-        Err(error) => Err(Error::msg(error)),
-    }
+async fn aop_reload_database_aliases(op_state: Rc<RefCell<OpState>>) -> Result<(), Error> {
+    let mut state = op_state.borrow_mut();
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.reload_database_aliases().await
 }
 
 #[op]
@@ -384,13 +373,9 @@ async fn aop_jsdb_get_connection_name(
     op_state: Rc<RefCell<OpState>>,
     db_alias: String,
 ) -> Result<String, Error> {
-    let mut dbtx;
-    {
-        let mut state = op_state.borrow_mut();
-        let context = state.borrow_mut::<JSContext>();
-        dbtx = context.dbtx.clone();
-    }
-    dbtx.create_db_connection(db_alias).await
+    let mut state = op_state.borrow_mut();
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.create_db_connection(db_alias).await
 }
 
 #[derive(deno_core::serde::Serialize)]
@@ -401,6 +386,82 @@ pub struct QueryResult {
     pub row_types: Vec<String>,
 }
 
+fn query_types_to_params(
+    query: Vec<String>,
+    query_types: Vec<i16>,
+) -> Result<(String, Vec<QueryParam>), Error> {
+    let qlen = query.len();
+    {
+        if qlen == 0 {
+            return Err(Error::msg("query must contain atleast the query"));
+        }
+        let tlen = query_types.len();
+        if qlen != tlen {
+            return Err(Error::msg("query values and query types must be same size"));
+        }
+    }
+
+    let mut query_params: Vec<QueryParam> = Vec::with_capacity(qlen);
+    // JS types
+    // 0 - NULL
+    // 1 - Boolean
+    // 2 - Number
+    // 3 - String
+    // 4 - Date
+    for ix in 1..qlen - 1 {
+        let v = query.get(ix).unwrap();
+        let t = query_types[ix];
+        if t == 0 {
+            //NULL
+            query_params.push(QueryParam::Null);
+        } else if t == 1 {
+            //boolean
+            let b = v.eq_ignore_ascii_case("true") || v.eq("1");
+            query_params.push(QueryParam::Bool(b));
+        } else if t == 2 {
+            //number
+            match v.parse::<i64>() {
+                Ok(v) => {
+                    query_params.push(QueryParam::Number(v));
+                }
+                Err(_) => match v.parse::<f64>() {
+                    Ok(v) => {
+                        query_params.push(QueryParam::Float(v));
+                    }
+                    Err(e) => {
+                        return Err(Error::msg(format!(
+                            "parameter {} `{}` is not number: {}",
+                            ix, v, e
+                        )));
+                    }
+                },
+            }
+        } else if query_types[ix] == 4 {
+            //date
+            match v.parse::<i64>() {
+                Ok(v) => {
+                    let secs = v / 1000;
+                    let ns = (v % 1000) * 1_000_000;
+                    let ndt = NaiveDateTime::from_timestamp_opt(secs, ns as u32).unwrap();
+                    let dt = DateTime::<Utc>::from_utc(ndt, Utc);
+                    let v = dt.to_rfc3339();
+                    query_params.push(QueryParam::Date(v));
+                }
+                Err(error) => {
+                    return Err(Error::msg(format!(
+                        "parameter {} `{}` is not UTC miliseconds: {}",
+                        ix, v, error
+                    )));
+                }
+            };
+        } else {
+            // use string value
+            query_params.push(QueryParam::String(v.clone()));
+        }
+    }
+    Ok((query[0].clone(), query_params))
+}
+
 #[op]
 async fn aop_jsdb_execute_query(
     op_state: Rc<RefCell<OpState>>,
@@ -408,13 +469,10 @@ async fn aop_jsdb_execute_query(
     query: Vec<String>,
     query_types: Vec<i16>,
 ) -> Result<QueryResult, Error> {
-    let mut dbtx;
-    {
-        let mut state = op_state.borrow_mut();
-        let context = state.borrow_mut::<JSContext>();
-        dbtx = context.dbtx.clone();
-    }
-    let result = dbtx.query(db_alias, query, query_types).await?;
+    let (query, params) = query_types_to_params(query, query_types)?;
+    let mut state = op_state.borrow_mut();
+    let tx = state.borrow_mut::<TransactionSession>();
+    let result = tx.query(db_alias, query, params).await?;
     Ok(QueryResult {
         rows: result.rows,
         row_names: result.row_names,
@@ -429,12 +487,8 @@ async fn aop_jsdb_execute_upsert(
     query: Vec<String>,
     query_types: Vec<i16>,
 ) -> Result<u64, Error> {
-    let mut dbtx;
-    {
-        let mut state = op_state.borrow_mut();
-        let context = state.borrow_mut::<JSContext>();
-        dbtx = context.dbtx.clone();
-    }
-    let result = dbtx.upsert(db_alias, query, query_types).await?;
-    Ok(result)
+    let (query, params) = query_types_to_params(query, query_types)?;
+    let mut state = op_state.borrow_mut();
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.upsert(db_alias, query, params).await
 }

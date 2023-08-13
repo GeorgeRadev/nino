@@ -1,19 +1,17 @@
 use crate::db::DBManager;
 use crate::db_notification::Notifier;
-use crate::db_transactions::TransactionManager;
+use crate::db_transactions::{TransactionManager, TransactionSession};
 use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
-use deno_core::error::AnyError;
 use deno_core::{
-    anyhow::Error, futures::FutureExt, url::Url, Extension, JsRuntime, ModuleLoader, ModuleSource,
-    ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState, RuntimeOptions,
+    anyhow::Error, error::AnyError, futures::FutureExt, url::Url, Extension, FastString, JsRuntime,
+    ModuleLoader, ModuleSource, ModuleSourceFuture, ModuleSpecifier, ModuleType, OpDecl, OpState,
+    ResolutionKind, RuntimeOptions,
 };
-use deno_core::{FastString, ResolutionKind};
-use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
-use deno_runtime::inspector_server::InspectorServer;
-use deno_runtime::permissions::PermissionsContainer;
-use deno_runtime::worker::{MainWorker, WorkerOptions};
-use deno_runtime::BootstrapOptions;
+use deno_runtime::{
+    deno_broadcast_channel::InMemoryBroadcastChannel, inspector_server::InspectorServer,
+    permissions::PermissionsContainer, worker::MainWorker, worker::WorkerOptions, BootstrapOptions,
+};
 use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
@@ -28,7 +26,6 @@ pub struct JavaScriptManager {
     thread_count: usize,
     inspector_port: u16,
     db: Arc<DBManager>,
-    dbtx: Arc<TransactionManager>,
     dynamics: Arc<DynamicManager>,
     notifier: Arc<Notifier>,
 }
@@ -45,20 +42,24 @@ impl JavaScriptManager {
         inspector_port: u16,
         db: Option<Arc<DBManager>>,
         dynamics: Option<Arc<DynamicManager>>,
-        tx: Option<Arc<TransactionManager>>,
     ) -> JavaScriptManager {
         {
             JS_INSTANCE.get_or_init(|| {
-                init_platform(thread_count);
+                init_platform(
+                    thread_count,
+                    module_loader,
+                    js_functions::get_javascript_ops(),
+                );
+
+                let db = db.unwrap();
 
                 let dynamics = dynamics.unwrap();
                 JavaScriptManager {
                     thread_count,
                     inspector_port,
-                    db: db.unwrap(),
+                    db,
                     notifier: dynamics.get_notifier(),
-                    dynamics: dynamics.clone(),
-                    dbtx: tx.unwrap(),
+                    dynamics,
                 }
             });
         }
@@ -70,20 +71,20 @@ impl JavaScriptManager {
     // for developing purposes use single js instance and debugger will attach to it
     pub async fn start() {
         let (thread_count, inspector_port) = {
-            let instance = Self::instance(0, 0, None, None, None);
+            let instance = Self::instance(0, 0, None, None);
             (instance.thread_count, instance.inspector_port)
         };
 
         for i in 0..thread_count {
             let builder = thread::Builder::new().name(format!("JS Thread {}", i).to_string());
-            let _ = builder.spawn(move || {
+            if let Err(error) = builder.spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                     .unwrap();
 
                 rt.block_on(async move {
-                    if let Err(e) = run_deno_main_thread(
+                    if let Err(error) = run_deno_main_thread(
                         module_loader,
                         js_functions::get_javascript_ops,
                         Self::create_js_context_state,
@@ -93,13 +94,16 @@ impl JavaScriptManager {
                         } else {
                             0
                         },
+                        true,
                     )
                     .await
                     {
-                        println!("ERROR: {}", e);
+                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                     }
                 })
-            });
+            }) {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            }
         }
     }
 
@@ -108,24 +112,20 @@ impl JavaScriptManager {
      * Allocating resources to the thread and releasing them must be handled in the main javascript try finaly block.
      */
     fn create_js_context_state(state: &mut OpState) {
-        static JS_THREAD_ID: std::sync::atomic::AtomicUsize =
-            std::sync::atomic::AtomicUsize::new(0);
+        static JS_THREAD_ID: std::sync::atomic::AtomicI16 = std::sync::atomic::AtomicI16::new(-1);
+        let id: i16 = JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let js = JavaScriptManager::instance(0, 0, None, None, None);
-
-        let inst = JS_INSTANCE.get().unwrap();
-        let dbtx = inst.dbtx.register_transaction_session();
+        let js = JS_INSTANCE.get().unwrap();
 
         state.put(js_functions::JSContext {
-            id: JS_THREAD_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst) as u32,
-            db: inst.db.clone(),
-            web_task_rx: inst.dynamics.get_web_task_rx(),
-            dbtx,
+            id,
+            db: js.db.clone(),
+            web_task_rx: js.dynamics.get_web_task_rx(),
             //request defaults
             is_request: false,
             response: Some(Response::new(200)),
             dynamics: js.dynamics.clone(),
-            notifier: js.notifier,
+            notifier: js.notifier.clone(),
             module: String::new(),
             request: None,
             stream: None,
@@ -134,12 +134,27 @@ impl JavaScriptManager {
             is_invalidate: false,
             message: String::new(),
         });
+        let session = TransactionManager::get_transaction_session(js.db.get_connection_string());
+        state.put::<TransactionSession>(session);
+    }
+
+    pub async fn run(code: &String) {
+        if let Err(error) = run_code(
+            module_loader,
+            js_functions::get_javascript_ops,
+            Self::create_js_context_state,
+            code,
+        )
+        .await
+        {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        }
     }
 }
 
 /// this is used to create the v8 runtime :
 /// it is intilaized only once and lives through the livetime of the applocation
-pub fn init_platform(thread_count: usize) {
+pub fn init_platform(thread_count: usize, module_loader: ModuleLoadingFunction, ops: Vec<OpDecl>) {
     static INIT_PLATFORM: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
     {
         //init platform once
@@ -151,7 +166,7 @@ pub fn init_platform(thread_count: usize) {
 
             let loader = Rc::new(FNModuleLoader::new(module_loader));
             let ext = Extension::builder(nino_constants::PROGRAM_NAME)
-                .ops(js_functions::get_javascript_ops())
+                .ops(ops)
                 .build();
             let _r = JsRuntime::new(RuntimeOptions {
                 v8_platform: platform,
@@ -173,16 +188,7 @@ type ModuleLoadingFunction =
 fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
     async move {
         let instance = JS_INSTANCE.get().unwrap();
-        match instance.dynamics.get_module_js(name.clone().as_str()).await {
-            Some(code) => Ok(code),
-            None => {
-                let err_msg = format!(
-                    "cannot load the main module '{}' from dynamics",
-                    name.clone()
-                );
-                Err(Error::msg(err_msg))
-            }
-        }
+        instance.dynamics.get_module_js(name.clone().as_str()).await
     }
     .boxed_local()
 }
@@ -257,6 +263,7 @@ pub async fn run_deno_main_thread(
     create_state: fn(state: &mut OpState) -> (),
     main_module: &str,
     inspector_port: u16,
+    in_loop: bool,
 ) -> Result<(), Error> {
     let main_uri = format!("{}{}", nino_constants::MODULE_URI, main_module).to_owned();
     let main_module = Url::parse(main_uri.as_str())?;
@@ -323,7 +330,77 @@ pub async fn run_deno_main_thread(
 
         worker.execute_main_module(&main_module).await?;
         worker.run_event_loop(false).await?;
+
+        if !in_loop {
+            break;
+        }
     }
     // maybe_inspector_server.unwrap();
-    // Ok(())
+    Ok(())
+}
+
+// new one using deno MainWorker
+pub async fn run_code(
+    module_loader: ModuleLoadingFunction,
+    get_ops: fn() -> Vec<OpDecl>,
+    create_state: fn(state: &mut OpState) -> (),
+    code: &String,
+) -> Result<(), Error> {
+    let main_uri = format!(
+        "{}{}",
+        nino_constants::MODULE_URI,
+        nino_constants::MAIN_MODULE
+    )
+    .to_owned();
+    let main_module = Url::parse(main_uri.as_str())?;
+
+    let create_web_worker_cb = Arc::new(|_| {
+        todo!("Web workers are not supported in the example");
+    });
+    let web_worker_event_cb = Arc::new(|_| {
+        todo!("Web workers are not supported in the example");
+    });
+
+    let extensions = {
+        let ext = Extension::builder("nino_extentions")
+            .ops(get_ops())
+            .state(create_state)
+            .build();
+        vec![ext]
+    };
+
+    let options = WorkerOptions {
+        bootstrap: BootstrapOptions::default(),
+        extensions,
+        module_loader: Rc::new(FNModuleLoader::new(module_loader)),
+        create_web_worker_cb: create_web_worker_cb.clone(),
+        web_worker_preload_module_cb: web_worker_event_cb.clone(),
+        web_worker_pre_execute_module_cb: web_worker_event_cb.clone(),
+        get_error_class_fn: Some(&get_error_class_name),
+        broadcast_channel: InMemoryBroadcastChannel::default(),
+        maybe_inspector_server: None,
+        seed: None,
+        npm_resolver: None,
+        startup_snapshot: None,
+        cache_storage_dir: None,
+        source_map_getter: None,
+        format_js_error_fn: None,
+        origin_storage_dir: None,
+        shared_array_buffer_store: None,
+        compiled_wasm_module_store: None,
+        unsafely_ignore_certificate_errors: None,
+        should_break_on_first_statement: false,
+        should_wait_for_inspector_session: false,
+        ..Default::default()
+    };
+
+    let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
+
+    let mut worker = MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
+
+    let source_code = FastString::from(code.to_owned());
+    worker.execute_script("run", source_code)?;
+    worker.run_event_loop(false).await?;
+
+    Ok(())
 }

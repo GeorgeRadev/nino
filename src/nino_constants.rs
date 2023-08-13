@@ -43,7 +43,7 @@ pub const SETTINGS_NINO_THREAD_COUNT_DEFAULT: i32 = 4;
 
 /// defines how many JavaScript threads to serve requests
 pub const SETTINGS_JS_THREAD_COUNT: &str = "nino_js_thread_count";
-pub const SETTINGS_JS_THREAD_COUNT_DEFAULT: i32 = 4;
+pub const SETTINGS_JS_THREAD_COUNT_DEFAULT: i32 = 1;
 
 /// defines web serving port
 pub const SETTINGS_NINO_WEB_SERVER_PORT: &str = "nino_web_server_port";

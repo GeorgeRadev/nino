@@ -1,145 +1,96 @@
-use crate::db::DBManager;
 use crate::nino_constants;
+use async_channel::{Receiver, Sender};
 use core::fmt;
 use deno_core::anyhow::Error;
-use postgres::Config;
-use std::cell::RefCell;
-use std::thread;
-
-use postgres::types::ToSql;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
-use tokio::sync::{mpsc, Mutex};
+use tokio_postgres::types::{to_sql_checked, IsNull, ToSql, Type};
+use tokio_postgres::Config;
 
 // organize db connections per js instance in a map by alias to connections
 // free all open aliases exept the first for keep it as pool
 // all channels and threads are because of Transaction<'_>
 // Manager 1-*  Session  1-*  Transaction
 
-static TRANSACTION_MANAGER: OnceLock<TransactionManager> = OnceLock::new();
-
-#[derive(Clone)]
-pub struct TransactionManager {
-    id: usize,
-    db: Arc<DBManager>,
-}
+pub struct TransactionManager {}
 
 impl TransactionManager {
-    pub fn instance(id: usize, db: Arc<DBManager>) -> TransactionManager {
-        TRANSACTION_MANAGER.get_or_init(|| TransactionManager { id, db });
-        TRANSACTION_MANAGER.get().unwrap().clone()
-    }
+    // creates
+    pub fn get_transaction_session(connection_string: String) -> TransactionSession {
+        let main_connection_string = connection_string.clone();
 
-    pub fn register_transaction_session(&self) -> TransactionSession {
-        let (request_in, request_out) = mpsc::channel::<TransactionSessionRequest>(16);
-        let (response_in, response_out) = mpsc::channel::<TransactionSessionResponse>(16);
+        let (request_in, request_out) = async_channel::unbounded::<TransactionSessionRequest>();
+        let (response_in, response_out) = async_channel::unbounded::<TransactionSessionResponse>();
 
-        let main_connection_string = self.db.get_connection_string().clone();
-        if let Err(error) = thread::Builder::new()
-            .name(format!("tx_session_{}", self.id))
-            .spawn(move || {
-                let mut tx = Transaction::new(main_connection_string, request_out, response_in);
-                tx.start_session();
-            })
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-        }
+        tokio::spawn(async move {
+            let mut tx = Transaction::new(main_connection_string, request_out, response_in);
+            tx.start_session().await;
+        });
         TransactionSession {
-            request_in: Arc::new(Mutex::new(request_in)),
-            response_out: Arc::new(Mutex::new(response_out)),
+            request_in,
+            response_out,
         }
     }
 }
 
-#[derive(Clone)]
 pub struct TransactionSession {
-    request_in: Arc<Mutex<mpsc::Sender<TransactionSessionRequest>>>,
-    response_out: Arc<Mutex<mpsc::Receiver<TransactionSessionResponse>>>,
+    request_in: Sender<TransactionSessionRequest>,
+    response_out: Receiver<TransactionSessionResponse>,
 }
 impl TransactionSession {
     pub async fn reload_database_aliases(&mut self) -> Result<(), Error> {
         if let Err(error) = self
             .request_in
-            .lock()
-            .await
             .send(TransactionSessionRequest::ReloadDBAliases)
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             return Err(Error::msg(error));
         }
-        match self.response_out.lock().await.recv().await {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionSessionResponse::Ok => Ok(()),
-                TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionSessionResponse::UpsertResult(_) => panic!(),
-                TransactionSessionResponse::QueryResult(_) => panic!(),
-                TransactionSessionResponse::Transaction(_) => panic!(),
-            },
+        match self.response_out.recv().await? {
+            TransactionSessionResponse::Ok => Ok(()),
+            TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionSessionResponse::UpsertResult(_) => panic!(),
+            TransactionSessionResponse::QueryResult(_) => panic!(),
+            TransactionSessionResponse::Transaction(_) => panic!(),
         }
     }
 
     pub async fn create_db_connection(&mut self, db_alias: String) -> Result<String, Error> {
         if let Err(error) = self
             .request_in
-            .lock()
-            .await
             .send(TransactionSessionRequest::CreateTransaction(db_alias))
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             return Err(Error::msg(error));
         }
-        match self.response_out.lock().await.recv().await {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionSessionResponse::Transaction(alias) => Ok(alias),
-                TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionSessionResponse::UpsertResult(_) => panic!(),
-                TransactionSessionResponse::QueryResult(_) => panic!(),
-                TransactionSessionResponse::Ok => panic!(),
-            },
+        match self.response_out.recv().await? {
+            TransactionSessionResponse::Transaction(alias) => Ok(alias),
+            TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionSessionResponse::UpsertResult(_) => panic!(),
+            TransactionSessionResponse::QueryResult(_) => panic!(),
+            TransactionSessionResponse::Ok => panic!(),
         }
     }
 
     pub async fn close_all(&mut self, error: bool) -> Result<(), Error> {
-        if let Err(error) = self
-            .request_in
-            .lock()
-            .await
+        self.request_in
             .send(TransactionSessionRequest::CloseAll(error))
-            .await
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.lock().await.recv().await {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionSessionResponse::Ok => Ok(()),
-                TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionSessionResponse::UpsertResult(_) => panic!(),
-                TransactionSessionResponse::QueryResult(_) => panic!(),
-                TransactionSessionResponse::Transaction(_) => panic!(),
-            },
+            .await?;
+        match self.response_out.recv().await? {
+            TransactionSessionResponse::Ok => Ok(()),
+            TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionSessionResponse::UpsertResult(_) => panic!(),
+            TransactionSessionResponse::QueryResult(_) => panic!(),
+            TransactionSessionResponse::Transaction(_) => panic!(),
         }
     }
 
     pub async fn query(
         &mut self,
         db_alias: String,
-        query: Vec<String>,
-        query_types: Vec<i16>,
+        query: String,
+        params: Vec<QueryParam>,
     ) -> Result<QueryResult, Error> {
         let qlen = query.len();
         if qlen < 1 {
@@ -148,40 +99,27 @@ impl TransactionSession {
 
         let query_data = QueryData {
             db_alias,
-            params: query,
-            param_types: query_types,
+            query,
+            params,
         };
 
-        if let Err(error) = self
-            .request_in
-            .lock()
-            .await
+        self.request_in
             .send(TransactionSessionRequest::Query(query_data))
-            .await
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.lock().await.recv().await {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionSessionResponse::QueryResult(result) => Ok(result),
-                TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionSessionResponse::UpsertResult(_) => panic!(),
-                TransactionSessionResponse::Transaction(_) => panic!(),
-                TransactionSessionResponse::Ok => panic!(),
-            },
+            .await?;
+        match self.response_out.recv().await? {
+            TransactionSessionResponse::QueryResult(result) => Ok(result),
+            TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionSessionResponse::UpsertResult(_) => panic!(),
+            TransactionSessionResponse::Transaction(_) => panic!(),
+            TransactionSessionResponse::Ok => panic!(),
         }
     }
 
     pub async fn upsert(
         &mut self,
         db_alias: String,
-        query: Vec<String>,
-        query_types: Vec<i16>,
+        query: String,
+        params: Vec<QueryParam>,
     ) -> Result<u64, Error> {
         let qlen = query.len();
         if qlen < 1 {
@@ -190,45 +128,86 @@ impl TransactionSession {
 
         let query_data = QueryData {
             db_alias,
-            params: query,
-            param_types: query_types,
+            query,
+            params,
         };
 
-        if let Err(error) = self
-            .request_in
-            .lock()
-            .await
+        self.request_in
             .send(TransactionSessionRequest::Upsert(query_data))
-            .await
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.lock().await.recv().await {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionSessionResponse::UpsertResult(affected) => Ok(affected),
-                TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionSessionResponse::QueryResult(_) => panic!(),
-                TransactionSessionResponse::Transaction(_) => panic!(),
-                TransactionSessionResponse::Ok => panic!(),
-            },
+            .await?;
+        match self.response_out.recv().await? {
+            TransactionSessionResponse::UpsertResult(affected) => Ok(affected),
+            TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionSessionResponse::QueryResult(_) => panic!(),
+            TransactionSessionResponse::Transaction(_) => panic!(),
+            TransactionSessionResponse::Ok => panic!(),
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub enum QueryParam {
+    Null,
+    Bool(bool),
+    Number(i64),
+    Float(f64),
+    String(String),
+    Date(String),
+}
+
+impl ToSql for QueryParam {
+    fn to_sql(
+        &self,
+        ty: &Type,
+        out: &mut tokio_postgres::types::private::BytesMut,
+    ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>>
+    where
+        Self: Sized,
+    {
+        match self {
+            QueryParam::Null => Ok(IsNull::Yes),
+            QueryParam::Bool(v) => v.to_sql(ty, out),
+            QueryParam::Number(v) => v.to_sql(ty, out),
+            QueryParam::Float(v) => v.to_sql(ty, out),
+            QueryParam::String(v) => v.to_sql(ty, out),
+            QueryParam::Date(v) => v.to_sql(ty, out),
+        }
+    }
+
+    fn accepts(_ty: &Type) -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+
+    to_sql_checked!();
+}
+
+impl ToSql for Box<QueryParam> {
+    fn to_sql(
+        &self,
+        ty: &Type,
+        out: &mut tokio_postgres::types::private::BytesMut,
+    ) -> Result<IsNull, Box<dyn std::error::Error + Sync + Send>>
+    where
+        Self: Sized,
+    {
+        self.as_ref().to_sql(ty, out)
+    }
+
+    fn accepts(ty: &Type) -> bool {
+        <&QueryParam as ToSql>::accepts(ty)
+    }
+
+    to_sql_checked!();
 }
 
 #[derive(Clone)]
 pub struct QueryData {
     db_alias: String,
-    params: Vec<String>,
-    // 0 - boolean
-    // 1 - number
-    // 2 - string
-    // 3 - date
-    param_types: Vec<i16>,
+    query: String,
+    params: Vec<QueryParam>,
 }
 
 #[derive(Clone)]
@@ -295,17 +274,17 @@ struct DBAliasInfo {
 
 pub struct Transaction {
     main_connection_string: String,
-    request_out: mpsc::Receiver<TransactionSessionRequest>,
-    response_in: mpsc::Sender<TransactionSessionResponse>,
     db_aliases: HashMap<String, DBAliasInfo>,
-    db_pool: HashMap<String, RefCell<Box<dyn DBCommand>>>,
+    db_pool: HashMap<String, TransactionInstance>,
+    request_out: Receiver<TransactionSessionRequest>,
+    response_in: Sender<TransactionSessionResponse>,
 }
 
 impl Transaction {
     fn new(
         main_connection_string: String,
-        request_out: mpsc::Receiver<TransactionSessionRequest>,
-        response_in: mpsc::Sender<TransactionSessionResponse>,
+        request_out: Receiver<TransactionSessionRequest>,
+        response_in: Sender<TransactionSessionResponse>,
     ) -> Self {
         Self {
             main_connection_string,
@@ -316,7 +295,7 @@ impl Transaction {
         }
     }
 
-    fn start_session(&mut self) {
+    async fn start_session(&mut self) {
         // register main db
         self.db_aliases.insert(
             String::from(nino_constants::MAIN_DB),
@@ -326,86 +305,98 @@ impl Transaction {
             },
         );
         // add main db to pool
-        if let Err(error) = self.create_db_transaction(nino_constants::MAIN_DB.to_string()) {
+        if let Err(error) = self
+            .create_db_transaction(nino_constants::MAIN_DB.to_string())
+            .await
+        {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
 
-        // ait for message and serve
+        // wait for message and serve
         loop {
-            if let Some(message) = self.request_out.blocking_recv() {
-                // process transaction command
-                let result = match message {
-                    TransactionSessionRequest::ReloadDBAliases => {
-                        self.reload_db_aliases();
-                        TransactionSessionResponse::Ok
-                    }
-                    TransactionSessionRequest::CreateTransaction(db_alias) => {
-                        match self.create_db_transaction(db_alias) {
-                            Ok(alias) => TransactionSessionResponse::Transaction(alias),
-                            Err(error) => TransactionSessionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            )),
+            eprintln!("ERROR loop Transaction");
+            match self.request_out.recv_blocking() {
+                Ok(message) => {
+                    // process transaction command
+                    let result = match message {
+                        TransactionSessionRequest::ReloadDBAliases => {
+                            self.reload_db_aliases();
+                            TransactionSessionResponse::Ok
                         }
-                    }
-                    TransactionSessionRequest::CloseAll(error) => match self.cleanup(error) {
-                        Ok(_) => TransactionSessionResponse::Ok,
-                        Err(error) => TransactionSessionResponse::Error(format!(
-                            "ERROR {}:{}:{}",
-                            file!(),
-                            line!(),
-                            error
-                        )),
-                    },
-                    TransactionSessionRequest::Query(query_data) => {
-                        match self.db_pool.get(&query_data.db_alias) {
-                            None => TransactionSessionResponse::Error(format!(
-                                "ERROR {}:{}: alias {} is missing",
-                                file!(),
-                                line!(),
-                                query_data.db_alias
-                            )),
-                            Some(implementation) => {
-                                let mut implementation = implementation.borrow_mut();
-                                match implementation.query(query_data) {
-                                    Ok(result) => TransactionSessionResponse::QueryResult(result),
-                                    Err(error) => TransactionSessionResponse::Error(format!(
-                                        "ERROR {}:{}:{}",
-                                        file!(),
-                                        line!(),
-                                        error
-                                    )),
-                                }
+                        TransactionSessionRequest::CreateTransaction(db_alias) => {
+                            match self.create_db_transaction(db_alias).await {
+                                Ok(alias) => TransactionSessionResponse::Transaction(alias),
+                                Err(error) => TransactionSessionResponse::Error(format!(
+                                    "ERROR {}:{}:{}",
+                                    file!(),
+                                    line!(),
+                                    error
+                                )),
                             }
                         }
-                    }
-                    TransactionSessionRequest::Upsert(query_data) => {
-                        match self.db_pool.get(&query_data.db_alias) {
-                            None => TransactionSessionResponse::Error(format!(
-                                "ERROR {}:{}: alias {} is missing",
-                                file!(),
-                                line!(),
-                                query_data.db_alias
-                            )),
-                            Some(implementation) => {
-                                let mut implementation = implementation.borrow_mut();
-                                match implementation.upsert(query_data) {
-                                    Ok(result) => TransactionSessionResponse::UpsertResult(result),
-                                    Err(error) => TransactionSessionResponse::Error(format!(
-                                        "ERROR {}:{}:{}",
-                                        file!(),
-                                        line!(),
-                                        error
-                                    )),
-                                }
+                        TransactionSessionRequest::CloseAll(error) => {
+                            match self.cleanup(error).await {
+                                Ok(_) => TransactionSessionResponse::Ok,
+                                Err(error) => TransactionSessionResponse::Error(format!(
+                                    "ERROR {}:{}:{}",
+                                    file!(),
+                                    line!(),
+                                    error
+                                )),
                             }
                         }
+                        TransactionSessionRequest::Query(query_data) => {
+                            match self.db_pool.get_mut(&query_data.db_alias) {
+                                None => TransactionSessionResponse::Error(format!(
+                                    "ERROR {}:{}: alias {} is missing",
+                                    file!(),
+                                    line!(),
+                                    query_data.db_alias
+                                )),
+                                Some(tx) => match tx {
+                                    TransactionInstance::Postgres(tx) => {
+                                        match tx.query(query_data) {
+                                            Ok(result) => {
+                                                TransactionSessionResponse::QueryResult(result)
+                                            }
+                                            Err(error) => TransactionSessionResponse::Error(
+                                                format!("ERROR {}:{}:{}", file!(), line!(), error),
+                                            ),
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                        TransactionSessionRequest::Upsert(query_data) => {
+                            match self.db_pool.get_mut(&query_data.db_alias) {
+                                None => TransactionSessionResponse::Error(format!(
+                                    "ERROR {}:{}: alias {} is missing",
+                                    file!(),
+                                    line!(),
+                                    query_data.db_alias
+                                )),
+                                Some(tx) => match tx {
+                                    TransactionInstance::Postgres(tx) => {
+                                        match tx.upsert(query_data) {
+                                            Ok(result) => {
+                                                TransactionSessionResponse::UpsertResult(result)
+                                            }
+                                            Err(error) => TransactionSessionResponse::Error(
+                                                format!("ERROR {}:{}:{}", file!(), line!(), error),
+                                            ),
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    };
+                    // send response
+                    if let Err(error) = self.response_in.send(result).await {
+                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                        break;
                     }
-                };
-                // send response
-                if let Err(error) = self.response_in.blocking_send(result) {
+                }
+                Err(error) => {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                     break;
                 }
@@ -414,7 +405,7 @@ impl Transaction {
     }
 
     fn reload_db_aliases(&mut self) {
-        match self.db_pool.get(nino_constants::MAIN_DB) {
+        match self.db_pool.get_mut(nino_constants::MAIN_DB) {
             None => {
                 eprintln!(
                     "ERROR {}:{}: db alias {} got disconnected",
@@ -423,75 +414,83 @@ impl Transaction {
                     nino_constants::MAIN_DB
                 );
             }
-            Some(db) => {
-                let mut db = db.borrow_mut();
-
-                let query: String = format!(
-                    "SELECT db_alias, db_type, db_connection_string FROM {}",
-                    nino_constants::DATABASE_TABLE
-                );
-                let query_data = QueryData {
-                    db_alias: nino_constants::MAIN_DB.to_string(),
-                    params: vec![query],
-                    param_types: vec![2],
-                };
-                match db.query(query_data) {
-                    Ok(result) => {
-                        for row in result.rows {
-                            let db_alias: String = row.get(0).unwrap().clone();
-                            let db_type: String = row.get(1).unwrap().clone();
-                            let connection_string: String = row.get(2).unwrap().clone();
-                            self.db_aliases.insert(
-                                db_alias,
-                                DBAliasInfo {
-                                    db_type: if nino_constants::DB_TYPE_POSTGRES == db_type {
-                                        // main is always  postgres type
-                                        SupportedDatabases::Postgres
-                                    } else {
-                                        SupportedDatabases::Unsupported(db_type)
+            Some(tx) => match tx {
+                TransactionInstance::Postgres(tx) => {
+                    let query: String = format!(
+                        "SELECT db_alias, db_type, db_connection_string FROM {}",
+                        nino_constants::DATABASE_TABLE
+                    );
+                    let query_data = QueryData {
+                        db_alias: nino_constants::MAIN_DB.to_string(),
+                        query: query,
+                        params: Vec::new(),
+                    };
+                    match tx.query(query_data) {
+                        Ok(result) => {
+                            for row in result.rows {
+                                let db_alias: String = row.get(0).unwrap().clone();
+                                let db_type: String = row.get(1).unwrap().clone();
+                                let connection_string: String = row.get(2).unwrap().clone();
+                                self.db_aliases.insert(
+                                    db_alias,
+                                    DBAliasInfo {
+                                        db_type: if nino_constants::DB_TYPE_POSTGRES == db_type {
+                                            // main is always  postgres type
+                                            SupportedDatabases::Postgres
+                                        } else {
+                                            SupportedDatabases::Unsupported(db_type)
+                                        },
+                                        connection_string,
                                     },
-                                    connection_string,
-                                },
-                            );
+                                );
+                            }
+                        }
+                        Err(error) => {
+                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                         }
                     }
-                    Err(error) => {
-                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                    }
                 }
-            }
+            },
         }
     }
 
-    fn cleanup(&mut self, error: bool) -> Result<(), Error> {
+    async fn cleanup(&mut self, error: bool) -> Result<(), Error> {
         if error {
-            self.db_pool.retain(move |_, db_session| {
-                let mut tx = db_session.borrow_mut();
-                if let Err(error) = tx.rollback() {
-                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            self.db_pool.retain(move |_, tx| {
+                match tx {
+                    TransactionInstance::Postgres(tx) => {
+                        if let Err(error) = tx.rollback() {
+                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                        }
+                    }
                 }
                 // remove all
                 false
             });
         } else {
-            self.db_pool.retain(move |_, db_session| {
-                let mut tx = db_session.borrow_mut();
-                if let Err(error) = tx.commit() {
-                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            self.db_pool.retain(move |_, tx| {
+                match tx {
+                    TransactionInstance::Postgres(tx) => {
+                        if let Err(error) = tx.commit() {
+                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                        }
+                    }
                 }
                 // remove all
                 false
             });
         }
 
-        self.create_db_transaction(nino_constants::MAIN_DB.to_string())?;
+        self.create_db_transaction(nino_constants::MAIN_DB.to_string())
+            .await?;
         Ok(())
     }
 
-    fn create_db_transaction(&mut self, db_alias: String) -> Result<String, Error> {
+    async fn create_db_transaction(&mut self, db_alias: String) -> Result<String, Error> {
         if db_alias == nino_constants::MAIN_DB {
             // db alias is from the main database
             self.db_pool_add_postgres(db_alias, self.main_connection_string.clone())
+                .await
         } else {
             // db alias is another connection
             let info = {
@@ -503,6 +502,7 @@ impl Transaction {
             match info.db_type {
                 SupportedDatabases::Postgres => {
                     self.db_pool_add_postgres(db_alias, info.connection_string)
+                        .await
                 }
                 SupportedDatabases::Unsupported(db_type) => {
                     Err(Error::msg(format!("unsupported database type {}", db_type)))
@@ -511,7 +511,7 @@ impl Transaction {
         }
     }
 
-    fn db_pool_add_postgres(
+    async fn db_pool_add_postgres(
         &mut self,
         db_alias: String,
         connection_string: String,
@@ -524,9 +524,9 @@ impl Transaction {
             }
         };
         // create Database Transactional Session
-        let db = TransactionPostgres::new(name.clone(), connection_string);
+        let db = TransactionPostgres::new(connection_string).await;
         self.db_pool
-            .insert(name.clone(), RefCell::new(Box::new(db)));
+            .insert(name.clone(), TransactionInstance::Postgres(db));
         Ok(name)
     }
 }
@@ -537,258 +537,163 @@ pub trait DBCommand {
     fn query(&mut self, query_data: QueryData) -> Result<QueryResult, Error>;
     fn upsert(&mut self, query_data: QueryData) -> Result<u64, Error>;
 }
+enum TransactionInstance {
+    Postgres(TransactionPostgres),
+}
+
 struct TransactionPostgres {
-    request_in: mpsc::Sender<TransactionRequest>,
-    response_out: mpsc::Receiver<TransactionResponse>,
+    request_in: Sender<TransactionRequest>,
+    response_out: Receiver<TransactionResponse>,
 }
 
 impl TransactionPostgres {
-    fn new(alias: String, connection_string: String) -> Self {
-        let (request_in, request_out) = mpsc::channel::<TransactionRequest>(16);
-        let (response_in, response_out) = mpsc::channel::<TransactionResponse>(16);
+    async fn new(connection_string: String) -> Self {
+        let (request_in, request_out) = async_channel::unbounded::<TransactionRequest>();
+        let (response_in, response_out) = async_channel::unbounded::<TransactionResponse>();
 
-        if let Err(error) = thread::Builder::new()
-            .name(format!("tx_db_{}", alias))
-            .spawn(move || {
-                if let Err(error) =
-                    Self::begin_db_transaction(connection_string, request_out, response_in)
-                {
-                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                }
-            })
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-        }
-
+        tokio::spawn(async move {
+            if let Err(error) =
+                Self::begin_db_transaction(connection_string, request_out, response_in).await
+            {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            }
+        });
         Self {
             request_in,
             response_out,
         }
     }
 
-    fn begin_db_transaction(
+    async fn begin_db_transaction(
         connection_string: String,
-        mut request_out: mpsc::Receiver<TransactionRequest>,
-        response_in: mpsc::Sender<TransactionResponse>,
+        request_out: Receiver<TransactionRequest>,
+        response_in: Sender<TransactionResponse>,
     ) -> Result<(), Error> {
         let config = connection_string.parse::<Config>().unwrap();
-        let mut conn = config.connect(tokio_postgres::NoTls)?;
-        let mut tx = conn.transaction()?;
+        let (mut conn, _) = config.connect(tokio_postgres::NoTls).await?;
+        let tx = conn.transaction().await?;
 
         loop {
-            if let Some(message) = request_out.blocking_recv() {
+            eprintln!("ERROR loop TransactionPostgress");
+            let response = match request_out.recv().await? {
                 // process transaction command
-                let response = match message {
-                    TransactionRequest::Commit => {
-                        let response = match tx.commit() {
-                            Ok(_) => TransactionResponse::Ok,
-                            Err(error) => TransactionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            )),
-                        };
-                        if let Err(error) = response_in.blocking_send(response) {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                        }
-                        return Ok(());
-                    }
-                    TransactionRequest::Rollback => {
-                        let response = match tx.rollback() {
-                            Ok(_) => TransactionResponse::Ok,
-                            Err(error) => TransactionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            )),
-                        };
-                        if let Err(error) = response_in.blocking_send(response) {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                        }
-                        return Ok(());
-                    }
-                    TransactionRequest::Query(params) => {
-                        let qlen = params.params.len();
-                        let mut i64vec: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(qlen);
-                        match Self::query_convert_parameters(
-                            &params.params,
-                            &params.param_types,
-                            &mut i64vec,
-                        ) {
-                            Err(error) => TransactionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            )),
-                            Ok(_) => {
-                                let mut qparams: Vec<&(dyn ToSql + Sync)> =
-                                    Vec::with_capacity(qlen);
-                                for value in i64vec.iter().take(qlen - 1) {
-                                    let sqlv: &(dyn ToSql + Sync) = value.as_ref();
-                                    qparams.push(sqlv);
-                                }
-                                let query = params.params[0].clone();
+                TransactionRequest::Commit => {
+                    let response = match tx.commit().await {
+                        Ok(_) => TransactionResponse::Ok,
+                        Err(error) => TransactionResponse::Error(format!(
+                            "ERROR {}:{}:{}",
+                            file!(),
+                            line!(),
+                            error
+                        )),
+                    };
+                    response_in.send(response).await?;
+                    return Ok(());
+                }
+                TransactionRequest::Rollback => {
+                    let response = match tx.rollback().await {
+                        Ok(_) => TransactionResponse::Ok,
+                        Err(error) => TransactionResponse::Error(format!(
+                            "ERROR {}:{}:{}",
+                            file!(),
+                            line!(),
+                            error
+                        )),
+                    };
+                    response_in.send(response).await?;
+                    return Ok(());
+                }
+                TransactionRequest::Query(query_data) => {
+                    let dyn_vec: Vec<_> = query_data
+                        .params
+                        .iter()
+                        .map(|v| v as &(dyn ToSql + Sync))
+                        .collect();
 
-                                match tx.query(&query, &qparams) {
-                                    Err(error) => TransactionResponse::Error(format!(
-                                        "ERROR {}:{}: db alias {} : {}",
-                                        file!(),
-                                        line!(),
-                                        params.db_alias,
-                                        error
-                                    )),
-                                    Ok(rows) => {
-                                        let mut row_types: Vec<String> = Vec::new();
-                                        let mut row_names: Vec<String> = Vec::new();
-                                        let mut result: Vec<Vec<String>> = Vec::new();
-                                        for row in rows {
-                                            if row_types.is_empty() {
-                                                for column in row.columns() {
-                                                    row_names.push(column.name().to_string());
-                                                    let t = column.type_();
-                                                    row_types.push(t.to_string());
-                                                }
-                                            }
-                                            let mut line: Vec<String> = Vec::new();
-                                            for ix in 0..row.len() {
-                                                let col_value: String = row.get(ix);
-                                                line.push(col_value);
-                                            }
-                                            result.push(line);
-                                        }
-                                        let query_result = QueryResult {
-                                            rows: result,
-                                            row_types,
-                                            row_names,
-                                        };
-                                        TransactionResponse::QueryResult(query_result)
+                    match tx.query(&query_data.query, &dyn_vec).await {
+                        Err(error) => TransactionResponse::Error(format!(
+                            "ERROR {}:{}: db alias {} : {}",
+                            file!(),
+                            line!(),
+                            query_data.db_alias,
+                            error
+                        )),
+                        Ok(rows) => {
+                            let mut row_types: Vec<String> = Vec::new();
+                            let mut row_names: Vec<String> = Vec::new();
+                            let mut result: Vec<Vec<String>> = Vec::new();
+                            for row in rows {
+                                if row_types.is_empty() {
+                                    for column in row.columns() {
+                                        row_names.push(column.name().to_string());
+                                        let t = column.type_();
+                                        row_types.push(t.to_string());
                                     }
                                 }
-                            }
-                        }
-                    }
-                    TransactionRequest::Upsert(params) => {
-                        let qlen = params.params.len();
-                        let mut i64vec: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(qlen);
-                        match Self::query_convert_parameters(
-                            &params.params,
-                            &params.param_types,
-                            &mut i64vec,
-                        ) {
-                            Err(error) => TransactionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            )),
-                            Ok(_) => {
-                                let mut qparams: Vec<&(dyn ToSql + Sync)> =
-                                    Vec::with_capacity(qlen);
-                                for value in i64vec.iter().take(qlen - 1) {
-                                    let sqlv: &(dyn ToSql + Sync) = value.as_ref();
-                                    qparams.push(sqlv);
+                                let mut line: Vec<String> = Vec::new();
+                                for ix in 0..row.len() {
+                                    let col_value: String = row.get(ix);
+                                    line.push(col_value);
                                 }
-                                let query = params.params[0].clone();
-
-                                match tx.execute(&query, &qparams) {
-                                    Err(error) => TransactionResponse::Error(format!(
-                                        "ERROR {}:{}: db alias {} : {}",
-                                        file!(),
-                                        line!(),
-                                        params.db_alias,
-                                        error
-                                    )),
-                                    Ok(affected) => TransactionResponse::UpsertResult(affected),
-                                }
+                                result.push(line);
                             }
+                            let query_result = QueryResult {
+                                rows: result,
+                                row_types,
+                                row_names,
+                            };
+                            TransactionResponse::QueryResult(query_result)
                         }
                     }
-                };
-                if let Err(error) = response_in.blocking_send(response) {
-                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
-            }
-        }
-    }
+                TransactionRequest::Upsert(query_data) => {
+                    // let qlen = query_data.params.len();
+                    // let mut qparams: Vec<Box<(dyn ToSql + Sync)>> = Vec::with_capacity(qlen);
+                    // for param in query_data.params {
+                    //     qparams.push(Box::new(param) as Box<(dyn ToSql + Sync)>);
+                    // }
+                    let dyn_vec: Vec<_> = query_data
+                        .params
+                        .iter()
+                        .map(|v| v as &(dyn ToSql + Sync))
+                        .collect();
 
-    fn query_convert_parameters(
-        query: &[String],
-        query_types: &[i16],
-        i64vec: &mut Vec<Box<dyn ToSql + Sync>>,
-    ) -> Result<(), Error> {
-        // try convert string to number
-        for (ix, val) in query.iter().enumerate().skip(1) {
-            if query_types[ix] == 0 {
-                //boolean
-                let b = val.eq_ignore_ascii_case("true") || val.eq("1");
-                i64vec.push(Box::new(b));
-            } else if query_types[ix] == 1 {
-                //number
-                match val.parse::<i64>() {
-                    Ok(v) => {
-                        i64vec.push(Box::new(v));
+                    match tx.execute(&query_data.query, &dyn_vec).await {
+                        Err(error) => TransactionResponse::Error(format!(
+                            "ERROR {}:{}: db alias {} : {}",
+                            file!(),
+                            line!(),
+                            query_data.db_alias,
+                            error
+                        )),
+                        Ok(affected) => TransactionResponse::UpsertResult(affected),
                     }
-                    Err(_) => match val.parse::<f64>() {
-                        Ok(v) => {
-                            i64vec.push(Box::new(v));
-                        }
-                        Err(error) => {
-                            return Err(Error::msg(format!(
-                                "parameter {} `{}` is not number: {}",
-                                ix, val, error
-                            )));
-                        }
-                    },
                 }
-            } else {
-                // use string value
-                let b: Box<String> = Box::new(val.clone());
-                i64vec.push(b);
-            }
+            };
+            response_in.send(response).await?;
         }
-        Ok(())
     }
 }
 
 impl DBCommand for TransactionPostgres {
     fn commit(&mut self) -> Result<(), Error> {
-        if let Err(error) = self.request_in.blocking_send(TransactionRequest::Commit) {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.blocking_recv() {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionResponse::Ok => Ok(()),
-                TransactionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionResponse::QueryResult(_) => todo!(),
-                TransactionResponse::UpsertResult(_) => todo!(),
-            },
+        self.request_in.send_blocking(TransactionRequest::Commit)?;
+        match self.response_out.recv_blocking()? {
+            TransactionResponse::Ok => Ok(()),
+            TransactionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionResponse::QueryResult(_) => todo!(),
+            TransactionResponse::UpsertResult(_) => todo!(),
         }
     }
 
     fn rollback(&mut self) -> Result<(), Error> {
-        if let Err(error) = self.request_in.blocking_send(TransactionRequest::Rollback) {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.blocking_recv() {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionResponse::Ok => Ok(()),
-                TransactionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionResponse::QueryResult(_) => todo!(),
-                TransactionResponse::UpsertResult(_) => todo!(),
-            },
+        self.request_in
+            .send_blocking(TransactionRequest::Rollback)?;
+        match self.response_out.recv_blocking()? {
+            TransactionResponse::Ok => Ok(()),
+            TransactionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionResponse::QueryResult(_) => todo!(),
+            TransactionResponse::UpsertResult(_) => todo!(),
         }
     }
 
@@ -797,24 +702,13 @@ impl DBCommand for TransactionPostgres {
         if qlen < 1 {
             return Err(Error::msg("query is an empty array"));
         }
-        if let Err(error) = self
-            .request_in
-            .blocking_send(TransactionRequest::Query(query_data))
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.blocking_recv() {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionResponse::Ok => todo!(),
-                TransactionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionResponse::QueryResult(result) => Ok(result),
-                TransactionResponse::UpsertResult(_) => todo!(),
-            },
+        self.request_in
+            .send_blocking(TransactionRequest::Query(query_data))?;
+        match self.response_out.recv_blocking()? {
+            TransactionResponse::Ok => todo!(),
+            TransactionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionResponse::QueryResult(result) => Ok(result),
+            TransactionResponse::UpsertResult(_) => todo!(),
         }
     }
 
@@ -823,24 +717,13 @@ impl DBCommand for TransactionPostgres {
         if qlen < 1 {
             return Err(Error::msg("query is an empty array"));
         }
-        if let Err(error) = self
-            .request_in
-            .blocking_send(TransactionRequest::Upsert(query_data))
-        {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            return Err(Error::msg(error));
-        }
-        match self.response_out.blocking_recv() {
-            None => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
-                Err(Error::msg("should not happen"))
-            }
-            Some(response) => match response {
-                TransactionResponse::UpsertResult(affected) => Ok(affected),
-                TransactionResponse::Error(msg) => Err(Error::msg(msg)),
-                TransactionResponse::QueryResult(_) => panic!(),
-                TransactionResponse::Ok => panic!(),
-            },
+        self.request_in
+            .send_blocking(TransactionRequest::Upsert(query_data))?;
+        match self.response_out.recv_blocking()? {
+            TransactionResponse::UpsertResult(affected) => Ok(affected),
+            TransactionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionResponse::QueryResult(_) => panic!(),
+            TransactionResponse::Ok => panic!(),
         }
     }
 }

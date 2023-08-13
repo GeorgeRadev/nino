@@ -1,24 +1,23 @@
 mod db;
 mod db_notification;
-mod db_transactions;
 mod db_settings;
+mod db_transactions;
 mod js;
 mod js_functions;
-mod js_test_debug;
 mod js_test;
+mod js_test_debug;
 mod nino_constants;
 mod nino_functions;
 mod nino_structures;
-mod trasport;
+mod nino_trasport;
 mod web;
 mod web_dynamics;
 mod web_requests;
 mod web_statics;
 
+use deno_core::anyhow::Error;
 use nino_structures::InitialSettings;
-use std::sync::Arc;
-
-use crate::db_transactions::TransactionManager;
+use std::{fs, sync::Arc};
 
 fn main() {
     setup_panic_hook();
@@ -43,15 +42,6 @@ fn main() {
         .build()
         .unwrap()
         .block_on(main_async(initial_settings));
-}
-
-macro_rules! await_and_exit_on_error {
-    ($future:expr) => {
-        if let Err(error) = $future.await {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            std::process::exit(1);
-        }
-    };
 }
 
 async fn get_db_settings(connection_string: String) -> InitialSettings {
@@ -90,17 +80,23 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
 }
 
 async fn main_async(settings: InitialSettings) {
+    if let Err(error) = nino_init(settings).await {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        std::process::exit(1);
+    }
+}
+async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     let db = Arc::new(
-        db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size)
-            .await
-            .unwrap(),
+        db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size).await?,
     );
 
     let db_notifier = db_notification::DBNotificationManager::new(db.clone());
     {
         // transport initial db content
-        let transport = trasport::TransportManager::new(db.clone());
-        await_and_exit_on_error!(transport.transport_file("./transports/0_transport.json"));
+        let transport = nino_trasport::TransportManager::new(db.clone());
+        transport
+            .transport_file("./transports/0_transport.json")
+            .await?;
     }
 
     let requests = Arc::new(web_requests::RequestManager::new(
@@ -123,19 +119,20 @@ async fn main_async(settings: InitialSettings) {
         dyn_subscriber,
     ));
 
-    let tx_sessions = Arc::new(TransactionManager::instance(settings.js_thread_count, db.clone()));
-
     let _js_engine = js::JavaScriptManager::instance(
         settings.js_thread_count,
         settings.debug_port,
         Some(db.clone()),
         Some(dynamics.clone()),
-        Some(tx_sessions),
     );
     // start js threads
     js::JavaScriptManager::start().await;
-
-    await_and_exit_on_error!(notifier.notify("string message".to_string()));
+    {
+        // compile dynamics
+        let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
+        js::JavaScriptManager::run(&recompile_dynamics).await;
+    }
+    notifier.notify("string message".to_string()).await?;
 
     let web = web::WebManager::new(
         settings.server_port,
@@ -143,7 +140,8 @@ async fn main_async(settings: InitialSettings) {
         statics.clone(),
         dynamics.clone(),
     );
-    await_and_exit_on_error!(web.start());
+    web.start().await?;
+    Ok(())
 }
 
 /// prints execution parameter information

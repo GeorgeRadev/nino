@@ -14,7 +14,7 @@
         },
         {
             "break_on_error": true,
-            "query": "CREATE TABLE IF NOT EXISTS nino_request (path VARCHAR(1024) PRIMARY KEY, name VARCHAR(1024) NOT NULL, dynamic boolean, execute boolean, authorize boolean)"
+            "query": "CREATE TABLE IF NOT EXISTS nino_request (path VARCHAR(1024) PRIMARY KEY, name VARCHAR(1024) NOT NULL, redirect boolean, authorize boolean, dynamic boolean, execute boolean)"
         },
         {
             "break_on_error": true,
@@ -75,78 +75,89 @@
         {
             "path": "/",
             "name": "index.html",
-            "dynamic": false,
+            "redirect": false,
             "authorize": false,
-            "execute": false
+            "dynamic": false,
+            "execute":true
         },
         {
             "path": "favicon.ico",
             "name": "favicon.ico",
-            "dynamic": false,
+            "redirect": false,
             "authorize": false,
-            "execute": false
+            "dynamic": false,
+            "execute":true
         },
         {
             "path": "static.json",
             "name": "static.json",
-            "dynamic": false,
+            "redirect": false,
             "authorize": false,
-            "execute": false
+            "dynamic": false,
+            "execute":true
         },
         {
             "path": "dynamic.json",
             "name": "dynamic_json",
-            "dynamic": true,
+            "redirect": false,
             "authorize": true,
-            "execute": true
+            "dynamic": true,
+            "execute":true
         },
         {
             "path": "test_servlet",
             "name": "test_servlet",
-            "dynamic": true,
+            "redirect": false,
             "authorize": true,
-            "execute": true
+            "dynamic": true,
+            "execute":true
         },
         {
             "path": "notify_servlet",
             "name": "notify_servlet",
-            "dynamic": true,
+            "redirect": false,
             "authorize": true,
-            "execute": true
+            "dynamic": true,
+            "execute":true
         },
         {
             "path": "jsqlx_servlet",
             "name": "jsqlx_servlet",
-            "dynamic": true,
+            "redirect": false,
             "authorize": true,
-            "execute": true
+            "dynamic": true,
+            "execute":true
         },
         {
             "path": "ide",
             "name": "ide/index.html",
-            "dynamic": false,
+            "redirect": false,
             "authorize": true,
-            "execute": false
+            "dynamic": false,
+            "execute":false
         },
         {
             "path": "ide/ide.css",
             "name": "ide/ide.css",
-            "dynamic": false,
+            "redirect": false,
             "authorize": false,
-            "execute": false
+            "dynamic": false,
+            "execute":false
         },
         {
             "path": "ide/ide.js",
             "name": "ide/ide.js",
-            "dynamic": false,
+            "redirect": false,
             "authorize": true,
+            "dynamic": false,
             "execute": false
         },
         {
             "path": "db_servlet",
             "name": "db_servlet",
-            "dynamic": true,
+            "redirect": false,
             "authorize": true,
+            "dynamic": true,
             "execute": true
         }
     ],

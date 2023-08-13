@@ -1,3 +1,5 @@
+use deno_core::anyhow::Error;
+
 use crate::{
     db::DBManager,
     db_notification,
@@ -17,9 +19,10 @@ pub struct RequestManager {
 #[derive(Clone)]
 pub struct RequestInfo {
     pub name: String,
+    pub redirect: bool,
+    pub authorize: bool,
     pub dynamic: bool,
     pub execute: bool,
-    pub authorize: bool,
 }
 
 static REQUEST_CACHE: OnceLock<RwLock<HashMap<String, RequestInfo>>> = OnceLock::new();
@@ -27,7 +30,7 @@ static REQUEST_CACHE: OnceLock<RwLock<HashMap<String, RequestInfo>>> = OnceLock:
 impl RequestManager {
     pub fn new(
         db: Arc<DBManager>,
-        db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
+        db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage>,
     ) -> RequestManager {
         REQUEST_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
         let this = Self { db };
@@ -41,7 +44,7 @@ impl RequestManager {
 
     pub async fn invalidator(
         &self,
-        mut db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::Message>,
+        mut db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage>,
     ) {
         loop {
             match db_subscribe.recv().await {
@@ -66,7 +69,7 @@ impl RequestManager {
     async fn reload_requests(&self) {
         //reload the db aliases
         let query: String = format!(
-            "SELECT path, name, dynamic, execute, authorize FROM {}",
+            "SELECT path, name, redirect, authorize, dynamic, execute FROM {}",
             nino_constants::REQUESTS_TABLE
         );
         match self.db.query(&query, &[]).await {
@@ -79,16 +82,18 @@ impl RequestManager {
                 for row in rows {
                     let path: String = row.get(0);
                     let name: String = row.get(1);
-                    let dynamic: bool = row.get(2);
-                    let execute: bool = row.get(3);
-                    let authorize: bool = row.get(4);
+                    let redirect: bool = row.get(2);
+                    let authorize: bool = row.get(3);
+                    let dynamic: bool = row.get(4);
+                    let execute: bool = row.get(5);
                     map.insert(
                         path,
                         RequestInfo {
                             name,
+                            redirect,
+                            authorize,
                             dynamic,
                             execute,
-                            authorize,
                         },
                     );
                 }
@@ -96,31 +101,31 @@ impl RequestManager {
         }
     }
 
-    pub async fn get_request(&self, path: &String) -> Option<RequestInfo> {
+    pub async fn get_request(&self, path: &String) -> Result<Option<RequestInfo>, Error> {
         if USE_REQUEST_CACHE {
             let map = REQUEST_CACHE.get().unwrap().read().unwrap();
-            map.get(path).cloned()
+            Ok(map.get(path).cloned())
         } else {
             let query: String = format!(
-                "SELECT name, dynamic, execute, authorize FROM {} WHERE path = $1",
+                "SELECT name, redirect, authorize, dynamic, execute FROM {} WHERE path = $1",
                 nino_constants::REQUESTS_TABLE
             );
-            match self.db.query_one(&query, &[&path]).await {
-                Err(error) => {
-                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                    None
-                }
-                Ok(row) => {
+            let result = self.db.query_opt(&query, &[&path]).await?;
+            match result {
+                None => Ok(None),
+                Some(row) => {
                     let name: String = row.get(0);
-                    let dynamic: bool = row.get(1);
-                    let execute: bool = row.get(2);
-                    let authorize: bool = row.get(3);
-                    Some(RequestInfo {
+                    let redirect: bool = row.get(1);
+                    let authorize: bool = row.get(2);
+                    let dynamic: bool = row.get(3);
+                    let execute: bool = row.get(4);
+                    Ok(Some(RequestInfo {
                         name,
-                        dynamic,
-                        execute,
                         authorize,
-                    })
+                        dynamic,
+                        redirect,
+                        execute,
+                    }))
                 }
             }
         }

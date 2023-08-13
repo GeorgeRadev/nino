@@ -12,7 +12,7 @@ pub struct InitialSettings {
 }
 
 #[derive(Clone)]
-pub struct WebTask {
+pub struct JSTask {
     //request task
     pub is_request: bool,
     pub js_module: Option<String>,
@@ -23,7 +23,16 @@ pub struct WebTask {
     pub message: String,
 }
 
+
 #[derive(Clone)]
-pub struct Message {
+pub struct JSTaskRequest {
+    pub is_request: bool,
+    pub js_module: Option<String>,
+    pub request: Option<Request>,
+    pub stream: Option<Box<TcpStream>>,
+}
+
+#[derive(Clone)]
+pub struct NotificationMessage {
     pub text: String,
 }

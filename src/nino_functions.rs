@@ -1,4 +1,5 @@
 use async_std::net::TcpStream;
+use deno_core::anyhow::Error;
 use http_types::Response;
 
 use crate::nino_constants;
@@ -67,7 +68,7 @@ const CONTENT_LENGTH: &str = "Content-Length";
 pub async fn send_response_to_stream(
     stream: Box<TcpStream>,
     response: &mut Response,
-) -> Result<(), String> {
+) -> Result<(), Error> {
     match response.body_bytes().await {
         Err(error) => {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -100,28 +101,15 @@ pub async fn send_response_to_stream(
             //write body
             {
                 let mut http_bytes = header_string.as_bytes();
-                match async_std::io::copy(&mut http_bytes, &mut stream.clone()).await {
-                    Ok(_bytes_written) => {
-                        // eprintln!("body:\n{}", String::from_utf8(body.clone()).unwrap());
-
-                        //write body
-                        if let Err(error) =
-                            async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await
-                        {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                        }
-                    }
-                    Err(error) => {
-                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                    }
-                }
+                async_std::io::copy(&mut http_bytes, &mut stream.clone()).await?;
+                async_std::io::copy(&mut body.as_slice(), &mut stream.clone()).await?;
             }
         }
     };
 
     //close socket - always
-    if let Err(error) = stream.shutdown(std::net::Shutdown::Both) {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+    if let Err(_) = stream.shutdown(std::net::Shutdown::Both) {
+        // stream already closed
     }
     Ok(())
 }

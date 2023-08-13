@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::js::{init_platform, run_deno_main_thread};
+    use crate::js::{init_platform, run_code, run_deno_main_thread};
     use deno_core::futures::FutureExt;
     use deno_core::Op;
     use deno_core::{anyhow::Error, op, OpDecl, OpState};
@@ -34,6 +34,27 @@ mod tests {
     })();
     "#;
 
+    static TEST_SOURCE: &str = r#"
+    return new Error("this is intentional");
+    const core = Deno[Deno.internal].core;
+    let result = "";
+    try{
+        core.print('----------RUN---------------\ntry\n');
+        const id = core.ops.op_id();
+        core.print('RUN id ' + id + '\n');
+        const value = core.ops.op_sync();
+        core.print('value ' + value + '\n');
+        const mod = await import("b");
+        const modValue = await mod.default();
+        core.print('modValue ' + modValue + '\n');
+        result = '' + id + value + modValue+"run";
+    }catch(e){
+        result = ' error: ' + e;
+    }
+    core.print('RUN RESULT: ' + result + '\n');
+    core.ops.op_set_result(result);
+    "#;
+
     fn module_loader(
         module_name: String,
     ) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
@@ -50,6 +71,7 @@ mod tests {
         .boxed_local()
     }
 
+    static TEST_RESULTS: Mutex<Option<String>> = Mutex::new(None);
     struct TestTask {
         id: u32,
     }
@@ -84,12 +106,10 @@ mod tests {
         Ok(v)
     }
 
-    static TEST_RESULTS: Mutex<Option<String>> = Mutex::new(None);
-
     async fn test_js() {
-        init_platform(2);
+        init_platform(2, module_loader, get_ops());
         // second call should not matter
-        init_platform(2);
+        init_platform(2, module_loader, get_ops());
         {
             let mut results = TEST_RESULTS.lock().unwrap();
             *results = Some(String::new());
@@ -105,6 +125,7 @@ mod tests {
                     },
                     "main",
                     9229,
+                    false,
                 )
                 .await
             },
@@ -117,21 +138,47 @@ mod tests {
                     },
                     "main",
                     0,
+                    false,
                 )
                 .await
             },
         );
+
         match r {
             Err(e) => {
                 panic!("JS ERROR: {}", e);
             }
             Ok(_v) => {
                 let mut res = TEST_RESULTS.lock().unwrap();
-                let str = (*res).as_mut().unwrap().as_mut();
+                let str = res.as_mut().unwrap();
                 println!("result: {}", str);
                 assert_eq!(str, "1OK42");
             }
         };
+
+        {
+            let mut results = TEST_RESULTS.lock().unwrap();
+            *results = Some(String::new());
+        }
+
+
+        println!("========================================================");
+        let _ = run_code(
+            module_loader,
+            get_ops,
+            |state| {
+                state.put(TestTask { id: 0 });
+            },
+            &TEST_SOURCE.to_string(),
+        )
+        .await;
+
+        {
+            let mut res = TEST_RESULTS.lock().unwrap();
+            let str = res.as_mut().unwrap();
+            println!("result: {}", str);
+            assert_eq!(str, "1OK42");
+        }
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use deno_core::anyhow::Error;
+
 use crate::{db::DBManager, nino_structures};
 use std::sync::Arc;
 
@@ -24,7 +26,7 @@ impl Notifier {
         Notifier { db_notifier }
     }
     /// send message to all (local and global) subscribers through the db
-    pub async fn notify(&self, msg: String) -> Result<u64, String> {
+    pub async fn notify(&self, msg: String) -> Result<u64, Error> {
         self.db_notifier.notify(msg).await
     }
 }
@@ -33,7 +35,7 @@ impl Notifier {
 /// plus a connection pool for executing transaction
 pub struct DBNotificationManager {
     //listener: std::thread::JoinHandle<bool>,
-    broadcast_sx: tokio::sync::broadcast::Sender<nino_structures::Message>,
+    broadcast_sx: tokio::sync::broadcast::Sender<nino_structures::NotificationMessage>,
     db: Arc<DBManager>,
 }
 
@@ -42,7 +44,7 @@ impl DBNotificationManager {
     pub fn new(db: Arc<DBManager>) -> DBNotificationManager {
         // 1 - * subscribe message - broadcast messages from DB broadcast
         let (broadcast_sx, _broadcast_rx) =
-            tokio::sync::broadcast::channel::<nino_structures::Message>(64);
+            tokio::sync::broadcast::channel::<nino_structures::NotificationMessage>(64);
 
         let _listener;
         {
@@ -62,21 +64,20 @@ impl DBNotificationManager {
     }
 
     /// get subscriper channel for recieving notifications
-    pub fn get_subscriber(&self) -> tokio::sync::broadcast::Receiver<nino_structures::Message> {
+    pub fn get_subscriber(&self) -> tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage> {
         self.broadcast_sx.subscribe()
     }
 
     /// send message to all (local and global) subscribers through the db
-    pub async fn notify(&self, msg: String) -> Result<u64, String> {
+    pub async fn notify(&self, msg: String) -> Result<u64, Error> {
         let db = self.db.get_connection().await?;
         let statement = format!("NOTIFY {}, {}", PKG_NAME!(), escape_single_quotes(&msg));
-        let result = db.execute(&statement, &[]).await;
-        result.map_err(|e| e.to_string())
+        db.execute(&statement, &[]).await.map_err(|e| e.into())
     }
 
     fn start_listening_for_messages(
         connection_string: &str,
-        broadcast_sx: tokio::sync::broadcast::Sender<nino_structures::Message>,
+        broadcast_sx: tokio::sync::broadcast::Sender<nino_structures::NotificationMessage>,
     ) -> ! {
         use postgres::fallible_iterator::FallibleIterator;
         use std::time::Duration;
@@ -107,7 +108,7 @@ impl DBNotificationManager {
                         if let Some(c) = msg {
                             println!("message: {:?}", c);
                             // broad cast message to listeners
-                            if let Err(error) = broadcast_sx.send(nino_structures::Message {
+                            if let Err(error) = broadcast_sx.send(nino_structures::NotificationMessage {
                                 text: c.payload().to_string(),
                             }) {
                                 eprintln!(
