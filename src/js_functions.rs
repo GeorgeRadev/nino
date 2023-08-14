@@ -392,7 +392,7 @@ fn query_types_to_params(
     // 2 - Number
     // 3 - String
     // 4 - Date
-    for ix in 1..qlen - 1 {
+    for ix in 1..qlen {
         let v = query.get(ix).unwrap();
         let t = query_types[ix];
         if t == 0 {

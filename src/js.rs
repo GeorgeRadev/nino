@@ -16,7 +16,7 @@ use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
-use std::thread::{self, JoinHandle};
+use std::thread::{self};
 use std::{pin::Pin, rc::Rc};
 //use tokio::macros::support::poll_fn;
 
@@ -34,8 +34,7 @@ static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
 
 impl JavaScriptManager {
     /**
-     * Greate and initialize Singleton Manager instance.
-     * use start() to begin listening.
+     * Create and initialize Singleton Manager instance.
      */
     pub fn create(
         thread_count: usize,
@@ -71,7 +70,7 @@ impl JavaScriptManager {
     // start all js processing threads
     // inspector port is attached only to the first js instance
     // for developing purposes use single js instance and debugger will attach to it
-    pub fn start(&mut self) {
+    fn start(&mut self) {
         let thread_count = self.thread_count;
         let inspector_port = self.inspector_port;
 

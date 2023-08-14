@@ -307,7 +307,6 @@ impl Transaction {
 
         // wait for message and serve
         loop {
-            eprintln!("------ loop Transaction");
             match self.request_out.recv().await {
                 Ok(message) => {
                     // process transaction command
@@ -458,7 +457,6 @@ impl Transaction {
                     }
                 }
             }
-            self.db_pool.clear();
         } else {
             for (_, tx) in self.db_pool.iter_mut() {
                 match tx {
@@ -469,8 +467,11 @@ impl Transaction {
                     }
                 }
             }
-            self.db_pool.clear();
         }
+
+        // close only those that are not in the aliases (as an artificial pool)
+        // self.db_pool.retain(|k, _| self.db_aliases.contains_key(k));
+        self.db_pool.clear();
 
         self.create_db_transaction(nino_constants::MAIN_DB.to_string())
             .await?;
@@ -599,12 +600,18 @@ impl TransactionPostgres {
         response_in: Sender<TransactionResponse>,
     ) -> Result<(), Error> {
         let config = connection_string.parse::<Config>().unwrap();
-        let (mut conn, _) = config.connect(tokio_postgres::NoTls).await?;
-        let tx = conn.transaction().await?;
+        let (mut client, connection) = config.connect(tokio_postgres::NoTls).await?;
+        // spawn connection
+        tokio::spawn(async move {
+            if let Err(error) = connection.await {
+                eprintln!("Connection error: {}", error);
+            }
+        });
+        let tx = client.transaction().await?;
 
         loop {
-            eprintln!("------- loop TransactionPostgress");
-            let response = match request_out.recv().await? {
+            let request = request_out.recv().await?;
+            let response = match request {
                 // process transaction command
                 TransactionRequest::Commit => {
                     let response = match tx.commit().await {

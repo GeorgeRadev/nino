@@ -125,13 +125,12 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         db.clone(),
         dynamics.clone(),
     );
-    // start js threads
-    // js::JavaScriptManager::start();
-    // {
-    //     // compile dynamics
-    //     let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
-    //     js::JavaScriptManager::run(&recompile_dynamics).await?;
-    // }
+
+    {
+        // compile dynamics
+        let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
+        js::JavaScriptManager::run(&recompile_dynamics).await?;
+    }
     notifier.notify("string message".to_string()).await?;
 
     let web = web::WebManager::new(
