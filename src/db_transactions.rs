@@ -384,12 +384,14 @@ impl Transaction {
                     };
                     // send response
                     if let Err(error) = self.response_in.send(result).await {
-                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                        // channel has been closed
+                        eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
                         break;
                     }
                 }
                 Err(error) => {
-                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                    // channel has been closed
+                    eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
                     break;
                 }
             }
@@ -414,7 +416,7 @@ impl Transaction {
                     );
                     let query_data = QueryData {
                         db_alias: nino_constants::MAIN_DB.to_string(),
-                        query: query,
+                        query,
                         params: Vec::new(),
                     };
                     match tx.query(query_data).await {
@@ -470,8 +472,7 @@ impl Transaction {
         }
 
         // close only those that are not in the aliases (as an artificial pool)
-        // self.db_pool.retain(|k, _| self.db_aliases.contains_key(k));
-        self.db_pool.clear();
+        self.db_pool.retain(|k, _| self.db_aliases.contains_key(k));
 
         self.create_db_transaction(nino_constants::MAIN_DB.to_string())
             .await?;
@@ -539,7 +540,7 @@ impl TransactionPostgres {
 
         tokio::spawn(async move {
             if let Err(error) =
-                Self::begin_db_transaction(connection_string, request_out, response_in).await
+                Self::begin_postgres_transaction(connection_string, request_out, response_in).await
             {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             }
@@ -594,7 +595,7 @@ impl TransactionPostgres {
         }
     }
 
-    async fn begin_db_transaction(
+    async fn begin_postgres_transaction(
         connection_string: String,
         request_out: Receiver<TransactionRequest>,
         response_in: Sender<TransactionResponse>,
@@ -607,118 +608,133 @@ impl TransactionPostgres {
                 eprintln!("Connection error: {}", error);
             }
         });
-        let tx = client.transaction().await?;
-
+        // connection loop
         loop {
-            let request = request_out.recv().await?;
-            let response = match request {
-                // process transaction command
-                TransactionRequest::Commit => {
-                    let response = match tx.commit().await {
-                        Ok(_) => TransactionResponse::Ok,
-                        Err(error) => {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                            TransactionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            ))
-                        }
-                    };
-                    response_in.send(response).await?;
-                    return Ok(());
-                }
-                TransactionRequest::Rollback => {
-                    let response = match tx.rollback().await {
-                        Ok(_) => TransactionResponse::Ok,
-                        Err(error) => {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                            TransactionResponse::Error(format!(
-                                "ERROR {}:{}:{}",
-                                file!(),
-                                line!(),
-                                error
-                            ))
-                        }
-                    };
-                    response_in.send(response).await?;
-                    return Ok(());
-                }
-                TransactionRequest::Query(query_data) => {
-                    let dyn_vec: Vec<_> = query_data
-                        .params
-                        .iter()
-                        .map(|v| v as &(dyn ToSql + Sync))
-                        .collect();
+            let tx = client.transaction().await?;
 
-                    match tx.query(&query_data.query, &dyn_vec).await {
-                        Err(error) => {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                            TransactionResponse::Error(format!(
-                                "ERROR {}:{}: db alias {} : {}",
-                                file!(),
-                                line!(),
-                                query_data.db_alias,
-                                error
-                            ))
-                        }
-                        Ok(rows) => {
-                            let mut row_types: Vec<String> = Vec::new();
-                            let mut row_names: Vec<String> = Vec::new();
-                            let mut result: Vec<Vec<String>> = Vec::new();
-                            for row in rows {
-                                if row_types.is_empty() {
-                                    for column in row.columns() {
-                                        row_names.push(column.name().to_string());
-                                        let t = column.type_();
-                                        row_types.push(t.to_string());
-                                    }
+            // transaction loop
+            // commit/rollback will break this loop and create new transaction
+            loop {
+                let request = request_out.recv().await;
+                let response = match request {
+                    Ok(request) => match request {
+                        // process transaction command
+                        TransactionRequest::Commit => {
+                            let response = match tx.commit().await {
+                                Ok(_) => TransactionResponse::Ok,
+                                Err(error) => {
+                                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                                    TransactionResponse::Error(format!(
+                                        "ERROR {}:{}:{}",
+                                        file!(),
+                                        line!(),
+                                        error
+                                    ))
                                 }
-                                let mut line: Vec<String> = Vec::new();
-                                for ix in 0..row.len() {
-                                    let col_value: String = row.get(ix);
-                                    line.push(col_value);
-                                }
-                                result.push(line);
-                            }
-                            let query_result = QueryResult {
-                                rows: result,
-                                row_types,
-                                row_names,
                             };
-                            TransactionResponse::QueryResult(query_result)
+                            response_in.send(response).await?;
+                            // terminate current transaction and start new one
+                            break;
                         }
-                    }
-                }
-                TransactionRequest::Upsert(query_data) => {
-                    // let qlen = query_data.params.len();
-                    // let mut qparams: Vec<Box<(dyn ToSql + Sync)>> = Vec::with_capacity(qlen);
-                    // for param in query_data.params {
-                    //     qparams.push(Box::new(param) as Box<(dyn ToSql + Sync)>);
-                    // }
-                    let dyn_vec: Vec<_> = query_data
-                        .params
-                        .iter()
-                        .map(|v| v as &(dyn ToSql + Sync))
-                        .collect();
+                        TransactionRequest::Rollback => {
+                            let response = match tx.rollback().await {
+                                Ok(_) => TransactionResponse::Ok,
+                                Err(error) => {
+                                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                                    TransactionResponse::Error(format!(
+                                        "ERROR {}:{}:{}",
+                                        file!(),
+                                        line!(),
+                                        error
+                                    ))
+                                }
+                            };
+                            response_in.send(response).await?;
+                            // terminate current transaction and start new one
+                            break;
+                        }
+                        TransactionRequest::Query(query_data) => {
+                            let dyn_vec: Vec<_> = query_data
+                                .params
+                                .iter()
+                                .map(|v| v as &(dyn ToSql + Sync))
+                                .collect();
 
-                    match tx.execute(&query_data.query, &dyn_vec).await {
-                        Ok(affected) => TransactionResponse::UpsertResult(affected),
-                        Err(error) => {
-                            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                            TransactionResponse::Error(format!(
-                                "ERROR {}:{}: db alias {} : {}",
-                                file!(),
-                                line!(),
-                                query_data.db_alias,
-                                error
-                            ))
+                            match tx.query(&query_data.query, &dyn_vec).await {
+                                Err(error) => {
+                                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                                    TransactionResponse::Error(format!(
+                                        "ERROR {}:{}: db alias {} : {}",
+                                        file!(),
+                                        line!(),
+                                        query_data.db_alias,
+                                        error
+                                    ))
+                                }
+                                Ok(rows) => {
+                                    let mut row_types: Vec<String> = Vec::new();
+                                    let mut row_names: Vec<String> = Vec::new();
+                                    let mut result: Vec<Vec<String>> = Vec::new();
+                                    for row in rows {
+                                        if row_types.is_empty() {
+                                            for column in row.columns() {
+                                                row_names.push(column.name().to_string());
+                                                let t = column.type_();
+                                                row_types.push(t.to_string());
+                                            }
+                                        }
+                                        let mut line: Vec<String> = Vec::new();
+                                        for ix in 0..row.len() {
+                                            let col_value: String = row.get(ix);
+                                            line.push(col_value);
+                                        }
+                                        result.push(line);
+                                    }
+                                    let query_result = QueryResult {
+                                        rows: result,
+                                        row_types,
+                                        row_names,
+                                    };
+                                    TransactionResponse::QueryResult(query_result)
+                                }
+                            }
                         }
+                        TransactionRequest::Upsert(query_data) => {
+                            let dyn_vec: Vec<_> = query_data
+                                .params
+                                .iter()
+                                .map(|v| v as &(dyn ToSql + Sync))
+                                .collect();
+
+                            match tx.execute(&query_data.query, &dyn_vec).await {
+                                Ok(affected) => TransactionResponse::UpsertResult(affected),
+                                Err(error) => {
+                                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                                    TransactionResponse::Error(format!(
+                                        "ERROR {}:{}: db alias {} : {}",
+                                        file!(),
+                                        line!(),
+                                        query_data.db_alias,
+                                        error
+                                    ))
+                                }
+                            }
+                        }
+                    },
+                    Err(_error) => {
+                        // eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                        // channel has been closed
+                        // just return
+                        return Ok(());
                     }
+                };
+                if let Err(error) = response_in.send(response).await {
+                    eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                    // channel has been closed
+                    // just return
+                    return Ok(());
                 }
-            };
-            response_in.send(response).await?;
+            }
         }
     }
 }

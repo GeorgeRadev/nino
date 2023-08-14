@@ -108,7 +108,7 @@ pub async fn send_response_to_stream(
     };
 
     //close socket - always
-    if let Err(_) = stream.shutdown(std::net::Shutdown::Both) {
+    if stream.shutdown(std::net::Shutdown::Both).is_err() {
         // stream already closed
     }
     Ok(())

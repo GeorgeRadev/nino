@@ -119,7 +119,7 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         dyn_subscriber,
     ));
 
-    let _js_engine = js::JavaScriptManager::create(
+    js::JavaScriptManager::create(
         settings.js_thread_count,
         settings.debug_port,
         db.clone(),

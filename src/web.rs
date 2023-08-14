@@ -134,7 +134,7 @@ impl WebManager {
 
         println!("REQUEST: {} {} {}", method, from_address, url);
 
-        match requests.get_request(&String::from(path)).await? {
+        match requests.get_request(&path).await? {
             None => {
                 Self::response_404(stream, url).await;
                 Ok(())

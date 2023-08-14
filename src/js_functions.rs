@@ -392,37 +392,36 @@ fn query_types_to_params(
     // 2 - Number
     // 3 - String
     // 4 - Date
-    for ix in 1..qlen {
-        let v = query.get(ix).unwrap();
+    for (ix, value) in query.iter().enumerate().take(qlen).skip(1) {
         let t = query_types[ix];
         if t == 0 {
             //NULL
             query_params.push(QueryParam::Null);
         } else if t == 1 {
             //boolean
-            let b = v.eq_ignore_ascii_case("true") || v.eq("1");
+            let b = value.eq_ignore_ascii_case("true") || value.eq("1");
             query_params.push(QueryParam::Bool(b));
         } else if t == 2 {
             //number
-            match v.parse::<i64>() {
+            match value.parse::<i64>() {
                 Ok(v) => {
                     query_params.push(QueryParam::Number(v));
                 }
-                Err(_) => match v.parse::<f64>() {
+                Err(_) => match value.parse::<f64>() {
                     Ok(v) => {
                         query_params.push(QueryParam::Float(v));
                     }
                     Err(e) => {
                         return Err(Error::msg(format!(
                             "parameter {} `{}` is not number: {}",
-                            ix, v, e
+                            ix, value, e
                         )));
                     }
                 },
             }
         } else if query_types[ix] == 4 {
             //date
-            match v.parse::<i64>() {
+            match value.parse::<i64>() {
                 Ok(v) => {
                     let secs = v / 1000;
                     let ns = (v % 1000) * 1_000_000;
@@ -434,20 +433,20 @@ fn query_types_to_params(
                 Err(error) => {
                     return Err(Error::msg(format!(
                         "parameter {} `{}` is not UTC miliseconds: {}",
-                        ix, v, error
+                        ix, value, error
                     )));
                 }
             };
         } else {
             // use string value
-            query_params.push(QueryParam::String(v.clone()));
+            query_params.push(QueryParam::String(value.clone()));
         }
     }
     Ok((query[0].clone(), query_params))
 }
 
 #[op]
-fn op_reload_database_aliases(state: &mut OpState) -> Result<(), Error>{
+fn op_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
     let tx = state.borrow_mut::<TransactionSession>();
     tx.reload_database_aliases()
 }
