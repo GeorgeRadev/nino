@@ -119,19 +119,19 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         dyn_subscriber,
     ));
 
-    let _js_engine = js::JavaScriptManager::instance(
+    let _js_engine = js::JavaScriptManager::create(
         settings.js_thread_count,
         settings.debug_port,
-        Some(db.clone()),
-        Some(dynamics.clone()),
+        db.clone(),
+        dynamics.clone(),
     );
     // start js threads
-    js::JavaScriptManager::start().await;
-    {
-        // compile dynamics
-        let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
-        js::JavaScriptManager::run(&recompile_dynamics).await?;
-    }
+    // js::JavaScriptManager::start();
+    // {
+    //     // compile dynamics
+    //     let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
+    //     js::JavaScriptManager::run(&recompile_dynamics).await?;
+    // }
     notifier.notify("string message".to_string()).await?;
 
     let web = web::WebManager::new(

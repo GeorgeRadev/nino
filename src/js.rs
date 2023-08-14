@@ -16,18 +16,18 @@ use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
-use std::thread;
+use std::thread::{self, JoinHandle};
 use std::{pin::Pin, rc::Rc};
 //use tokio::macros::support::poll_fn;
 
 /// need to call start() to begin js threads
-#[derive(Clone)]
 pub struct JavaScriptManager {
     thread_count: usize,
     inspector_port: u16,
     db: Arc<DBManager>,
     dynamics: Arc<DynamicManager>,
     notifier: Arc<Notifier>,
+    //join_handlers: Vec<JoinHandle<()>>,
 }
 
 static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
@@ -37,73 +37,74 @@ impl JavaScriptManager {
      * Greate and initialize Singleton Manager instance.
      * use start() to begin listening.
      */
-    pub fn instance(
+    pub fn create(
         thread_count: usize,
         inspector_port: u16,
-        db: Option<Arc<DBManager>>,
-        dynamics: Option<Arc<DynamicManager>>,
-    ) -> JavaScriptManager {
-        {
-            JS_INSTANCE.get_or_init(|| {
-                init_platform(
-                    thread_count,
-                    module_loader,
-                    js_functions::get_javascript_ops(),
-                );
+        db: Arc<DBManager>,
+        dynamics: Arc<DynamicManager>,
+    ) {
+        JS_INSTANCE.get_or_init(|| {
+            init_platform(
+                thread_count,
+                module_loader,
+                js_functions::get_javascript_ops(),
+            );
 
-                let db = db.unwrap();
+            let db = db;
+            let dynamics = dynamics;
 
-                let dynamics = dynamics.unwrap();
-                JavaScriptManager {
-                    thread_count,
-                    inspector_port,
-                    db,
-                    notifier: dynamics.get_notifier(),
-                    dynamics,
-                }
-            });
-        }
-        JS_INSTANCE.get().unwrap().clone()
+            let mut this = JavaScriptManager {
+                thread_count,
+                inspector_port,
+                db,
+                notifier: dynamics.get_notifier(),
+                dynamics,
+                //join_handlers: Vec::with_capacity(thread_count).into(),
+            };
+            // start all threads
+            this.start();
+
+            this
+        });
     }
 
     // start all js processing threads
     // inspector port is attached only to the first js instance
     // for developing purposes use single js instance and debugger will attach to it
-    pub async fn start() {
-        let (thread_count, inspector_port) = {
-            let instance = Self::instance(0, 0, None, None);
-            (instance.thread_count, instance.inspector_port)
-        };
+    pub fn start(&mut self) {
+        let thread_count = self.thread_count;
+        let inspector_port = self.inspector_port;
 
         for i in 0..thread_count {
             let builder = thread::Builder::new().name(format!("JS Thread {}", i).to_string());
-            if let Err(error) = builder.spawn(move || {
+            match builder.spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
                     .unwrap();
 
-                rt.block_on(async move {
-                    if let Err(error) = run_deno_main_thread(
-                        module_loader,
-                        js_functions::get_javascript_ops,
-                        Self::create_js_context_state,
-                        nino_constants::MAIN_MODULE,
-                        None,
-                        if inspector_port > 0 {
-                            inspector_port + i as u16
-                        } else {
-                            0
-                        },
-                        true,
-                    )
-                    .await
-                    {
-                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                    }
-                })
+                if let Err(error) = rt.block_on(run_deno_main_thread(
+                    module_loader,
+                    js_functions::get_javascript_ops,
+                    Self::create_js_context_state,
+                    nino_constants::MAIN_MODULE,
+                    None,
+                    if inspector_port > 0 {
+                        inspector_port + i as u16
+                    } else {
+                        0
+                    },
+                    true,
+                )) {
+                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                }
             }) {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                Ok(_jh) => {
+                    //self.join_handlers.push(jh);
+                }
+                Err(error) => {
+                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                }
             }
         }
     }

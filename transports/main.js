@@ -4,11 +4,12 @@ async function main() {
     const database_invalidation_prefix = core.ops.op_get_database_invalidation_prefix();
     for (; ;) {
         try {
-            // core.print('js try\n');
+            // core.print('_main try\n');
             debugger;
             const module = core.ops.op_begin_task();
 
             if (module) {
+                core.print('-----------------------------so far so good ---------------------------\n');
                 // request for module execution
                 // core.print('module ' + module + '\n');
                 const mod = await import(module);
@@ -101,7 +102,8 @@ async function main() {
                     throw new Error("Should never get this");
                 }
             }
-            await core.opAsync('aop_end_task', false);
+            core.ops.op_tx_end(false);
+            await core.opAsync('aop_end_task');
 
         } catch (e) {
             try {
@@ -110,7 +112,13 @@ async function main() {
                 core.ops.op_set_response_status(500);
                 core.ops.op_set_response_header('Content-Type', 'text/plain;charset=UTF-8');
                 await core.opAsync('aop_set_response_send_text', errorMessage);
-                await core.opAsync('aop_end_task', true);
+            } catch (ex) {
+                let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
+                core.print(errorMessage + '\n');
+            }
+            try {
+                core.ops.op_tx_end(true);
+                await core.opAsync('aop_end_task');
             } catch (ex) {
                 let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
                 core.print(errorMessage + '\n');

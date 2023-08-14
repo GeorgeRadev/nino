@@ -1,6 +1,6 @@
 export default async function getDB(name) {
     const core = Deno[Deno.internal].core;
-    const db_alias = await core.opAsync('aop_jsdb_get_connection_name', name);
+    const db_alias = core.ops.op_tx_get_connection_name(name);
     core.print('db alias :' + db_alias + '\n');
 
     var normalizeParams = function (args) {
@@ -10,10 +10,10 @@ export default async function getDB(name) {
         var params = [];
         var paramTypes = [];
         for (var arg of args) {
-            if (  arg === undefined || arg === null) {
+            if (arg === undefined || arg === null) {
                 params.push("NULL");
                 paramTypes.push(0);
-            } else  if (typeof arg === 'boolean') {
+            } else if (typeof arg === 'boolean') {
                 params.push("" + arg);
                 paramTypes.push(1);
             } else if (typeof arg === 'number') {
@@ -34,7 +34,7 @@ export default async function getDB(name) {
         var { params, paramTypes } = normalizeParams(queryArray);
 
         if (params[0].startsWith("SELECT")) {
-            const queryResult = await core.opAsync('aop_jsdb_execute_query', name, params, paramTypes);
+            const queryResult = core.ops.op_tx_execute_query(name, params, paramTypes);
             if (callback) {
                 for (var row of queryResult.rows) {
                     if (!callback.call(this, row, queryResult.rowTypes, queryResult.rowNames)) {
@@ -46,7 +46,7 @@ export default async function getDB(name) {
                 return queryResult;
             }
         } else {
-            const queryResult = await core.opAsync('aop_jsdb_execute_upsert', name, params, paramTypes);
+            const queryResult = core.ops.op_tx_execute_upsert(name, params, paramTypes);
             return queryResult;
         }
     }

@@ -7,8 +7,7 @@ use async_channel::Receiver;
 use async_std::net::TcpStream;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
-use http_types::headers::CONTENT_TYPE;
-use http_types::{Request, Response, StatusCode};
+use http_types::{headers::CONTENT_TYPE, Request, Response, StatusCode};
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
 
@@ -28,10 +27,11 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         aop_broadcast_message::DECL,
         op_get_module_invalidation_prefix::DECL,
         op_get_database_invalidation_prefix::DECL,
-        aop_reload_database_aliases::DECL,
-        aop_jsdb_get_connection_name::DECL,
-        aop_jsdb_execute_query::DECL,
-        aop_jsdb_execute_upsert::DECL,
+        op_reload_database_aliases::DECL,
+        op_tx_end::DECL,
+        op_tx_get_connection_name::DECL,
+        op_tx_execute_query::DECL,
+        op_tx_execute_upsert::DECL,
     ]
 }
 
@@ -96,8 +96,8 @@ macro_rules! function {
 
 #[op]
 fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
-    let context = state.borrow_mut::<JSContext>();
     let mut module = String::new();
+    let context = state.borrow_mut::<JSContext>();
     let result = context.web_task_rx.recv_blocking();
     match result {
         Ok(web_task) => {
@@ -138,15 +138,16 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 }
 
 #[op]
-async fn aop_end_task(op_state: Rc<RefCell<OpState>>, error: bool) -> Result<bool, Error> {
-    {
-        let mut state = op_state.borrow_mut();
-        let tx = state.borrow_mut::<TransactionSession>();
-
-        if let Err(error) = tx.close_all(error).await {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-        }
+fn op_tx_end(state: &mut OpState, error: bool) -> Result<(), Error> {
+    let tx = state.borrow_mut::<TransactionSession>();
+    if let Err(error) = tx.close_all(error) {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
+    Ok(())
+}
+
+#[op]
+async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
     let stream;
     let mut response;
     {
@@ -361,23 +362,6 @@ fn op_get_database_invalidation_prefix() -> String {
     String::from(db_notification::NOTIFICATION_PREFIX_DBNAME)
 }
 
-#[op]
-async fn aop_reload_database_aliases(op_state: Rc<RefCell<OpState>>) -> Result<(), Error> {
-    let mut state = op_state.borrow_mut();
-    let tx = state.borrow_mut::<TransactionSession>();
-    tx.reload_database_aliases().await
-}
-
-#[op]
-async fn aop_jsdb_get_connection_name(
-    op_state: Rc<RefCell<OpState>>,
-    db_alias: String,
-) -> Result<String, Error> {
-    let mut state = op_state.borrow_mut();
-    let tx = state.borrow_mut::<TransactionSession>();
-    tx.create_db_connection(db_alias).await
-}
-
 #[derive(deno_core::serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
@@ -463,16 +447,28 @@ fn query_types_to_params(
 }
 
 #[op]
-async fn aop_jsdb_execute_query(
-    op_state: Rc<RefCell<OpState>>,
+fn op_reload_database_aliases(state: &mut OpState) -> Result<(), Error>{
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.reload_database_aliases()
+}
+
+#[op]
+fn op_tx_get_connection_name(state: &mut OpState, db_alias: String) -> Result<String, Error> {
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.create_db_connection(db_alias)
+}
+
+#[op]
+fn op_tx_execute_query(
+    state: &mut OpState,
     db_alias: String,
     query: Vec<String>,
     query_types: Vec<i16>,
 ) -> Result<QueryResult, Error> {
     let (query, params) = query_types_to_params(query, query_types)?;
-    let mut state = op_state.borrow_mut();
     let tx = state.borrow_mut::<TransactionSession>();
-    let result = tx.query(db_alias, query, params).await?;
+
+    let result = tx.query(db_alias, query, params)?;
     Ok(QueryResult {
         rows: result.rows,
         row_names: result.row_names,
@@ -481,14 +477,13 @@ async fn aop_jsdb_execute_query(
 }
 
 #[op]
-async fn aop_jsdb_execute_upsert(
-    op_state: Rc<RefCell<OpState>>,
+fn op_tx_execute_upsert(
+    state: &mut OpState,
     db_alias: String,
     query: Vec<String>,
     query_types: Vec<i16>,
 ) -> Result<u64, Error> {
     let (query, params) = query_types_to_params(query, query_types)?;
-    let mut state = op_state.borrow_mut();
     let tx = state.borrow_mut::<TransactionSession>();
-    tx.upsert(db_alias, query, params).await
+    tx.upsert(db_alias, query, params)
 }
