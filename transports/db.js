@@ -10,21 +10,22 @@ export default async function getDB(name) {
         var params = [];
         var paramTypes = [];
         for (var arg of args) {
+            // core.print('p : ' + (typeof arg) + '\n');
             if (arg === undefined || arg === null) {
                 params.push("NULL");
                 paramTypes.push(0);
-            } else if (typeof arg === 'boolean') {
-                params.push("" + arg);
-                paramTypes.push(1);
-            } else if (typeof arg === 'number') {
-                params.push("" + arg);
-                paramTypes.push(2);
             } else if (arg instanceof Date) {
-                params.push("" + arg.getUTCMilliseconds());
+                params.push(arg.getUTCMilliseconds().toString());
                 paramTypes.push(4);
             } else {
-                params.push("" + arg);
-                paramTypes.push(3);
+                if (typeof arg === 'boolean') {
+                    paramTypes.push(1);
+                } else if (typeof arg === 'number') {
+                    paramTypes.push(2);
+                } else {
+                    paramTypes.push(3);
+                }
+                params.push(arg.toString());
             }
         }
         return { params, paramTypes };
@@ -37,7 +38,7 @@ export default async function getDB(name) {
             const queryResult = core.ops.op_tx_execute_query(name, params, paramTypes);
             if (callback) {
                 for (var row of queryResult.rows) {
-                    if (!callback.call(this, row, queryResult.rowTypes, queryResult.rowNames)) {
+                    if (!callback.apply(this, row)) {
                         break;
                     }
                 }

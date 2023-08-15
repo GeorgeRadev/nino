@@ -173,14 +173,16 @@ impl TransportManager {
 
             let name_string = Self::get_string(obj_name, dynamic, ix, "name");
             let file_name = Self::get_string(obj_name, dynamic, ix, "file");
+            let transpile = Self::get_bool(dynamic, "transpile", false);
+
             let (length, content) = Self::get_file(transport_path, file_name)?;
 
             let query = format!(
-                "INSERT INTO {}(name, code_length, js_length, code, js) VALUES($1, $2, $2, $3, $3)",
+                "INSERT INTO {}(name, code_length, js_length, transpile, code, js) VALUES($1, $2, $2, $4, $3, $3)",
                 nino_constants::DYNAMICS_TABLE
             );
             self.db
-                .execute(&query, &[&name_string, &length, &content])
+                .execute(&query, &[&name_string, &length, &content, &transpile])
                 .await?;
         }
         Ok(())

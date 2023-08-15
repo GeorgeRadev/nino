@@ -8,11 +8,13 @@ export default async function db_servlet(request) {
         result += "<pre>";
         result += "// all with callback  \n"
         const conn = await db("_main");
-        const sql = ["SELECT * FROM nino_database"];
 
         var line = 0;
-        await conn.query(sql, function (row) {
-            result += "line " + (++line) + " : " + JSON.stringify(row) + "\n";
+        const sql =
+            SELECT *
+            FROM nino_database;
+        await conn.query(sql, function (db_alias, db_type, db_connection_string) {
+            result += "line " + (++line) + " : " + db_alias + ", " + db_type + ", " + db_connection_string + "\n";
             // return true to fetch next
             return true;
         });
@@ -20,15 +22,17 @@ export default async function db_servlet(request) {
         result += "</pre>";
         result += "<hr/>";
     }
-
     {
         result += "<pre>";
         result += "// one with callback and parameters\n"
         const conn = await db("_main");
 
-        const sql = ["SELECT * FROM nino_database where db_alias = $1", "_main"];
-        await conn.query(sql, function (row) {
-            result += "line " + (++line) + " : " + JSON.stringify(row) + "\n";
+        const sql =
+            SELECT db_alias, db_type, db_connection_string
+            FROM nino_database 
+            WHERE db_alias = "_main";
+        await conn.query(sql, function (db_alias, db_type, db_connection_string) {
+            result += "line " + (++line) + " : " + db_alias + ", " + db_type + ", " + db_connection_string + "\n";
             // return true to fetch next
             return false;
         });
@@ -38,7 +42,10 @@ export default async function db_servlet(request) {
         if (request.query) {
             currentDate = "error";
         }
-        const update = ["UPDATE nino_database SET db_connection_string = $2 where db_alias = $1", "_main", currentDate];
+        const update =
+            UPDATE nino_database 
+            SET db_connection_string = :currentDate 
+            WHERE db_alias = "_main";
         var affected = await conn.query(update);
         result += "affected " + affected + " lines \n";
 
@@ -61,8 +68,10 @@ export default async function db_servlet(request) {
         result += "<pre>";
         result += "// query result \n"
         const conn = await db("_main");
-        const sql = ["SELECT * FROM nino_database where db_alias = $1", "_main"];
-
+        const sql =
+            SELECT *
+            FROM nino_database 
+            WHERE db_alias = "_main";
         try {
             var queryResult = await conn.query(sql);
             result += "result: " + JSON.stringify(queryResult) + "\n";

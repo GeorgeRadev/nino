@@ -84,7 +84,7 @@ impl WebManager {
                 return;
             }
         };
-        // println!("starting new connection from {}", from_addres);
+        // info!("starting new connection from {}", from_addres);
         /* match timeout(timeout_duration, fut).await {
             Ok(Ok(Some(r))) => r,
             Ok(Ok(None)) | Err(TimeoutError { .. }) => return Ok(ConnectionStatus::Close), /* EOF or timeout */

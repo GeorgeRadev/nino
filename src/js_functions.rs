@@ -1,5 +1,6 @@
 use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
+use crate::nino_constants::info;
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
 use crate::{db::DBManager, nino_functions};
@@ -121,12 +122,13 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
                 // should not  get here
                 panic!("should not get here")
             }
-            // println!("new js task");
+            info!("new js task");
         }
         Err(error) => {
-            context.closed = true;
-            println!(
-                "{}:{}:{} new js task ERROR: {}",
+            context.clear();
+            // should happen only when terminating program
+            info!(
+                "ERROR {}:{}:{} <OK> {}",
                 function!(),
                 line!(),
                 context.id,
@@ -454,7 +456,7 @@ fn op_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
 #[op]
 fn op_tx_get_connection_name(state: &mut OpState, db_alias: String) -> Result<String, Error> {
     let tx = state.borrow_mut::<TransactionSession>();
-    tx.create_db_connection(db_alias)
+    tx.create_transaction(db_alias)
 }
 
 #[op]

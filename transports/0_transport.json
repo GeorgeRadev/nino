@@ -30,7 +30,7 @@
         },
         {
             "break_on_error": true,
-            "query": "CREATE TABLE IF NOT EXISTS nino_dynamic (name VARCHAR(1024) PRIMARY KEY, code_length INT, js_length INT, code BYTEA, js BYTEA)"
+            "query": "CREATE TABLE IF NOT EXISTS nino_dynamic (name VARCHAR(1024) PRIMARY KEY, code_length INT, js_length INT, transpile boolean, code BYTEA, js BYTEA)"
         },
         {
             "break_on_error": true,
@@ -159,6 +159,14 @@
             "authorize": true,
             "dynamic": true,
             "execute": true
+        },
+        {
+            "path": "db_list",
+            "name": "db_list",
+            "redirect": false,
+            "authorize": false,
+            "dynamic": true,
+            "execute": true
         }
     ],
     "statics": [
@@ -196,38 +204,52 @@
     "dynamics": [
         {
             "name": "_main",
-            "file": "main.js"
+            "file": "_main.js",
+            "transpile": false
         },{
-            "name": "notifier",
-            "file": "notifier.js"
+            "name": "notify",
+            "file": "notify.js",
+            "transpile": true
         },
         {
             "name": "dynamic_json",
-            "file": "./dynamic_json.js"
+            "file": "./dynamic_json.js",
+            "transpile": true
         },
         {
             "name": "test_servlet",
-            "file": "./test_servlet.js"
+            "file": "./test_servlet.js",
+            "transpile": false
         },
         {
             "name": "notify_servlet",
-            "file": "./notify_servlet.js"
+            "file": "./notify_servlet.js",
+            "transpile": false
         },
         {
             "name": "jsqlx_core",
-            "file": "./jsqlx.min.js"
+            "file": "./jsqlx.min.js",
+            "transpile": false
         },
         {
             "name": "jsqlx_servlet",
-            "file": "./jsqlx_servlet.js"
+            "file": "./jsqlx_servlet.js",
+            "transpile": false
         },
         {
             "name": "db",
-            "file": "./db.js"
+            "file": "./db.js",
+            "transpile": false
         },
         {
             "name": "db_servlet",
-            "file": "./db_servlet.js"
+            "file": "./db_servlet.js",
+            "transpile": true
+        },
+        {
+            "name": "db_list",
+            "file": "./db_list.js",
+            "transpile": false
         }
     ]
 }

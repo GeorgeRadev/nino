@@ -1,4 +1,4 @@
-use crate::nino_constants;
+use crate::nino_constants::{self, info};
 use async_channel::{Receiver, Sender};
 use core::fmt;
 use deno_core::anyhow::Error;
@@ -10,7 +10,7 @@ use tokio_postgres::Config;
 // organize db connections per js instance in a map by alias to connections
 // free all open aliases exept the first for keep it as pool
 // all channels and threads are because of Transaction<'_>
-// Manager 1-*  Session  1-*  Transaction
+// Manager 1-*  Session  <-async channel->  TransactionThread 1-* Transaction
 
 #[derive(Clone, Debug)]
 pub enum QueryParam {
@@ -36,7 +36,10 @@ impl ToSql for QueryParam {
             QueryParam::Bool(v) => v.to_sql(ty, out),
             QueryParam::Number(v) => v.to_sql(ty, out),
             QueryParam::Float(v) => v.to_sql(ty, out),
-            QueryParam::String(v) => v.to_sql(ty, out),
+            QueryParam::String(v) => {
+                let vstr = v.as_bytes();
+                vstr.to_sql(ty, out)
+            }
             QueryParam::Date(v) => v.to_sql(ty, out),
         }
     }
@@ -155,8 +158,8 @@ impl TransactionManager {
                 .build()
                 .unwrap();
 
-            let mut tx = Transaction::new(main_connection_string, request_out, response_in);
-            rt.block_on(tx.start_session());
+            let mut tx = TransactionsThread::new(main_connection_string, request_out, response_in);
+            rt.block_on(tx.session_loop());
         }) {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
@@ -189,7 +192,7 @@ impl TransactionSession {
         }
     }
 
-    pub fn create_db_connection(&mut self, db_alias: String) -> Result<String, Error> {
+    pub fn create_transaction(&mut self, db_alias: String) -> Result<String, Error> {
         if let Err(error) = self
             .request_in
             .send_blocking(TransactionSessionRequest::CreateTransaction(db_alias))
@@ -265,15 +268,21 @@ impl TransactionSession {
     }
 }
 
-pub struct Transaction {
+pub struct TransactionsThread {
     main_connection_string: String,
-    db_aliases: HashMap<String, DBAliasInfo>,
-    db_pool: HashMap<String, TransactionInstance>,
+    // keep connections strings and db types
+    db_alias_info: HashMap<String, DBAliasInfo>,
+    // keep already given aliases
+    db_aliases: HashMap<String, String>,
+    // when to clean all aliases
+    dirty: bool,
+    // keep transaction per alias
+    db_pool: HashMap<String, Transaction>,
     request_out: Receiver<TransactionSessionRequest>,
     response_in: Sender<TransactionSessionResponse>,
 }
 
-impl Transaction {
+impl TransactionsThread {
     fn new(
         main_connection_string: String,
         request_out: Receiver<TransactionSessionRequest>,
@@ -283,23 +292,28 @@ impl Transaction {
             main_connection_string,
             request_out,
             response_in,
+            db_alias_info: HashMap::with_capacity(32),
             db_aliases: HashMap::with_capacity(32),
+            dirty: false,
             db_pool: HashMap::with_capacity(32),
         }
     }
 
-    async fn start_session(&mut self) {
+    async fn session_loop(&mut self) {
         // register main db
-        self.db_aliases.insert(
+        self.db_alias_info.insert(
             String::from(nino_constants::MAIN_DB),
             DBAliasInfo {
                 db_type: SupportedDatabases::Postgres,
                 connection_string: self.main_connection_string.clone(),
             },
         );
+
+        // db info clean
+        self.dirty = false;
         // add main db to pool
         if let Err(error) = self
-            .create_db_transaction(nino_constants::MAIN_DB.to_string())
+            .db_create_alias(nino_constants::MAIN_DB.to_string())
             .await
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -316,7 +330,7 @@ impl Transaction {
                             TransactionSessionResponse::Ok
                         }
                         TransactionSessionRequest::CreateTransaction(db_alias) => {
-                            match self.create_db_transaction(db_alias).await {
+                            match self.db_create_alias(db_alias).await {
                                 Ok(alias) => TransactionSessionResponse::Transaction(alias),
                                 Err(error) => TransactionSessionResponse::Error(format!(
                                     "ERROR {}:{}:{}",
@@ -327,7 +341,7 @@ impl Transaction {
                             }
                         }
                         TransactionSessionRequest::CloseAll(error) => {
-                            match self.cleanup(error).await {
+                            match self.close_transactions(error).await {
                                 Ok(_) => TransactionSessionResponse::Ok,
                                 Err(error) => TransactionSessionResponse::Error(format!(
                                     "ERROR {}:{}:{}",
@@ -346,7 +360,7 @@ impl Transaction {
                                     query_data.db_alias
                                 )),
                                 Some(tx) => match tx {
-                                    TransactionInstance::Postgres(tx) => {
+                                    Transaction::Postgres(tx) => {
                                         match tx.query(query_data).await {
                                             Ok(result) => {
                                                 TransactionSessionResponse::QueryResult(result)
@@ -368,7 +382,7 @@ impl Transaction {
                                     query_data.db_alias
                                 )),
                                 Some(tx) => match tx {
-                                    TransactionInstance::Postgres(tx) => {
+                                    Transaction::Postgres(tx) => {
                                         match tx.upsert(query_data).await {
                                             Ok(result) => {
                                                 TransactionSessionResponse::UpsertResult(result)
@@ -385,13 +399,13 @@ impl Transaction {
                     // send response
                     if let Err(error) = self.response_in.send(result).await {
                         // channel has been closed
-                        eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                        info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
                         break;
                     }
                 }
                 Err(error) => {
                     // channel has been closed
-                    eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                    info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
                     break;
                 }
             }
@@ -409,7 +423,7 @@ impl Transaction {
                 );
             }
             Some(tx) => match tx {
-                TransactionInstance::Postgres(tx) => {
+                Transaction::Postgres(tx) => {
                     let query: String = format!(
                         "SELECT db_alias, db_type, db_connection_string FROM {}",
                         nino_constants::DATABASE_TABLE
@@ -425,7 +439,7 @@ impl Transaction {
                                 let db_alias: String = row.get(0).unwrap().clone();
                                 let db_type: String = row.get(1).unwrap().clone();
                                 let connection_string: String = row.get(2).unwrap().clone();
-                                self.db_aliases.insert(
+                                self.db_alias_info.insert(
                                     db_alias,
                                     DBAliasInfo {
                                         db_type: if nino_constants::DB_TYPE_POSTGRES == db_type {
@@ -438,6 +452,8 @@ impl Transaction {
                                     },
                                 );
                             }
+                            // mark db connections as dirty
+                            self.dirty = true;
                         }
                         Err(error) => {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -448,11 +464,12 @@ impl Transaction {
         }
     }
 
-    async fn cleanup(&mut self, error: bool) -> Result<(), Error> {
+    async fn close_transactions(&mut self, error: bool) -> Result<(), Error> {
         if error {
+            info!("Rollback All");
             for (_, tx) in self.db_pool.iter_mut() {
                 match tx {
-                    TransactionInstance::Postgres(tx) => {
+                    Transaction::Postgres(tx) => {
                         if let Err(error) = tx.rollback().await {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                         }
@@ -460,9 +477,10 @@ impl Transaction {
                 }
             }
         } else {
+            info!("Commit All");
             for (_, tx) in self.db_pool.iter_mut() {
                 match tx {
-                    TransactionInstance::Postgres(tx) => {
+                    Transaction::Postgres(tx) => {
                         if let Err(error) = tx.commit().await {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                         }
@@ -472,59 +490,68 @@ impl Transaction {
         }
 
         // close only those that are not in the aliases (as an artificial pool)
-        self.db_pool.retain(|k, _| self.db_aliases.contains_key(k));
-
-        self.create_db_transaction(nino_constants::MAIN_DB.to_string())
-            .await?;
+        if self.dirty {
+            // clean all transactions and aliases
+            self.db_pool.clear();
+            self.db_aliases.clear();
+            self.db_create_alias(nino_constants::MAIN_DB.to_string())
+                .await?;
+        } else {
+            // just clear extra aliases transactions
+            self.db_pool
+                .retain(|k, _| self.db_alias_info.contains_key(k));
+            // and remove used aliases
+            self.db_aliases.clear();
+        }
         Ok(())
     }
 
-    async fn create_db_transaction(&mut self, db_alias: String) -> Result<String, Error> {
-        if db_alias == nino_constants::MAIN_DB {
-            // db alias is from the main database
-            self.db_pool_add_postgres(db_alias, self.main_connection_string.clone())
-                .await
+    async fn db_create_alias(&mut self, db_alias: String) -> Result<String, Error> {
+        // db alias is another connection
+        let db_info: DBAliasInfo = {
+            match self.db_alias_info.get(&db_alias) {
+                Some(info) => info.clone(),
+                None => return Err(Error::msg(format!("db alias not found : {}", db_alias))),
+            }
+        };
+        self.db_create_pool(db_alias, &db_info).await
+    }
+
+    async fn db_create_pool(
+        &mut self,
+        db_alias: String,
+        db_info: &DBAliasInfo,
+    ) -> Result<String, Error> {
+        // create new alias if already taken
+        let name = if self.db_aliases.contains_key(&db_alias) {
+            format!("{}_{}", db_alias, self.db_aliases.len())
         } else {
-            // db alias is another connection
-            let info = {
-                match self.db_aliases.get(&db_alias) {
-                    Some(info) => info.clone(),
-                    None => return Err(Error::msg(format!("db alias not found : {}", db_alias))),
-                }
-            };
-            match info.db_type {
-                SupportedDatabases::Postgres => {
-                    self.db_pool_add_postgres(db_alias, info.connection_string)
-                        .await
-                }
-                SupportedDatabases::Unsupported(db_type) => {
-                    Err(Error::msg(format!("unsupported database type {}", db_type)))
-                }
+            db_alias.clone()
+        };
+        // if no db transaction for the alias exists - create one
+        if !self.db_pool.contains_key(&name) {
+            // create Database transaction
+            let db = Self::db_create_transaction(db_info).await?;
+            self.db_pool.insert(name.clone(), db);
+        };
+        self.db_aliases.insert(name.clone(), db_alias);
+        Ok(name)
+    }
+
+    async fn db_create_transaction(db_info: &DBAliasInfo) -> Result<Transaction, Error> {
+        match &db_info.db_type {
+            SupportedDatabases::Unsupported(db_type) => {
+                Err(Error::msg(format!("unsupported database type {}", db_type)))
+            }
+            SupportedDatabases::Postgres => {
+                let pg = TransactionPostgres::new(db_info.connection_string.clone()).await;
+                Ok(Transaction::Postgres(pg))
             }
         }
     }
-
-    async fn db_pool_add_postgres(
-        &mut self,
-        db_alias: String,
-        connection_string: String,
-    ) -> Result<String, Error> {
-        let name = {
-            if self.db_pool.contains_key(&db_alias) {
-                format!("{}_{}", db_alias, self.db_pool.len())
-            } else {
-                db_alias
-            }
-        };
-        // create Database Transactional Session
-        let db = TransactionPostgres::new(connection_string).await;
-        self.db_pool
-            .insert(name.clone(), TransactionInstance::Postgres(db));
-        Ok(name)
-    }
 }
 
-enum TransactionInstance {
+enum Transaction {
     Postgres(TransactionPostgres),
 }
 
@@ -540,7 +567,7 @@ impl TransactionPostgres {
 
         tokio::spawn(async move {
             if let Err(error) =
-                Self::begin_postgres_transaction(connection_string, request_out, response_in).await
+                Self::transaction_loop(connection_string, request_out, response_in).await
             {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             }
@@ -595,7 +622,7 @@ impl TransactionPostgres {
         }
     }
 
-    async fn begin_postgres_transaction(
+    async fn transaction_loop(
         connection_string: String,
         request_out: Receiver<TransactionRequest>,
         response_in: Sender<TransactionResponse>,
@@ -685,8 +712,17 @@ impl TransactionPostgres {
                                         }
                                         let mut line: Vec<String> = Vec::new();
                                         for ix in 0..row.len() {
-                                            let col_value: String = row.get(ix);
-                                            line.push(col_value);
+                                            let value: Result<String, tokio_postgres::Error> =
+                                                row.try_get(ix);
+                                            match value {
+                                                Ok(value) => line.push(value),
+                                                Err(_) => {
+                                                    let value: &[u8] = row.get(ix);
+                                                    line.push(
+                                                        String::from_utf8(value.into()).unwrap(),
+                                                    );
+                                                }
+                                            }
                                         }
                                         result.push(line);
                                     }
@@ -721,15 +757,15 @@ impl TransactionPostgres {
                             }
                         }
                     },
-                    Err(_error) => {
-                        // eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                    Err(error) => {
+                        info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
                         // channel has been closed
                         // just return
                         return Ok(());
                     }
                 };
                 if let Err(error) = response_in.send(response).await {
-                    eprintln!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                    info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
                     // channel has been closed
                     // just return
                     return Ok(());

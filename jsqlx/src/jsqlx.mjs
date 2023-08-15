@@ -7,9 +7,9 @@ export default function jsqlx(code) {
         presets: [
             ['react', {
                 runtime: "automatic",
-                //  pragma: "_jsx",
-                //  pragmaFrag: "_Fragment"
+                // pragma: "_jsx",
+                // pragmaFrag: "_Fragment"
             }]]
     });
-    return output.code
+    return output.code.toString();
 }

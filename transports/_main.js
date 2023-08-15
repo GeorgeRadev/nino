@@ -9,7 +9,6 @@ async function main() {
             const module = core.ops.op_begin_task();
 
             if (module) {
-                core.print('-----------------------------so far so good ---------------------------\n');
                 // request for module execution
                 // core.print('module ' + module + '\n');
                 const mod = await import(module);
@@ -74,11 +73,9 @@ async function main() {
                         },
                     };
 
-                    core.print('before handler 2\n');
                     core.ops.op_set_response_header('Content-Type', 'text/html;charset=UTF-8');
                     await handler(request, response);
                     // core.print('result = ' + (result) + '\n');
-                    core.print('after handler 2\n');
 
                 } else {
                     throw new Error("module '" + module + "' default async function should take 1 or 2 parameters for rest and servlet modes");

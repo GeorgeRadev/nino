@@ -10,6 +10,11 @@ macro_rules! PKG_VERSION {
     };
 }
 
+macro_rules! info {
+    ($($arg:tt)*) => (if ::std::cfg!(debug_assertions) { ::std::println!($($arg)*); })
+}
+pub(crate) use info;
+
 /// program name
 pub const PROGRAM_NAME: &str = PKG_NAME!();
 pub const PROGRAM_VERSION: &str = PKG_VERSION!();
@@ -33,7 +38,7 @@ pub const DATABASE_TABLE: &str = concat!(PKG_NAME!(), "_database");
 pub const MODULE_URI: &str = "http://nino.db/";
 pub const MAIN_MODULE: &str = "_main";
 pub const MAIN_DB: &str = "_main";
-pub const DB_TYPE_POSTGRES : &str = "postgres";
+pub const DB_TYPE_POSTGRES: &str = "postgres";
 
 /// SETTINGS table constants
 

@@ -122,6 +122,14 @@ export function sqlToArray(code) {
                     sql_string += t.value;
                 }
             }
+        } else if (t.type == "S1" || t.type == "S2") {
+            // escape non terminal characters
+            var str = t.value
+            if ((str.charAt(0) === '"' && str.charAt(str.length - 1) === '"') ||
+                (str.charAt(0) === "'" && str.charAt(str.length - 1) === "'")) {
+                str = str.substr(1, str.length - 2);
+            }
+            result += JSON.stringify(str);
         } else {
             result += t.value;
         }

@@ -1,4 +1,4 @@
-import notify from 'notifier';
+import notify from 'notify';
 
 export default async function servlet(request, response) {
     debugger;

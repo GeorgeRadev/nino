@@ -4,10 +4,15 @@ export default async function jsqlx_servlet(request, response) {
     debugger;
     
     var code = `
-    const n = 1;
-    const sql = SELECT id, username 
-    FROM users 
-    WHERE active = :active AND department=:('test'+n) AND department = 'test';
+    var line = 0;
+    const sql = SELECT * 
+                FROM nino_database;
+    await conn.query(sql, function (row) {
+        result += "line " + (++line) + " : " + JSON.stringify(row) + "\\n";
+        // return true to fetch next
+        return true;
+    });
+
     const html = <><h><span>{sql[0]}</span></h></>;
     `;
     

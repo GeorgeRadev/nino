@@ -1,6 +1,6 @@
 use deno_core::anyhow::Error;
 
-use crate::{db::DBManager, nino_structures};
+use crate::{db::DBManager, nino_constants::info, nino_structures};
 use std::sync::Arc;
 
 // notification prefixes for resource invalidation:
@@ -64,7 +64,9 @@ impl DBNotificationManager {
     }
 
     /// get subscriper channel for recieving notifications
-    pub fn get_subscriber(&self) -> tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage> {
+    pub fn get_subscriber(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage> {
         self.broadcast_sx.subscribe()
     }
 
@@ -106,11 +108,13 @@ impl DBNotificationManager {
                 match msg_result {
                     Ok(msg) => {
                         if let Some(c) = msg {
-                            println!("message: {:?}", c);
+                            info!("message: {:?}", c);
                             // broad cast message to listeners
-                            if let Err(error) = broadcast_sx.send(nino_structures::NotificationMessage {
-                                text: c.payload().to_string(),
-                            }) {
+                            if let Err(error) =
+                                broadcast_sx.send(nino_structures::NotificationMessage {
+                                    text: c.payload().to_string(),
+                                })
+                            {
                                 eprintln!(
                                     "ERROR {}:{}:sending message {}",
                                     file!(),

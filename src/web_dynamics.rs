@@ -1,4 +1,5 @@
 use crate::db_notification::Notifier;
+use crate::nino_constants::info;
 use crate::nino_functions;
 use crate::{
     db::DBManager,
@@ -63,7 +64,7 @@ impl DynamicManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("dymnamics got message: {}", message.text);
+                    info!("dymnamics got message: {}", message.text);
                     // send invalidation messages to the js threads
                     let web_task = Box::new(nino_structures::JSTask {
                         is_request: false,

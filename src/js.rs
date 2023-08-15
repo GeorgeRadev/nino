@@ -1,6 +1,7 @@
 use crate::db::DBManager;
 use crate::db_notification::Notifier;
 use crate::db_transactions::{TransactionManager, TransactionSession};
+use crate::nino_constants::info;
 use crate::web_dynamics::DynamicManager;
 use crate::{js_functions, nino_constants};
 use deno_core::{
@@ -248,7 +249,7 @@ impl ModuleLoader for FNModuleLoader {
         _is_dyn_import: bool,
     ) -> Pin<Box<ModuleSourceFuture>> {
         let module_path = &module_specifier.path()[1..];
-        println!("load module: {}", &module_path);
+        info!("load module: {}", &module_path);
         Self::async_load(String::from(module_path)).boxed_local()
     }
 }
@@ -335,7 +336,7 @@ pub async fn run_deno_main_thread(
             worker.run_event_loop(false).await?;
         } else {
             let source_code = FastString::from(just_code.unwrap().to_owned());
-            worker.execute_script("run_code", source_code)?;
+            worker.execute_script("js_code", source_code)?;
             worker.run_event_loop(false).await?;
         }
 

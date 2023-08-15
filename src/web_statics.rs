@@ -1,4 +1,4 @@
-use crate::{db::DBManager, nino_constants, nino_functions, nino_structures};
+use crate::{db::DBManager, nino_constants::{self, info}, nino_functions, nino_structures};
 use async_std::net::TcpStream;
 use deno_core::anyhow::Error;
 use http_types::{Method, Mime, Request, Response, StatusCode};
@@ -32,7 +32,7 @@ impl StaticManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("statics got message: {}", message.text);
+                    info!("statics got message: {}", message.text);
                 }
             }
         }

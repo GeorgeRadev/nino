@@ -15,6 +15,7 @@ mod web_dynamics;
 mod web_requests;
 mod web_statics;
 
+use crate::nino_constants::info;
 use deno_core::anyhow::Error;
 use nino_structures::InitialSettings;
 use std::{fs, sync::Arc};
@@ -56,7 +57,7 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
         };
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
-    eprintln!("Database ok");
+    info!("Database ok");
 
     let settings = db_settings::SettingsManager::new(db);
     let thread_count = settings.get_thread_count().await;
