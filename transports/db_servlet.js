@@ -67,11 +67,11 @@ export default async function db_servlet(request) {
     {
         result += "<pre>";
         result += "// query result \n"
-        const conn = await db("_main");
+        const conn = await db("test");
         const sql =
             SELECT *
             FROM nino_database 
-            WHERE db_alias = "_main";
+            WHERE db_alias = "test";
         try {
             var queryResult = await conn.query(sql);
             result += "result: " + JSON.stringify(queryResult) + "\n";

@@ -308,9 +308,6 @@ impl TransactionsThread {
                 connection_string: self.main_connection_string.clone(),
             },
         );
-
-        // db info clean
-        self.dirty = false;
         // add main db to pool
         if let Err(error) = self
             .db_create_alias(nino_constants::MAIN_DB.to_string())
@@ -318,6 +315,9 @@ impl TransactionsThread {
         {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
+        // load database aliases
+        self.reload_db_aliases().await;
+        self.db_aliases.clear();
 
         // wait for message and serve
         loop {
@@ -435,8 +435,17 @@ impl TransactionsThread {
                     };
                     match tx.query(query_data).await {
                         Ok(result) => {
+                            // mark db connections as dirty
+                            self.dirty = true;
+                            // remove old entries
+                            self.db_alias_info
+                                .retain(|k, _| k == nino_constants::MAIN_DB);
+                            // reload all except main
                             for row in result.rows {
                                 let db_alias: String = row.get(0).unwrap().clone();
+                                if db_alias == nino_constants::MAIN_DB {
+                                    continue;
+                                }
                                 let db_type: String = row.get(1).unwrap().clone();
                                 let connection_string: String = row.get(2).unwrap().clone();
                                 self.db_alias_info.insert(
@@ -452,8 +461,6 @@ impl TransactionsThread {
                                     },
                                 );
                             }
-                            // mark db connections as dirty
-                            self.dirty = true;
                         }
                         Err(error) => {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -493,7 +500,6 @@ impl TransactionsThread {
         if self.dirty {
             // clean all transactions and aliases
             self.db_pool.clear();
-            self.db_aliases.clear();
             self.db_create_alias(nino_constants::MAIN_DB.to_string())
                 .await?;
         } else {
@@ -501,8 +507,8 @@ impl TransactionsThread {
             self.db_pool
                 .retain(|k, _| self.db_alias_info.contains_key(k));
             // and remove used aliases
-            self.db_aliases.clear();
         }
+        self.db_aliases.clear();
         Ok(())
     }
 
