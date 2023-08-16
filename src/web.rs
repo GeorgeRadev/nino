@@ -135,14 +135,10 @@ impl WebManager {
         println!("REQUEST: {} {} {}", method, from_address, url);
 
         match requests.get_request(&path).await? {
-            None => {
-                Self::response_404(stream, url).await;
-                Ok(())
-            }
+            None => Ok(Self::response_404(stream, url).await),
             Some(request_info) => {
                 if request_info.redirect {
-                    // implement redirect response
-                    todo!();
+                    Ok(Self::response_307_redirect(stream, &request_info.name).await)
                 } else if request_info.dynamic {
                     // serve from dynamic resources
                     if request_info.execute {
@@ -173,8 +169,15 @@ impl WebManager {
         }
     }
 
+    async fn response_307_redirect(stream: Box<TcpStream>, url: &String) {
+        // TODO: introduce 404 handler
+        let mut response = Response::new(StatusCode::TemporaryRedirect);
+        response.append_header("Location", url);
+        if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
+            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        }
+    }
     async fn response_404(stream: Box<TcpStream>, url: &Url) {
-        // return 404 not found
         // TODO: introduce 404 handler
         let mut response = Response::new(StatusCode::NotFound);
         let content = format!("url not found: {} ", url);

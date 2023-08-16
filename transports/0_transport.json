@@ -167,6 +167,14 @@
             "authorize": false,
             "dynamic": true,
             "execute": true
+        },
+        {
+            "path": "google",
+            "name": "http://www.google.com",
+            "redirect": true,
+            "authorize": false,
+            "dynamic": false,
+            "execute": false
         }
     ],
     "statics": [
