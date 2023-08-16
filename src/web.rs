@@ -1,3 +1,4 @@
+use crate::nino_constants::info;
 use crate::nino_functions;
 use crate::web_dynamics::DynamicManager;
 use crate::web_requests::RequestManager;
@@ -105,8 +106,9 @@ impl WebManager {
                     )
                     .await
                     {
-                        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                        Self::response_500(stream, error).await;
+                        // requestor has closed the stream
+                        info!("ERROR {}:{}:{}", file!(), line!(), error);
+                        //Self::response_500(stream, error).await;
                     }
                     return;
                 }
@@ -186,7 +188,7 @@ impl WebManager {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
     }
-
+    /*
     async fn response_500(stream: Box<TcpStream>, error: Error) {
         let mut response = Response::new(StatusCode::InternalServerError);
         let content = format!("ERROR: {}", error);
@@ -195,4 +197,5 @@ impl WebManager {
             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
         }
     }
+    */
 }

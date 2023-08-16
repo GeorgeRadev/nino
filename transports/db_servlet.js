@@ -7,7 +7,7 @@ export default async function db_servlet(request) {
     {
         result += "<pre>";
         result += "// all with callback  \n"
-        const conn = await db("_main");
+        const conn = await db();
 
         var line = 0;
         const sql =
@@ -25,12 +25,12 @@ export default async function db_servlet(request) {
     {
         result += "<pre>";
         result += "// one with callback and parameters\n"
-        const conn = await db("_main");
+        const conn = await db();
 
         const sql =
             SELECT db_alias, db_type, db_connection_string
             FROM nino_database 
-            WHERE db_alias = "_main";
+            WHERE db_alias = "nino_main";
         await conn.query(sql, function (db_alias, db_type, db_connection_string) {
             result += "line " + (++line) + " : " + db_alias + ", " + db_type + ", " + db_connection_string + "\n";
             // return true to fetch next
@@ -45,7 +45,7 @@ export default async function db_servlet(request) {
         const update =
             UPDATE nino_database 
             SET db_connection_string = :currentDate 
-            WHERE db_alias = "_main";
+            WHERE db_alias = "nino_main";
         var affected = await conn.query(update);
         result += "affected " + affected + " lines \n";
 

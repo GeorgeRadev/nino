@@ -1,5 +1,12 @@
-export default async function getDB(name) {
+export default async function getDB() {
     const core = Deno[Deno.internal].core;
+
+    var name;
+    if (arguments.length > 0) {
+        name = arguments[0].toString();
+    } else {
+        name = "nino_main";
+    }
     const db_alias = core.ops.op_tx_get_connection_name(name);
     core.print('db alias :' + db_alias + '\n');
 

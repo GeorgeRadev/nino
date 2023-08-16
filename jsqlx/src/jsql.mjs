@@ -3,9 +3,9 @@ import moo from "moo";
 let lexer = moo.compile({
     ID: /[a-zA-Z_][a-zA-Z0-9_]*/,
     N: /0|[1-9][0-9]*/,
-    S1: /"(?:\\["\\]|[^\n"\\])*"/,
-    S2: /'(?:\\['\\]|[^\n'\\])*'/,
-    S3: { match: /`(?:\\[`\\]|[^\n`\\])*`/, lineBreaks: true }, // multiline string
+    S1: /\"(?:[^"\\\n]|\\.)*\"/,
+    S2: /\'(?:[^'\\\n]|\\.)*\'/,
+    S3: { match: /`(?:[^`\\\n]|\\.|\n)*`/, lineBreaks: true }, // multiline string
     LP: '(',
     RP: ')',
     C: ':',
@@ -122,14 +122,14 @@ export function sqlToArray(code) {
                     sql_string += t.value;
                 }
             }
-        } else if (t.type == "S1" || t.type == "S2") {
-            // escape non terminal characters
-            var str = t.value
-            if ((str.charAt(0) === '"' && str.charAt(str.length - 1) === '"') ||
-                (str.charAt(0) === "'" && str.charAt(str.length - 1) === "'")) {
-                str = str.substr(1, str.length - 2);
-            }
-            result += JSON.stringify(str);
+        // } else if (t.type == "S1" || t.type == "S2") {
+        //     // escape non terminal characters
+        //     var str = t.value
+        //     if ((str.charAt(0) === '"' && str.charAt(str.length - 1) === '"') ||
+        //         (str.charAt(0) === "'" && str.charAt(str.length - 1) === "'")) {
+        //         str = str.substr(1, str.length - 2);
+        //     }
+        //     result += JSON.stringify(str);
         } else {
             result += t.value;
         }

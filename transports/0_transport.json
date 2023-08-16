@@ -42,7 +42,7 @@
         },
         {
             "break_on_error": true,
-            "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('_main', 'postgres', 'just a name for referencing the application connection')"
+            "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('nino_main', 'postgres', 'reserved name for the defailt db alias of the main application')"
         },
         {
             "break_on_error": true,
@@ -211,8 +211,8 @@
     ],
     "dynamics": [
         {
-            "name": "_main",
-            "file": "_main.js",
+            "name": "nino_main",
+            "file": "nino_main.js",
             "transpile": false
         },{
             "name": "notify",

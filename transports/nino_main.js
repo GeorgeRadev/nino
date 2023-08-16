@@ -1,3 +1,6 @@
+/*
+ * This is the main entry point for the nino js threads
+ */
 async function main() {
     const core = Deno[Deno.internal].core;
     const module_invalidation_prefix = core.ops.op_get_module_invalidation_prefix();

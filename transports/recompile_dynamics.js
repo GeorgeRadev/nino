@@ -3,7 +3,7 @@ async function main() {
     const db = (await import('db')).default;
     const jsqlx = (await import('jsqlx_core')).default;
 
-    const conn = await db("_main");
+    const conn = await db();
 
     //load all dynamic modules
     var names = [];
