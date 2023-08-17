@@ -1,8 +1,12 @@
-use async_std::net::TcpStream;
-use deno_core::anyhow::Error;
-use http_types::Response;
-
 use crate::nino_constants;
+use async_std::net::TcpStream;
+use bcrypt::{hash, verify, DEFAULT_COST};
+use deno_core::anyhow::Error;
+use hmac::{digest::KeyInit, Hmac};
+use http_types::Response;
+use jwt::{SignWithKey, VerifyWithKey};
+use sha2::Sha256;
+use std::collections::HashMap;
 
 /// Get the postgres connection string from the
 /// program parameters or system environment variable (in dat order of existance).
@@ -114,9 +118,61 @@ pub async fn send_response_to_stream(
     Ok(())
 }
 
+pub fn password_hash(password: &str) -> Result<String, Error> {
+    let hash = match hash(&password, DEFAULT_COST) {
+        Ok(hash) => hash,
+        Err(error) => {
+            eprintln!("{}", error);
+            return Err(Error::msg(error));
+        }
+    };
+    Ok(hash)
+}
+
+pub fn password_verify(password: &str, hash: &str) -> Result<bool, Error> {
+    match verify(password, &hash) {
+        Ok(matched) => Ok(matched),
+        Err(error) => Err(Error::msg(error)),
+    }
+}
+
+pub fn jwt_from_map(secret: &String, map: HashMap<String, String>) -> Result<String, Error> {
+    let key: Hmac<Sha256> = Hmac::new_from_slice(secret.as_bytes())?;
+    let jwt = map.sign_with_key(&key)?;
+    Ok(jwt)
+}
+
+pub fn jwt_to_map(secret: &String, jwt: &String) -> Result<HashMap<String, String>, Error> {
+    let key: Hmac<Sha256> = Hmac::new_from_slice(secret.as_bytes())?;
+    let map_decoded: HashMap<String, String> = jwt.verify_with_key(&key)?;
+    Ok(map_decoded)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::nino_functions::normalize_path;
+    use std::collections::HashMap;
+
+    use crate::nino_functions::{normalize_path, password_hash, password_verify, jwt_from_map, jwt_to_map};
+
+
+    #[test]
+    fn test_jwt_hashing() {
+        let secret = String::from("nino");
+        let mut map:HashMap<String, String> = HashMap::new();
+        map.insert("key".to_owned(), "value".to_owned());
+        let jwt = jwt_from_map(&secret, map).unwrap();
+        assert!(!jwt.is_empty());
+        let map_decoded = jwt_to_map(&secret, &jwt).unwrap();
+        assert!("value" == map_decoded.get("key").unwrap());
+    }
+
+    #[test]
+    fn test_password_hashing() {
+        let password = String::from("p@ssw0rd");
+        let hash = password_hash(&password).unwrap();
+        assert!(password_verify(&password, &hash).unwrap());
+        assert!(!password_verify("test", &hash).unwrap());
+    }
 
     #[test]
     fn test_normalize_path() {

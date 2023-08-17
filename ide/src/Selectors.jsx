@@ -1,6 +1,7 @@
 import React from 'react';
 import SelectorDB from './SelectorDB';
 import SelectorRequests from './SelectorRequests';
+import SelectorSettings from './SelectorSettings';
 
 function SelectorToggable({ name, IDEContext, children }) {
   const selectedAction = IDEContext.selectedAction;
@@ -25,6 +26,10 @@ export default function Selectors({ IDEContext }) {
 
         <SelectorToggable name="databases" IDEContext={IDEContext}>
           <SelectorDB IDEContext={IDEContext} />
+        </SelectorToggable>
+
+        <SelectorToggable name="settings" IDEContext={IDEContext}>
+          <SelectorSettings IDEContext={IDEContext} />
         </SelectorToggable>
       </div>
     </div>
