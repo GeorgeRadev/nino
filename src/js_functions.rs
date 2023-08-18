@@ -8,7 +8,9 @@ use async_channel::Receiver;
 use async_std::net::TcpStream;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
+use http_types::Url;
 use http_types::{headers::CONTENT_TYPE, Request, Response, StatusCode};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
 
@@ -181,6 +183,7 @@ pub struct HttpRequest {
     host: String,
     path: String,
     query: String,
+    parameters: HashMap<String, Vec<String>>,
 }
 
 #[op]
@@ -192,6 +195,22 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
     let request = context.request.as_mut().unwrap();
     let url = request.url();
     let url_str = url.to_string();
+    let query = String::from(url.query().unwrap_or(""));
+    let mut parameters: HashMap<String, Vec<String>> = HashMap::new();
+    for (key, value) in url.query_pairs() {
+        let key = key.to_string();
+        let value = value.to_string();
+        match parameters.get_mut(&key) {
+            None => {
+                let mut vec: Vec<String> = Vec::with_capacity(2);
+                vec.push(value);
+                parameters.insert(key, vec);
+            }
+            Some(vec) => {
+                vec.push(value);
+            }
+        }
+    }
 
     let request = HttpRequest {
         url: url.clone(),
@@ -199,7 +218,8 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
         original_url: url_str,
         host: String::from(url.host_str().unwrap_or("")),
         path: String::from(url.path()),
-        query: String::from(url.query().unwrap_or("")),
+        query,
+        parameters,
     };
     //deno_core::serde_json::to_string(&request).unwrap()
     Ok(request)
