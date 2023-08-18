@@ -52,7 +52,6 @@ impl RequestManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    // todo! innvalidate cache
                     println!("web got message: {}", message.text);
                     if message
                         .text

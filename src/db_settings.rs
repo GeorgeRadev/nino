@@ -1,21 +1,86 @@
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock, RwLock};
+
 use deno_core::anyhow::Error;
 
 use crate::db::DBManager;
-use crate::nino_constants;
+use crate::{db_notification, nino_constants, nino_structures};
 
 /// A Postgres DB connector and listener
 /// plus a connection pool for executing transaction
+#[derive(Clone)]
 pub struct SettingsManager {
-    db: DBManager,
+    db: Arc<DBManager>,
 }
+
+static SETTING_CACHE: OnceLock<RwLock<HashMap<String, String>>> = OnceLock::new();
 
 impl SettingsManager {
     /// Create DB Manager and connection pool
-    pub fn new(db: DBManager) -> SettingsManager {
+    pub fn new(
+        db: Arc<DBManager>,
+        db_subscribe: Option<
+            tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage>,
+        >,
+    ) -> SettingsManager {
+        SETTING_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
+        if db_subscribe.is_some() {
+            tokio::spawn(async move {
+                Self::invalidator(db_subscribe.unwrap()).await;
+            });
+        }
         Self { db }
     }
 
+    pub async fn invalidator(
+        mut db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage>,
+    ) {
+        loop {
+            match db_subscribe.recv().await {
+                Err(error) => {
+                    eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                }
+                Ok(message) => {
+                    println!("settings got message: {}", message.text);
+                    if message
+                        .text
+                        .starts_with(db_notification::NOTIFICATION_PREFIX_SETTINGS)
+                    {
+                        SETTING_CACHE.get().unwrap().write().unwrap().clear();
+                    }
+                }
+            }
+        }
+    }
+
+    fn cache_get(settings_key: &str) -> Option<String> {
+        // check if setting is in the cache
+        match SETTING_CACHE
+            .get()
+            .unwrap()
+            .read()
+            .unwrap()
+            .get(settings_key)
+        {
+            Some(value) => Some(value.clone()),
+            None => None,
+        }
+    }
+
+    fn cache_set(settings_key: &str, value: &String) {
+        // cache value
+        SETTING_CACHE
+            .get()
+            .unwrap()
+            .write()
+            .unwrap()
+            .insert(settings_key.into(), value.into());
+    }
+
     async fn get_setting(&self, settings_key: &str) -> Result<Option<String>, Error> {
+        if let Some(value) = Self::cache_get(settings_key) {
+            return Ok(Some(value));
+        }
         let query = format!(
             "SELECT setting_value FROM {} WHERE setting_key = $1",
             nino_constants::SETTINGS_TABLE
@@ -24,6 +89,7 @@ impl SettingsManager {
         match self.db.query_opt(&query, &[&settings_key]).await? {
             Some(row) => {
                 let value: String = row.get(0);
+                Self::cache_set(settings_key, &value);
                 Ok(Some(value))
             }
             None => Ok(None),

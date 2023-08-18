@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub const NOTIFICATION_PREFIX_REQUESTS: &str = "request:";
 pub const NOTIFICATION_PREFIX_DYNAMICS: &str = "dynamic:";
 // pub const NOTIFICATION_PREFIX_STATICS: &str = "static:";
-// pub const NOTIFICATION_PREFIX_SETTINGS: &str = "setting:";
+pub const NOTIFICATION_PREFIX_SETTINGS: &str = "setting:";
 pub const NOTIFICATION_PREFIX_DBNAME: &str = "database:";
 
 macro_rules! PKG_NAME {

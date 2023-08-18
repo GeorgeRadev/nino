@@ -1,9 +1,9 @@
 use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_constants::info;
+use crate::nino_functions;
 use crate::nino_structures;
 use crate::web_dynamics::DynamicManager;
-use crate::{db::DBManager, nino_functions};
 use async_channel::Receiver;
 use async_std::net::TcpStream;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -38,7 +38,6 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
 
 pub struct JSContext {
     pub id: i16,
-    pub db: Arc<DBManager>,
     pub dynamics: Arc<DynamicManager>,
     pub notifier: Arc<Notifier>,
     pub web_task_rx: Receiver<Box<nino_structures::JSTask>>,

@@ -1,6 +1,6 @@
 mod db;
-mod db_notification;
 mod db_settings;
+mod db_notification;
 mod db_transactions;
 mod js;
 mod js_functions;
@@ -15,7 +15,7 @@ mod web_dynamics;
 mod web_requests;
 mod web_statics;
 
-use crate::nino_constants::info;
+use crate::{db_settings::SettingsManager, nino_constants::info};
 use deno_core::anyhow::Error;
 use nino_structures::InitialSettings;
 use std::{fs, sync::Arc};
@@ -50,7 +50,7 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
     loop {
         match db::DBManager::instance(connection_string.clone(), 2).await {
             Ok(inst) => {
-                db = inst;
+                db = Arc::new(inst);
                 break;
             }
             Err(error) => eprintln!("Waiting for database...({})", error),
@@ -59,7 +59,7 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
     }
     info!("Database ok");
 
-    let settings = db_settings::SettingsManager::new(db);
+    let settings = SettingsManager::new(db, None);
     let thread_count = settings.get_thread_count().await;
     let js_thread_count = settings.get_js_thread_count().await;
     let server_port = settings.get_server_port().await;
@@ -100,6 +100,11 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
             .await?;
     }
 
+    let settings_manager = Arc::new(SettingsManager::new(
+        db.clone(),
+        Some(db_notifier.get_subscriber()),
+    ));
+
     let requests = Arc::new(web_requests::RequestManager::new(
         db.clone(),
         db_notifier.get_subscriber(),
@@ -123,10 +128,10 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     js::JavaScriptManager::create(
         settings.js_thread_count,
         settings.debug_port,
-        db.clone(),
+        db.get_connection_string(),
         dynamics.clone(),
+        settings_manager.clone(),
     );
-
     {
         // compile dynamics
         let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;

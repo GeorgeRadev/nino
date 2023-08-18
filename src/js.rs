@@ -1,5 +1,5 @@
-use crate::db::DBManager;
 use crate::db_notification::Notifier;
+use crate::db_settings::SettingsManager;
 use crate::db_transactions::{TransactionManager, TransactionSession};
 use crate::nino_constants::info;
 use crate::web_dynamics::DynamicManager;
@@ -25,10 +25,10 @@ use std::{pin::Pin, rc::Rc};
 pub struct JavaScriptManager {
     thread_count: usize,
     inspector_port: u16,
-    db: Arc<DBManager>,
+    connection_string: String,
     dynamics: Arc<DynamicManager>,
+    settings: Arc<SettingsManager>,
     notifier: Arc<Notifier>,
-    //join_handlers: Vec<JoinHandle<()>>,
 }
 
 static JS_INSTANCE: OnceLock<JavaScriptManager> = OnceLock::new();
@@ -40,8 +40,9 @@ impl JavaScriptManager {
     pub fn create(
         thread_count: usize,
         inspector_port: u16,
-        db: Arc<DBManager>,
+        connection_string: String,
         dynamics: Arc<DynamicManager>,
+        settings: Arc<SettingsManager>,
     ) {
         JS_INSTANCE.get_or_init(|| {
             init_platform(
@@ -50,16 +51,15 @@ impl JavaScriptManager {
                 js_functions::get_javascript_ops(),
             );
 
-            let db = db;
             let dynamics = dynamics;
 
             let mut this = JavaScriptManager {
                 thread_count,
                 inspector_port,
-                db,
+                connection_string,
                 notifier: dynamics.get_notifier(),
                 dynamics,
-                //join_handlers: Vec::with_capacity(thread_count).into(),
+                settings,
             };
             // start all threads
             this.start();
@@ -121,7 +121,6 @@ impl JavaScriptManager {
 
         state.put(js_functions::JSContext {
             id,
-            db: js.db.clone(),
             web_task_rx: js.dynamics.get_web_task_rx(),
             //request defaults
             is_request: false,
@@ -136,8 +135,9 @@ impl JavaScriptManager {
             is_invalidate: false,
             message: String::new(),
         });
-        let session = TransactionManager::get_transaction_session(js.db.get_connection_string());
+        let session = TransactionManager::get_transaction_session(js.connection_string.clone());
         state.put::<TransactionSession>(session);
+        state.put::<SettingsManager>(js.settings.as_ref().clone())
     }
 
     pub async fn run(code: &str) -> Result<(), Error> {
