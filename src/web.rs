@@ -137,10 +137,14 @@ impl WebManager {
         println!("REQUEST: {} {} {}", method, from_address, url);
 
         match requests.get_request(&path).await? {
-            None => Ok(Self::response_404(stream, url).await),
+            None => {
+                Self::response_404(stream, url).await;
+                Ok(())
+            }
             Some(request_info) => {
                 if request_info.redirect {
-                    Ok(Self::response_307_redirect(stream, &request_info.name).await)
+                    Self::response_307_redirect(stream, &request_info.name).await;
+                    Ok(())
                 } else if request_info.dynamic {
                     // serve from dynamic resources
                     if request_info.execute {

@@ -55,16 +55,13 @@ impl SettingsManager {
 
     fn cache_get(settings_key: &str) -> Option<String> {
         // check if setting is in the cache
-        match SETTING_CACHE
+        SETTING_CACHE
             .get()
             .unwrap()
             .read()
             .unwrap()
             .get(settings_key)
-        {
-            Some(value) => Some(value.clone()),
-            None => None,
-        }
+            .cloned()
     }
 
     fn cache_set(settings_key: &str, value: &String) {

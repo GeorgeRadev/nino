@@ -119,7 +119,7 @@ pub async fn send_response_to_stream(
 }
 
 pub fn password_hash(password: &str) -> Result<String, Error> {
-    let hash = match hash(&password, DEFAULT_COST) {
+    let hash = match hash(password, DEFAULT_COST) {
         Ok(hash) => hash,
         Err(error) => {
             eprintln!("{}", error);
@@ -130,7 +130,7 @@ pub fn password_hash(password: &str) -> Result<String, Error> {
 }
 
 pub fn password_verify(password: &str, hash: &str) -> Result<bool, Error> {
-    match verify(password, &hash) {
+    match verify(password, hash) {
         Ok(matched) => Ok(matched),
         Err(error) => Err(Error::msg(error)),
     }
@@ -150,15 +150,15 @@ pub fn jwt_to_map(secret: &String, jwt: &String) -> Result<HashMap<String, Strin
 
 #[cfg(test)]
 mod tests {
+    use crate::nino_functions::{
+        jwt_from_map, jwt_to_map, normalize_path, password_hash, password_verify,
+    };
     use std::collections::HashMap;
-
-    use crate::nino_functions::{normalize_path, password_hash, password_verify, jwt_from_map, jwt_to_map};
-
 
     #[test]
     fn test_jwt_hashing() {
         let secret = String::from("nino");
-        let mut map:HashMap<String, String> = HashMap::new();
+        let mut map: HashMap<String, String> = HashMap::new();
         map.insert("key".to_owned(), "value".to_owned());
         let jwt = jwt_from_map(&secret, map).unwrap();
         assert!(!jwt.is_empty());
