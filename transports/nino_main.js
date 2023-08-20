@@ -8,9 +8,9 @@ async function main() {
     for (; ;) {
         try {
             // core.print('_main try\n');
-            debugger;
             const module = core.ops.op_begin_task();
 
+            debugger;
             if (module) {
                 // request for module execution
                 // core.print('module ' + module + '\n');
@@ -104,7 +104,9 @@ async function main() {
                     throw new Error("Should never get this");
                 }
             }
-            core.ops.op_tx_end(false);
+            const error = false;
+            core.ops.op_tx_end(error);
+            await core.opAsync('aop_broadcast_message', error);
             await core.opAsync('aop_end_task');
 
         } catch (e) {
@@ -119,7 +121,9 @@ async function main() {
                 core.print(errorMessage + '\n');
             }
             try {
-                core.ops.op_tx_end(true);
+                const error = true;
+                core.ops.op_tx_end(error);
+                await core.opAsync('aop_broadcast_message', error);
                 await core.opAsync('aop_end_task');
             } catch (ex) {
                 let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;

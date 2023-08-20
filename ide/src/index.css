@@ -208,19 +208,23 @@ code {
   table-layout: fixed;
   border: 1px solid #888;
 }
+
 .nino_list_fixed_header tbody {
   display: block;
   width: 100%;
   overflow: auto;
   height: 100%;
 }
+
 .nino_list_fixed_header thead tr {
   display: block;
 }
+
 .nino_list_fixed_header thead {
   background: #082773;
   color: #fff;
 }
+
 .nino_list_fixed_header th,
 .nino_list_fixed_header td {
   padding: 5px;
@@ -232,4 +236,39 @@ code {
   width: 282px;
   border: 1px solid #888;
 
+}
+
+.nino-ide-dialog {
+  position: fixed;
+  left: 0px;
+  top: 0px;
+  bottom: 0px;
+  right: 0px;
+  z-index: 1;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+}
+
+.nino-ide-dialog-background {
+  position: fixed;
+  left: 0px;
+  top: 0px;
+  bottom: 0px;
+  right: 0px;
+  z-index: 2;
+  white-space: normal;
+  opacity: 50%;
+  background-color: #888;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+}
+
+.nino-ide-dialog-content {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  background-color: #FBFBFB;
 }

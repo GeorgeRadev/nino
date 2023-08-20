@@ -589,8 +589,8 @@ impl TransactionPostgres {
         match self.response_out.recv().await? {
             TransactionResponse::Ok => Ok(()),
             TransactionResponse::Error(msg) => Err(Error::msg(msg)),
-            TransactionResponse::QueryResult(_) => todo!(),
-            TransactionResponse::UpsertResult(_) => todo!(),
+            TransactionResponse::QueryResult(_) => panic!(),
+            TransactionResponse::UpsertResult(_) => panic!(),
         }
     }
 
@@ -599,8 +599,8 @@ impl TransactionPostgres {
         match self.response_out.recv().await? {
             TransactionResponse::Ok => Ok(()),
             TransactionResponse::Error(msg) => Err(Error::msg(msg)),
-            TransactionResponse::QueryResult(_) => todo!(),
-            TransactionResponse::UpsertResult(_) => todo!(),
+            TransactionResponse::QueryResult(_) => panic!(),
+            TransactionResponse::UpsertResult(_) => panic!(),
         }
     }
 
@@ -609,10 +609,10 @@ impl TransactionPostgres {
             .send(TransactionRequest::Query(query_data))
             .await?;
         match self.response_out.recv().await? {
-            TransactionResponse::Ok => todo!(),
-            TransactionResponse::Error(msg) => Err(Error::msg(msg)),
             TransactionResponse::QueryResult(result) => Ok(result),
-            TransactionResponse::UpsertResult(_) => todo!(),
+            TransactionResponse::Error(msg) => Err(Error::msg(msg)),
+            TransactionResponse::UpsertResult(_) => panic!(),
+            TransactionResponse::Ok => panic!(),
         }
     }
 

@@ -8,5 +8,5 @@ export default async function notify(message) {
     } else {
         message = JSON.stringify(message);
     }
-    return await core.opAsync('aop_broadcast_message', message);
+    return core.ops.op_broadcast_message(message);
 }

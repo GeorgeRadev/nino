@@ -1,4 +1,5 @@
 import React from 'react';
+import Dialog from './Dialog';
 
 export default function SelectorDB({ IDEContext }) {
     function addSetting() {
@@ -13,10 +14,10 @@ export default function SelectorDB({ IDEContext }) {
             <br />
             filter:
             <br />
-            <input type="text" id="selector_settings_filter" name="filter settings" maxlength="1024" />
+            <input type="text" id="selector_settings_filter" name="filter settings" maxLength="1024" />
             <br />
             <br />
-            <table class="nino_list_fixed_header">
+            <table className="nino_list_fixed_header">
                 <thead>
                     <tr>
                         <th>Setting</th>
@@ -66,6 +67,9 @@ export default function SelectorDB({ IDEContext }) {
 
             <button onClick={() => newSetting()}>New</button>
 
+            <Dialog>
+                <span>from parent</span>
+            </Dialog>
         </div>
     );
 }

@@ -8,7 +8,6 @@ use async_channel::Receiver;
 use async_std::net::TcpStream;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
-use http_types::Url;
 use http_types::{headers::CONTENT_TYPE, Request, Response, StatusCode};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,6 +26,7 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         aop_set_response_send_buf::DECL,
         op_get_invalidation_message::DECL,
         op_get_thread_id::DECL,
+        op_broadcast_message::DECL,
         aop_broadcast_message::DECL,
         op_get_module_invalidation_prefix::DECL,
         op_get_database_invalidation_prefix::DECL,
@@ -53,6 +53,7 @@ pub struct JSContext {
     // invalidate
     pub is_invalidate: bool,
     pub message: String,
+    pub broadcast_messages: Vec<String>,
 }
 
 impl JSContext {
@@ -358,18 +359,31 @@ fn op_get_thread_id(state: &mut OpState) -> i16 {
 }
 
 #[op]
-async fn aop_broadcast_message(
-    op_state: Rc<RefCell<OpState>>,
-    message: String,
-) -> Result<bool, Error> {
-    let notifier = {
+fn op_broadcast_message(state: &mut OpState, message: String) {
+    let context = state.borrow_mut::<JSContext>();
+    context.broadcast_messages.push(message);
+}
+
+#[op]
+async fn aop_broadcast_message(op_state: Rc<RefCell<OpState>>, error: bool) {
+    let notifier;
+    let mut messages: Vec<String> = Vec::with_capacity(8);
+    {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        context.notifier.clone()
+        notifier = context.notifier.clone();
+        if !error {
+            messages.append(&mut context.broadcast_messages);
+        } else {
+            context.broadcast_messages.clear();
+        }
     };
-    match notifier.notify(message).await {
-        Ok(_) => Ok(true),
-        Err(error) => Err(Error::msg(error)),
+    if !error {
+        for message in messages {
+            if let Err(error) = notifier.notify(message).await {
+                eprintln!("ERROR {}:{}:{}", function!(), line!(), error);
+            }
+        }
     }
 }
 

@@ -134,6 +134,7 @@ impl JavaScriptManager {
             //invalidate defaults
             is_invalidate: false,
             message: String::new(),
+            broadcast_messages:Vec::with_capacity(8),
         });
         let session = TransactionManager::get_transaction_session(js.connection_string.clone());
         state.put::<TransactionSession>(session);
