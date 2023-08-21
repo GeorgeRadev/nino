@@ -145,31 +145,25 @@ impl WebManager {
                 if request_info.redirect {
                     Self::response_307_redirect(stream, &request_info.name).await;
                     Ok(())
-                } else if request_info.dynamic {
+                } else if !request_info.dynamic {
+                    //serve static resources
+                    statics
+                        .serve_static(request_info, request.clone(), stream.clone())
+                        .await
+                    //ok - stream should be served and closed
+                } else {
                     // serve from dynamic resources
                     if request_info.execute {
                         // execute the JS
                         dynamics
-                            .execute_dynamic(
-                                request_info.name.as_str(),
-                                request.clone(),
-                                stream.clone(),
-                            )
+                            .execute_dynamic(request_info, request.clone(), stream.clone())
                             .await
                         //ok - stream should be served and closed
                     } else {
                         // return js code as response
-                        dynamics
-                            .serve_dynamic(request_info.name.as_str(), stream.clone())
-                            .await
+                        dynamics.serve_dynamic(request_info, stream.clone()).await
                         //ok - stream should be served and closed
                     }
-                } else {
-                    //serve static resources
-                    statics
-                        .serve_static(request_info.name.as_str(), request.clone(), stream.clone())
-                        .await
-                    //ok - stream should be served and closed
                 }
             }
         }

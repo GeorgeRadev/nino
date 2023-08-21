@@ -112,7 +112,9 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
                 }
                 context.module = module.clone();
                 context.request = web_task.request;
-                context.response = Some(Response::new(200));
+                let mut response = Response::new(200);
+                response.set_content_type(web_task.request_info.unwrap().mime);
+                context.response = Some(response);
                 context.stream = web_task.stream;
                 context.closed = false;
             } else if web_task.is_invalidate {

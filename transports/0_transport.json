@@ -14,7 +14,7 @@
         },
         {
             "break_on_error": true,
-            "query": "CREATE TABLE IF NOT EXISTS nino_request (path VARCHAR(1024) PRIMARY KEY, name VARCHAR(1024) NOT NULL, redirect boolean, authorize boolean, dynamic boolean, execute boolean)"
+            "query": "CREATE TABLE IF NOT EXISTS nino_request (path VARCHAR(1024) PRIMARY KEY, name VARCHAR(1024) NOT NULL, mime VARCHAR(64) NOT NULL, redirect boolean, authorize boolean, dynamic boolean, execute boolean)"
         },
         {
             "break_on_error": true,
@@ -22,7 +22,7 @@
         },
         {
             "break_on_error": true,
-            "query": "CREATE TABLE IF NOT EXISTS nino_static (name VARCHAR(1024) PRIMARY KEY, mime VARCHAR(64) NOT NULL, length INT, content BYTEA)"
+            "query": "CREATE TABLE IF NOT EXISTS nino_static (name VARCHAR(1024) PRIMARY KEY, length INT, content BYTEA)"
         },
         {
             "break_on_error": true,
@@ -75,6 +75,7 @@
         {
             "path": "/",
             "name": "index.html",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": false,
             "authorize": false,
             "dynamic": false,
@@ -83,6 +84,7 @@
         {
             "path": "favicon.ico",
             "name": "favicon.ico",
+            "mime": "image/x-icon",
             "redirect": false,
             "authorize": false,
             "dynamic": false,
@@ -91,6 +93,7 @@
         {
             "path": "static.json",
             "name": "static.json",
+            "mime": "application/json;charset=UTF-8",
             "redirect": false,
             "authorize": false,
             "dynamic": false,
@@ -99,6 +102,7 @@
         {
             "path": "dynamic.json",
             "name": "dynamic_json",
+            "mime": "application/json;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": true,
@@ -107,6 +111,7 @@
         {
             "path": "test_servlet",
             "name": "test_servlet",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": false,
             "authorize": true,
             "dynamic": true,
@@ -115,6 +120,7 @@
         {
             "path": "notify_servlet",
             "name": "notify_servlet",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": false,
             "authorize": true,
             "dynamic": true,
@@ -123,6 +129,7 @@
         {
             "path": "jsqlx_servlet",
             "name": "jsqlx_servlet",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": false,
             "authorize": true,
             "dynamic": true,
@@ -131,6 +138,7 @@
         {
             "path": "ide",
             "name": "ide/index.html",
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": false,
@@ -139,6 +147,7 @@
         {
             "path": "ide/ide.css",
             "name": "ide/ide.css",
+            "mime": "text/css;charset=UTF-8",
             "redirect": false,
             "authorize": false,
             "dynamic": false,
@@ -147,6 +156,7 @@
         {
             "path": "ide/ide.js",
             "name": "ide/ide.js",
+            "mime": "text/javascript;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": false,
@@ -155,6 +165,7 @@
         {
             "path": "db_servlet",
             "name": "db_servlet",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": false,
             "authorize": true,
             "dynamic": true,
@@ -163,6 +174,7 @@
         {
             "path": "db_list",
             "name": "db_list",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": false,
             "authorize": false,
             "dynamic": true,
@@ -171,6 +183,7 @@
         {
             "path": "google",
             "name": "http://www.google.com",
+            "mime": "text/html;charset=UTF-8", 
             "redirect": true,
             "authorize": false,
             "dynamic": false,
@@ -180,32 +193,26 @@
     "statics": [
         {
             "name": "index.html",
-            "mime": "text/html; charset=UTF-8",
             "file": "./index.html"
         },
         {
             "name": "favicon.ico",
-            "mime": "image/x-icon",
             "file": "./favicon.ico"
         },
         {
             "name": "static.json",
-            "mime": "application/json",
             "file": "./static.json"
         },
         {
             "name": "ide/index.html",
-            "mime": "text/html; charset=UTF-8",
             "file": "./ide/index.html"
         },
         {
             "name": "ide/ide.css",
-            "mime": "text/css",
             "file": "./ide/ide.css"
         },
         {
             "name": "ide/ide.js",
-            "mime": "text/javascript",
             "file": "./ide/ide.js"
         }
     ],

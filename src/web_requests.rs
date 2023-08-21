@@ -1,4 +1,5 @@
 use deno_core::anyhow::Error;
+use http_types::Mime;
 
 use crate::{
     db::DBManager,
@@ -8,6 +9,7 @@ use crate::{
 };
 use std::{
     collections::HashMap,
+    str::FromStr,
     sync::{Arc, OnceLock, RwLock},
 };
 
@@ -19,6 +21,7 @@ pub struct RequestManager {
 #[derive(Clone)]
 pub struct RequestInfo {
     pub name: String,
+    pub mime: Mime,
     pub redirect: bool,
     pub authorize: bool,
     pub dynamic: bool,
@@ -68,7 +71,7 @@ impl RequestManager {
     async fn reload_requests(&self) {
         //reload the db aliases
         let query: String = format!(
-            "SELECT path, name, redirect, authorize, dynamic, execute FROM {}",
+            "SELECT path, name, mime, redirect, authorize, dynamic, execute FROM {}",
             nino_constants::REQUESTS_TABLE
         );
         match self.db.query(&query, &[]).await {
@@ -81,14 +84,17 @@ impl RequestManager {
                 for row in rows {
                     let path: String = row.get(0);
                     let name: String = row.get(1);
-                    let redirect: bool = row.get(2);
-                    let authorize: bool = row.get(3);
-                    let dynamic: bool = row.get(4);
-                    let execute: bool = row.get(5);
+                    let mime_str: String = row.get(2);
+                    let mime = Mime::from_str(&mime_str).unwrap();
+                    let redirect: bool = row.get(3);
+                    let authorize: bool = row.get(4);
+                    let dynamic: bool = row.get(5);
+                    let execute: bool = row.get(6);
                     map.insert(
                         path,
                         RequestInfo {
                             name,
+                            mime,
                             redirect,
                             authorize,
                             dynamic,
@@ -106,7 +112,7 @@ impl RequestManager {
             Ok(map.get(path).cloned())
         } else {
             let query: String = format!(
-                "SELECT name, redirect, authorize, dynamic, execute FROM {} WHERE path = $1",
+                "SELECT name, mime, redirect, authorize, dynamic, execute FROM {} WHERE path = $1",
                 nino_constants::REQUESTS_TABLE
             );
             let result = self.db.query_opt(&query, &[&path]).await?;
@@ -114,12 +120,15 @@ impl RequestManager {
                 None => Ok(None),
                 Some(row) => {
                     let name: String = row.get(0);
-                    let redirect: bool = row.get(1);
-                    let authorize: bool = row.get(2);
-                    let dynamic: bool = row.get(3);
-                    let execute: bool = row.get(4);
+                    let mime_str: String = row.get(1);
+                    let mime = Mime::from_str(&mime_str).unwrap();
+                    let redirect: bool = row.get(2);
+                    let authorize: bool = row.get(3);
+                    let dynamic: bool = row.get(4);
+                    let execute: bool = row.get(5);
                     Ok(Some(RequestInfo {
                         name,
+                        mime,
                         authorize,
                         dynamic,
                         redirect,

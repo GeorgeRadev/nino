@@ -1,6 +1,7 @@
 use crate::db_notification::Notifier;
 use crate::nino_constants::info;
 use crate::nino_functions;
+use crate::web_requests::RequestInfo;
 use crate::{
     db::DBManager,
     nino_constants,
@@ -10,8 +11,7 @@ use async_channel::{Receiver, Sender};
 use async_std::net::TcpStream;
 use deno_core::anyhow::Error;
 use http_types::Request;
-use http_types::{Mime, Response, StatusCode};
-use std::str::FromStr;
+use http_types::{Response, StatusCode};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -70,6 +70,7 @@ impl DynamicManager {
                         is_request: false,
                         js_module: None,
                         request: None,
+                        request_info: None,
                         stream: None,
                         is_invalidate: true,
                         message: message.text,
@@ -123,28 +124,33 @@ impl DynamicManager {
         }
     }
 
-    pub async fn serve_dynamic(&self, path: &str, stream: Box<TcpStream>) -> Result<(), Error> {
+    pub async fn serve_dynamic(
+        &self,
+        request_info: RequestInfo,
+        stream: Box<TcpStream>,
+    ) -> Result<(), Error> {
         // look for matching path
-        let js_module = self.get_matching_path(path).await?;
+        let js_module = self.get_matching_path(&request_info.name).await?;
         let mut response = Response::new(StatusCode::Ok);
-        response.set_content_type(Mime::from_str("application/javascript").unwrap());
+        response.set_content_type(request_info.mime);
         response.set_body(http_types::Body::from(js_module));
         nino_functions::send_response_to_stream(stream, &mut response).await
     }
 
     pub async fn execute_dynamic(
         &self,
-        path: &str,
+        request_info: RequestInfo,
         request: Request,
         stream: Box<TcpStream>,
     ) -> Result<(), Error> {
         // look for matching path
-        let js_module = self.get_matching_path(path).await?;
+        let js_module = self.get_matching_path(&request_info.name).await?;
         //send new task to the javascript threads
         let web_task = Box::new(nino_structures::JSTask {
             is_request: true,
             js_module: Some(js_module),
             request: Some(request),
+            request_info: Some(request_info),
             stream: Some(stream),
             is_invalidate: false,
             message: String::new(),

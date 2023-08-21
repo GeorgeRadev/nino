@@ -103,25 +103,21 @@ impl TransportManager {
 
             let path = Self::get_string(obj_name, request, ix, "path");
             let name = Self::get_string(obj_name, request, ix, "name");
+            let mime = Self::get_string(obj_name, request, ix, "mime");
             let redirect = Self::get_bool(request, "redirect", false);
             let authorize = Self::get_bool(request, "authorize", false);
             let dynamic = Self::get_bool(request, "dynamic", false);
             let execute = Self::get_bool(request, "execute", false);
 
             let query = format!(
-                "INSERT INTO {} (path, name, redirect, authorize, dynamic, execute) VALUES($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO {} (path, name, mime, redirect, authorize, dynamic, execute) VALUES($1, $2, $3, $4, $5, $6, $7)",
                 nino_constants::REQUESTS_TABLE
             );
             self.db
                 .execute(
                     &query,
                     &[
-                        &path,
-                        &name,
-                        &redirect,
-                        &authorize,
-                        &dynamic,
-                        &execute,
+                        &path, &name, &mime, &redirect, &authorize, &dynamic, &execute,
                     ],
                 )
                 .await?;
@@ -142,18 +138,15 @@ impl TransportManager {
             let obj_name = "statics";
             let statics = Self::get_object(obj_name, statics, ix);
 
-            let name_string = Self::get_string(obj_name, statics, ix, "name");
-            let mime_string = Self::get_string(obj_name, statics, ix, "mime");
+            let name = Self::get_string(obj_name, statics, ix, "name");
             let file_name = Self::get_string(obj_name, statics, ix, "file");
             let (length, content) = Self::get_file(transport_path, file_name)?;
 
             let query = format!(
-                "INSERT INTO {}(name, mime, length, content) VALUES($1, $2, $3, $4)",
+                "INSERT INTO {}(name, length, content) VALUES($1, $2, $3)",
                 nino_constants::STATICS_TABLE
             );
-            self.db
-                .execute(&query, &[&name_string, &mime_string, &length, &content])
-                .await?;
+            self.db.execute(&query, &[&name, &length, &content]).await?;
         }
         Ok(())
     }

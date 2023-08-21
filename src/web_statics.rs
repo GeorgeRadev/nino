@@ -1,8 +1,13 @@
-use crate::{db::DBManager, nino_constants::{self, info}, nino_functions, nino_structures};
+use crate::{
+    db::DBManager,
+    nino_constants::{self, info},
+    nino_functions, nino_structures,
+    web_requests::RequestInfo,
+};
 use async_std::net::TcpStream;
 use deno_core::anyhow::Error;
-use http_types::{Method, Mime, Request, Response, StatusCode};
-use std::{str::FromStr, sync::Arc};
+use http_types::{Method, Request, Response, StatusCode};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct StaticManager {
@@ -38,39 +43,41 @@ impl StaticManager {
         }
     }
 
-    async fn get_static(&self, path: &str) -> Option<(String, Vec<u8>)> {
+    async fn get_static(&self, path: &str) -> Result<Option<Vec<u8>>, Error> {
         let query: String = format!(
-            "SELECT mime, content FROM {} WHERE name = $1",
+            "SELECT content FROM {} WHERE name = $1",
             nino_constants::STATICS_TABLE
         );
-        match self.db.query(&query, &[&path]).await {
+        match self.db.query_opt(&query, &[&path]).await {
             Err(error) => {
                 eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-                None
+                Err(error)
             }
-            Ok(rows) => {
-                for row in rows {
-                    let mime = row.get(0);
-                    let content: Vec<u8> = row.get(1);
-                    if !content.is_empty() {
-                        return Some((mime, content));
-                    }
+            Ok(row) => match row {
+                None => Ok(None),
+                Some(row) => {
+                    let content: Vec<u8> = row.get(0);
+                    return Ok(Some(content));
                 }
-                None
-            }
+            },
         }
     }
 
-    pub async fn serve_static(&self, path: &str, request: Request, stream: Box<TcpStream>) -> Result<(), Error> {
+    pub async fn serve_static(
+        &self,
+        request_info: RequestInfo,
+        request: Request,
+        stream: Box<TcpStream>,
+    ) -> Result<(), Error> {
         let method = request.method();
         if Method::Get != method {
             // handle only GET static requests
             return Err(Error::msg("static requests handles only GET requests"));
         }
         // look for exact path
-        if let Some((mime, content)) = self.get_static(path).await {
+        if let Some(content) = self.get_static(&request_info.name).await? {
             let mut response = Response::new(StatusCode::Ok);
-            response.set_content_type(Mime::from_str(&mime).unwrap());
+            response.set_content_type(request_info.mime);
             response.set_body(http_types::Body::from(content));
             nino_functions::send_response_to_stream(stream, &mut response).await?
         }
