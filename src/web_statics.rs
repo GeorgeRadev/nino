@@ -57,7 +57,7 @@ impl StaticManager {
                 None => Ok(None),
                 Some(row) => {
                     let content: Vec<u8> = row.get(0);
-                    return Ok(Some(content));
+                    Ok(Some(content))
                 }
             },
         }

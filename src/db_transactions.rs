@@ -399,13 +399,13 @@ impl TransactionsThread {
                     // send response
                     if let Err(error) = self.response_in.send(result).await {
                         // channel has been closed
-                        info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                        info!("OK {}:{}: {}", file!(), line!(), error);
                         break;
                     }
                 }
                 Err(error) => {
                     // channel has been closed
-                    info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                    info!("OK {}:{}: {}", file!(), line!(), error);
                     break;
                 }
             }
@@ -764,14 +764,14 @@ impl TransactionPostgres {
                         }
                     },
                     Err(error) => {
-                        info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                        info!("OK {}:{}: {}", file!(), line!(), error);
                         // channel has been closed
                         // just return
                         return Ok(());
                     }
                 };
                 if let Err(error) = response_in.send(response).await {
-                    info!("ERROR {}:{}: <OK> {}", file!(), line!(), error);
+                    info!("OK {}:{}: {}", file!(), line!(), error);
                     // channel has been closed
                     // just return
                     return Ok(());

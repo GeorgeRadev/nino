@@ -2,13 +2,12 @@ use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_constants::info;
 use crate::nino_functions;
-use crate::nino_structures;
+use crate::nino_structures::JSTask;
 use crate::web_dynamics::DynamicManager;
 use async_channel::Receiver;
-use async_std::net::TcpStream;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
-use http_types::{headers::CONTENT_TYPE, Request, Response, StatusCode};
+use http_types::StatusCode;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
@@ -22,7 +21,6 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_set_response_status::DECL,
         op_set_response_header::DECL,
         aop_set_response_send_text::DECL,
-        aop_set_response_send_json::DECL,
         aop_set_response_send_buf::DECL,
         op_get_invalidation_message::DECL,
         op_get_thread_id::DECL,
@@ -42,32 +40,16 @@ pub struct JSContext {
     pub id: i16,
     pub dynamics: Arc<DynamicManager>,
     pub notifier: Arc<Notifier>,
-    pub web_task_rx: Receiver<Box<nino_structures::JSTask>>,
-    // response
-    pub is_request: bool,
-    pub module: String,
-    pub request: Option<Request>,
-    pub response: Option<Response>,
-    pub stream: Option<Box<TcpStream>>,
-    pub closed: bool,
-    // invalidate
-    pub is_invalidate: bool,
-    pub message: String,
+    pub web_task_rx: Receiver<JSTask>,
+    // close request will have a None Task
+    pub task: Option<JSTask>,
+    // collect broadcast messages to be send after commit
     pub broadcast_messages: Vec<String>,
 }
 
 impl JSContext {
     pub fn clear(&mut self) {
-        // response
-        self.is_request = false;
-        self.module = String::new();
-        self.request = None;
-        self.response = Some(Response::new(200));
-        self.stream = None;
-        self.closed = true;
-        // invalidate
-        self.is_invalidate = false;
-        self.message = String::new();
+        self.task = None;
     }
 }
 
@@ -102,42 +84,26 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
     let mut module = String::new();
     let context = state.borrow_mut::<JSContext>();
     let result = context.web_task_rx.recv_blocking();
+    // return execution module or empty string if not a Servlet
     match result {
-        Ok(web_task) => {
-            if web_task.is_request {
-                // request
-                context.is_request = true;
-                if web_task.js_module.is_some() {
-                    module = web_task.js_module.clone().unwrap();
+        Ok(task) => {
+            context.task = Some(task);
+            if let Some(task) = &context.task {
+                match task {
+                    JSTask::Message(_) => {
+                        // nothing to do here
+                    }
+                    JSTask::Servlet(request) => {
+                        module = request.js_module.clone();
+                    }
                 }
-                context.module = module.clone();
-                context.request = web_task.request;
-                let mut response = Response::new(200);
-                response.set_content_type(web_task.request_info.unwrap().mime);
-                context.response = Some(response);
-                context.stream = web_task.stream;
-                context.closed = false;
-            } else if web_task.is_invalidate {
-                // invalidate message
-                context.is_invalidate = web_task.is_invalidate;
-                context.message = web_task.message;
-                context.closed = true;
-            } else {
-                // should not  get here
-                panic!("should not get here")
             }
             info!("new js task");
         }
         Err(error) => {
             context.clear();
             // should happen only when terminating program
-            info!(
-                "ERROR {}:{}:{} <OK> {}",
-                function!(),
-                line!(),
-                context.id,
-                error
-            );
+            info!("OK {}:{}:{} {}", function!(), line!(), context.id, error);
         }
     }
     Ok(module)
@@ -160,15 +126,22 @@ async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
 
-        if context.closed {
+        if context.task.is_none() {
             //task already closed
             return Ok(false);
         }
 
-        context.clear();
-
-        stream = context.stream.take().unwrap();
-        response = context.response.take().unwrap();
+        match context.task.take().unwrap() {
+            JSTask::Message(_) => {
+                // nothing to do here
+                return Ok(false);
+            }
+            JSTask::Servlet(request) => {
+                stream = request.stream;
+                response = request.response;
+                context.clear();
+            }
+        }
     }
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
@@ -192,57 +165,83 @@ pub struct HttpRequest {
 #[op]
 fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
     let context = state.borrow_mut::<JSContext>();
-    if !context.is_request {
-        return Err(Error::msg("task is not a request"));
-    }
-    let request = context.request.as_mut().unwrap();
-    let url = request.url();
-    let url_str = url.to_string();
-    let query = String::from(url.query().unwrap_or(""));
-    let mut parameters: HashMap<String, Vec<String>> = HashMap::new();
-    for (key, value) in url.query_pairs() {
-        let key = key.to_string();
-        let value = value.to_string();
-        match parameters.get_mut(&key) {
-            None => {
-                let mut vec: Vec<String> = Vec::with_capacity(2);
-                vec.push(value);
-                parameters.insert(key, vec);
-            }
-            Some(vec) => {
-                vec.push(value);
-            }
-        }
-    }
 
-    let request = HttpRequest {
-        url: url.clone(),
-        method: request.method().to_string(),
-        original_url: url_str,
-        host: String::from(url.host_str().unwrap_or("")),
-        path: String::from(url.path()),
-        query,
-        parameters,
-    };
-    //deno_core::serde_json::to_string(&request).unwrap()
-    Ok(request)
+    if let Some(task) = &context.task {
+        match task {
+            JSTask::Servlet(servlet) => {
+                let url = servlet.request.url();
+                let url_str = url.to_string();
+                let query = String::from(url.query().unwrap_or(""));
+                let mut parameters: HashMap<String, Vec<String>> = HashMap::new();
+                for (key, value) in url.query_pairs() {
+                    let key = key.to_string();
+                    let value = value.to_string();
+                    match parameters.get_mut(&key) {
+                        None => {
+                            let mut vec: Vec<String> = Vec::with_capacity(2);
+                            vec.push(value);
+                            parameters.insert(key, vec);
+                        }
+                        Some(vec) => {
+                            vec.push(value);
+                        }
+                    }
+                }
+
+                let request = HttpRequest {
+                    url: url.clone(),
+                    method: servlet.request.method().to_string(),
+                    original_url: url_str,
+                    host: String::from(url.host_str().unwrap_or("")),
+                    path: String::from(url.path()),
+                    query,
+                    parameters,
+                };
+                //deno_core::serde_json::to_string(&request).unwrap()
+                Ok(request)
+            }
+            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
 }
 
 #[op]
 fn op_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
     let context = state.borrow_mut::<JSContext>();
-    let status = StatusCode::try_from(status).unwrap();
-    context.response.as_mut().unwrap().set_status(status);
-    Ok(())
+
+    if let Some(task) = &mut context.task {
+        match task {
+            JSTask::Servlet(servlet) => {
+                let status = StatusCode::try_from(status).unwrap();
+                servlet.response.set_status(status);
+                Ok(())
+            }
+            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
 }
 
 #[op]
 fn op_set_response_header(state: &mut OpState, key: String, value: String) -> Result<(), Error> {
     let context = state.borrow_mut::<JSContext>();
-    let res = context.response.as_mut().unwrap();
-    res.remove_header(&*key);
-    res.append_header(&*key, &*value);
-    Ok(())
+
+    if let Some(task) = &mut context.task {
+        match task {
+            JSTask::Servlet(servlet) => {
+                let response = &mut servlet.response;
+                response.remove_header(&*key);
+                response.append_header(&*key, &*value);
+                Ok(())
+            }
+            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
 }
 
 #[op]
@@ -250,44 +249,32 @@ async fn aop_set_response_send_text(
     op_state: Rc<RefCell<OpState>>,
     body: String,
 ) -> Result<(), Error> {
-    aop_set_response_send(op_state, "text/html;charset=UTF-8", body).await
+    aop_set_response_send(op_state, body).await
 }
 
-#[op]
-async fn aop_set_response_send_json(
-    op_state: Rc<RefCell<OpState>>,
-    body: String,
-) -> Result<(), Error> {
-    aop_set_response_send(op_state, "application/json;charset=UTF-8", body).await
-}
-
-async fn aop_set_response_send(
-    op_state: Rc<RefCell<OpState>>,
-    mime: &str,
-    body: String,
-) -> Result<(), Error> {
+async fn aop_set_response_send(op_state: Rc<RefCell<OpState>>, body: String) -> Result<(), Error> {
     let stream;
     let mut response;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        if context.closed {
+
+        if context.task.is_none() {
             //task already closed
             return Ok(());
         }
-        if !context.is_request {
-            return Err(Error::msg("task is not a request"));
+
+        match context.task.take().unwrap() {
+            JSTask::Servlet(servlet) => {
+                stream = servlet.stream;
+                response = servlet.response;
+            }
+            JSTask::Message(_) => {
+                return Err(Error::msg("task is not a request"));
+            }
         }
-
-        stream = context.stream.take().unwrap();
-        response = context.response.take().unwrap();
-        context.clear();
     }
 
-    let has_no_type = response.header(CONTENT_TYPE).is_none();
-    if has_no_type {
-        response.insert_header(CONTENT_TYPE, mime);
-    }
     response.set_body(body);
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
@@ -306,24 +293,24 @@ async fn aop_set_response_send_buf(
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
-        if context.closed {
+
+        if context.task.is_none() {
             //task already closed
             return Ok(());
         }
-        if !context.is_request {
-            return Err(Error::msg("task is not a request"));
+
+        match context.task.take().unwrap() {
+            JSTask::Servlet(servlet) => {
+                stream = servlet.stream;
+                response = servlet.response;
+            }
+            JSTask::Message(_) => {
+                return Err(Error::msg("task is not a request"));
+            }
         }
-
-        stream = context.stream.take().unwrap();
-        response = context.response.take().unwrap();
-        context.clear();
     }
 
-    let has_no_type = response.header(CONTENT_TYPE).is_none();
     response.set_body(buffer);
-    if has_no_type {
-        response.insert_header(CONTENT_TYPE, "text/html;charset=UTF-8");
-    }
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -348,10 +335,15 @@ async fn aop_sleep(op_state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Er
 #[op]
 fn op_get_invalidation_message(state: &mut OpState) -> String {
     let context = state.borrow_mut::<JSContext>();
-    if context.is_invalidate {
-        return context.message.clone();
+
+    if context.task.is_some() {
+        match context.task.as_mut().unwrap() {
+            JSTask::Message(message) => message.clone(),
+            JSTask::Servlet(_) => String::new(),
+        }
+    } else {
+        String::new()
     }
-    String::new()
 }
 
 #[op]

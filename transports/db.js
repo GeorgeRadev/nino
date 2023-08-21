@@ -45,7 +45,8 @@ export default async function getDB() {
             const queryResult = core.ops.op_tx_execute_query(name, params, paramTypes);
             if (callback) {
                 for (var row of queryResult.rows) {
-                    if (!callback.apply(this, row)) {
+                    const params = [...row, queryResult.rowNames, queryResult.rowTypes];
+                    if (!callback.apply(this, params)) {
                         break;
                     }
                 }

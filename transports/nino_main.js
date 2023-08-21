@@ -40,7 +40,7 @@ async function main() {
                     } else if (response instanceof ArrayBuffer) {
                         await core.opAsync('aop_set_response_send_buf', response);
                     } else {
-                        await core.opAsync('aop_set_response_send_json', JSON.stringify(response));
+                        await core.opAsync('aop_set_response_send_text', JSON.stringify(response));
                     }
                 }
 
@@ -76,7 +76,6 @@ async function main() {
                         },
                     };
 
-                    core.ops.op_set_response_header('Content-Type', 'text/html;charset=UTF-8');
                     await handler(request, response);
                     // core.print('result = ' + (result) + '\n');
 

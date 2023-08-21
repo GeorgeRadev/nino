@@ -27,12 +27,13 @@ export default async function db_servlet(request) {
         result += "// one with callback and parameters\n"
         const conn = await db();
 
+        var line = 0;
         const sql =
             SELECT db_alias, db_type, db_connection_string
             FROM nino_database 
             WHERE db_alias = "nino_main";
-        await conn.query(sql, function (db_alias, db_type, db_connection_string) {
-            result += "line " + (++line) + " : " + db_alias + ", " + db_type + ", " + db_connection_string + "\n";
+        await conn.query(sql, function () {
+            result += "line " + (++line) + " : " + JSON.stringify(arguments) + "\n";
             // return true to fetch next
             return false;
         });

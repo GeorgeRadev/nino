@@ -13,7 +13,6 @@ use deno_runtime::{
     deno_broadcast_channel::InMemoryBroadcastChannel, inspector_server::InspectorServer,
     permissions::PermissionsContainer, worker::MainWorker, worker::WorkerOptions, BootstrapOptions,
 };
-use http_types::Response;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
@@ -122,19 +121,10 @@ impl JavaScriptManager {
         state.put(js_functions::JSContext {
             id,
             web_task_rx: js.dynamics.get_web_task_rx(),
-            //request defaults
-            is_request: false,
-            response: Some(Response::new(200)),
             dynamics: js.dynamics.clone(),
             notifier: js.notifier.clone(),
-            module: String::new(),
-            request: None,
-            stream: None,
-            closed: true,
-            //invalidate defaults
-            is_invalidate: false,
-            message: String::new(),
-            broadcast_messages:Vec::with_capacity(8),
+            broadcast_messages: Vec::with_capacity(8),
+            task: None,
         });
         let session = TransactionManager::get_transaction_session(js.connection_string.clone());
         state.put::<TransactionSession>(session);

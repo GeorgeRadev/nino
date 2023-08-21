@@ -1,6 +1,7 @@
 use crate::db_notification::Notifier;
 use crate::nino_constants::info;
 use crate::nino_functions;
+use crate::nino_structures::ServletTask;
 use crate::web_requests::RequestInfo;
 use crate::{
     db::DBManager,
@@ -18,8 +19,8 @@ use std::sync::Arc;
 pub struct DynamicManager {
     db: Arc<DBManager>,
     js_thread_count: usize,
-    web_task_sx: Sender<Box<nino_structures::JSTask>>,
-    web_task_rx: Receiver<Box<nino_structures::JSTask>>,
+    web_task_sx: Sender<nino_structures::JSTask>,
+    web_task_rx: Receiver<nino_structures::JSTask>,
     notifier: Arc<Notifier>,
 }
 
@@ -31,7 +32,7 @@ impl DynamicManager {
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage>,
     ) -> DynamicManager {
         // web_task channel is used to send tasks to the js threads
-        let (web_task_sx, web_task_rx) = async_channel::unbounded::<Box<nino_structures::JSTask>>();
+        let (web_task_sx, web_task_rx) = async_channel::unbounded::<nino_structures::JSTask>();
         let this = Self {
             db,
             js_thread_count,
@@ -50,7 +51,7 @@ impl DynamicManager {
         self.notifier.clone()
     }
 
-    pub fn get_web_task_rx(&self) -> Receiver<Box<JSTask>> {
+    pub fn get_web_task_rx(&self) -> Receiver<JSTask> {
         self.web_task_rx.clone()
     }
 
@@ -66,15 +67,7 @@ impl DynamicManager {
                 Ok(message) => {
                     info!("dymnamics got message: {}", message.text);
                     // send invalidation messages to the js threads
-                    let web_task = Box::new(nino_structures::JSTask {
-                        is_request: false,
-                        js_module: None,
-                        request: None,
-                        request_info: None,
-                        stream: None,
-                        is_invalidate: true,
-                        message: message.text,
-                    });
+                    let web_task = nino_structures::JSTask::Message(message.text);
                     for _ in 0..self.js_thread_count {
                         if let Err(error) = self.web_task_sx.send(web_task.clone()).await {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -145,16 +138,17 @@ impl DynamicManager {
     ) -> Result<(), Error> {
         // look for matching path
         let js_module = self.get_matching_path(&request_info.name).await?;
+        // default response
+        let mut response = Response::new(200);
+        response.set_content_type(request_info.mime);
         //send new task to the javascript threads
-        let web_task = Box::new(nino_structures::JSTask {
-            is_request: true,
-            js_module: Some(js_module),
-            request: Some(request),
-            request_info: Some(request_info),
-            stream: Some(stream),
-            is_invalidate: false,
-            message: String::new(),
-        });
+        let js_task_request = ServletTask {
+            js_module,
+            request,
+            stream,
+            response,
+        };
+        let web_task = nino_structures::JSTask::Servlet(js_task_request);
         self.web_task_sx.send(web_task).await?;
         Ok(())
     }

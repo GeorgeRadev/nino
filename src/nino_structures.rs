@@ -1,7 +1,5 @@
 use async_std::net::TcpStream;
-use http_types::Request;
-
-use crate::web_requests::RequestInfo;
+use http_types::{Request, Response};
 
 #[derive(Clone)]
 pub struct InitialSettings {
@@ -14,24 +12,18 @@ pub struct InitialSettings {
 }
 
 #[derive(Clone)]
-pub struct JSTask {
-    //request task
-    pub is_request: bool,
-    pub js_module: Option<String>,
-    pub request: Option<Request>,
-    pub request_info: Option<RequestInfo>,
-    pub stream: Option<Box<TcpStream>>,
-    // invalidate task
-    pub is_invalidate: bool,
-    pub message: String,
+
+pub enum JSTask{
+    Servlet(ServletTask),
+    Message(String)
 }
 
 #[derive(Clone)]
-pub struct JSTaskRequest {
-    pub is_request: bool,
-    pub js_module: Option<String>,
-    pub request: Option<Request>,
-    pub stream: Option<Box<TcpStream>>,
+pub struct ServletTask {
+    pub js_module: String,
+    pub request: Request,
+    pub response: Response,
+    pub stream: Box<TcpStream>,
 }
 
 #[derive(Clone)]
