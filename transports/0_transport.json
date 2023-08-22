@@ -188,6 +188,24 @@
             "authorize": false,
             "dynamic": false,
             "execute": false
+        },
+        {
+            "path": "login",
+            "name": "login.html",
+            "mime": "text/html;charset=UTF-8", 
+            "redirect": false,
+            "authorize": false, 
+            "dynamic": false,
+            "execute": false
+        },
+        {
+            "path": "nino_login",
+            "name": "nino_login",
+            "mime": "text/html;charset=UTF-8", 
+            "redirect": false,
+            "authorize": false,
+            "dynamic": true,
+            "execute": true
         }
     ],
     "statics": [
@@ -214,6 +232,10 @@
         {
             "name": "ide/ide.js",
             "file": "./ide/ide.js"
+        },
+        {
+            "name": "login.html",
+            "file": "./login.html"
         }
     ],
     "dynamics": [
@@ -265,6 +287,11 @@
             "name": "db_list",
             "file": "./db_list.js",
             "transpile": false
+        },
+        {
+            "name": "nino_login",
+            "file": "./nino_login.js",
+            "transpile": true
         }
     ]
 }

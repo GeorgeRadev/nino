@@ -135,6 +135,7 @@ impl DynamicManager {
         request_info: RequestInfo,
         request: Request,
         stream: Box<TcpStream>,
+        body: String,
     ) -> Result<(), Error> {
         // look for matching path
         let js_module = self.get_matching_path(&request_info.name).await?;
@@ -145,6 +146,7 @@ impl DynamicManager {
         let js_task_request = ServletTask {
             js_module,
             request,
+            body,
             stream,
             response,
         };

@@ -124,21 +124,21 @@ impl WebManager {
 
     async fn dispatch_request(
         from_address: SocketAddr,
-        request: Request,
+        mut request: Request,
         stream: Box<TcpStream>,
         requests: Arc<RequestManager>,
         statics: Arc<StaticManager>,
         dynamics: Arc<DynamicManager>,
     ) -> Result<(), Error> {
         let method = request.method();
-        let url = request.url();
+        let url = request.url().clone();
         let path = nino_functions::normalize_path(url.path().to_string());
-
+        
         println!("REQUEST: {} {} {}", method, from_address, url);
-
+        
         match requests.get_request(&path).await? {
             None => {
-                Self::response_404(stream, url).await;
+                Self::response_404(stream, &url).await;
                 Ok(())
             }
             Some(request_info) => {
@@ -148,16 +148,17 @@ impl WebManager {
                 } else if !request_info.dynamic {
                     //serve static resources
                     statics
-                        .serve_static(request_info, request.clone(), stream.clone())
-                        .await
+                    .serve_static(request_info, request.clone(), stream.clone())
+                    .await
                     //ok - stream should be served and closed
                 } else {
                     // serve from dynamic resources
                     if request_info.execute {
                         // execute the JS
+                        let body = request.body_string().await.map_err(|e| Error::msg(e.to_string()))?;
                         dynamics
-                            .execute_dynamic(request_info, request.clone(), stream.clone())
-                            .await
+                        .execute_dynamic(request_info, request.clone(), stream.clone(), body)
+                        .await
                         //ok - stream should be served and closed
                     } else {
                         // return js code as response

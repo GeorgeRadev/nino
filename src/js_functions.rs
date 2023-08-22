@@ -18,6 +18,7 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_begin_task::DECL,
         aop_end_task::DECL,
         op_get_request::DECL,
+        op_get_request_body::DECL,
         op_set_response_status::DECL,
         op_set_response_header::DECL,
         aop_set_response_send_text::DECL,
@@ -514,4 +515,19 @@ fn op_tx_execute_upsert(
     let (query, params) = query_types_to_params(query, query_types)?;
     let tx = state.borrow_mut::<TransactionSession>();
     tx.upsert(db_alias, query, params)
+}
+
+#[op]
+fn op_get_request_body(state: &mut OpState) -> Result<String, Error> {
+    let context = state.borrow_mut::<JSContext>();
+
+    if context.task.is_some() {
+        if let Some(JSTask::Servlet(servlet)) = context.task.as_mut() {
+            Ok(servlet.body.clone())
+        } else {
+            return Err(Error::msg("task is not a request"));
+        }
+    } else {
+        return Err(Error::msg("no current task"));
+    }
 }

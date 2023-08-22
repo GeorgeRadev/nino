@@ -31,8 +31,15 @@ async function main() {
                 request.set = function (key, value) {
                     core.ops.op_set_response_header(key, value);
                 };
+                request.getBody = function () {
+                    return core.ops.op_get_request_body();
+                };
+
                 const send_response = async function (response) {
                     core.print('response typeof ' + (typeof response) + '\n');
+                    if (response === undefined || response === null) {
+                        throw new Error("response should not be undefined nor null");
+                    }
                     if (typeof response === 'string') {
                         await core.opAsync('aop_set_response_send_text', response);
                     } else if (typeof response === "number") {

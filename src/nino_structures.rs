@@ -13,15 +13,16 @@ pub struct InitialSettings {
 
 #[derive(Clone)]
 
-pub enum JSTask{
+pub enum JSTask {
     Servlet(ServletTask),
-    Message(String)
+    Message(String),
 }
 
 #[derive(Clone)]
 pub struct ServletTask {
     pub js_module: String,
     pub request: Request,
+    pub body: String,
     pub response: Response,
     pub stream: Box<TcpStream>,
 }
