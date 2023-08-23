@@ -96,15 +96,13 @@ async function main() {
             } else {
                 const invalidation_message = core.ops.op_get_invalidation_message();
                 if (invalidation_message) {
+                    const threadId = core.ops.op_get_thread_id();
+                    core.print('MSG:js:' + threadId + ': ' + invalidation_message + '\n');
                     //request for cache invalidation
                     if (invalidation_message.startsWith(module_invalidation_prefix)) {
                         // modules has been changed
-                        const threadId = core.ops.op_get_thread_id();
-                        core.print('js invalidation message (' + threadId + '): ' + invalidation_message + '\n');
                         break;
                     } else if (invalidation_message.startsWith(database_invalidation_prefix)) {
-                        const threadId = core.ops.op_get_thread_id();
-                        core.print('js reaload db aliases (' + threadId + '): ' + invalidation_message + '\n');
                         await core.ops.op_reload_database_aliases();
                     } else {
                         // future  js message listeners could be implemented here

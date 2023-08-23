@@ -65,7 +65,7 @@ impl DynamicManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    info!("dymnamics got message: {}", message.text);
+                    info!("MSG:dymnamics: {}", message.text);
                     // send invalidation messages to the js threads
                     let web_task = nino_structures::JSTask::Message(message.text);
                     for _ in 0..self.js_thread_count {

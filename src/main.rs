@@ -1,6 +1,6 @@
 mod db;
-mod db_settings;
 mod db_notification;
+mod db_settings;
 mod db_transactions;
 mod js;
 mod js_functions;
@@ -137,7 +137,6 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
         js::JavaScriptManager::run(&recompile_dynamics).await?;
     }
-    notifier.notify("string message".to_string()).await?;
 
     let web = web::WebManager::new(
         settings.server_port,
@@ -145,6 +144,10 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         statics.clone(),
         dynamics.clone(),
     );
+
+    // brodcast initial message
+    tokio::spawn(async move { notifier.notify("to all".to_string()).await });
+
     web.start().await?;
     Ok(())
 }

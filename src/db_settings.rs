@@ -41,7 +41,7 @@ impl SettingsManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("settings got message: {}", message.text);
+                    println!("MSG:settings: {}", message.text);
                     if message
                         .text
                         .starts_with(db_notification::NOTIFICATION_PREFIX_SETTINGS)

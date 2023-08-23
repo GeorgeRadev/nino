@@ -55,7 +55,7 @@ impl RequestManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    println!("web got message: {}", message.text);
+                    println!("MSG:requests: {}", message.text);
                     if message
                         .text
                         .starts_with(db_notification::NOTIFICATION_PREFIX_REQUESTS)

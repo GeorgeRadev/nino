@@ -37,7 +37,7 @@ impl StaticManager {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
                 Ok(message) => {
-                    info!("statics got message: {}", message.text);
+                    info!("MSG:statics: {}", message.text);
                 }
             }
         }
