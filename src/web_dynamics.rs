@@ -135,6 +135,7 @@ impl DynamicManager {
         request_info: RequestInfo,
         request: Request,
         stream: Box<TcpStream>,
+        user: String,
         body: String,
     ) -> Result<(), Error> {
         // look for matching path
@@ -146,6 +147,7 @@ impl DynamicManager {
         let js_task_request = ServletTask {
             js_module,
             request,
+            user,
             body,
             stream,
             response,

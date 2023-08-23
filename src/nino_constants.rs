@@ -39,6 +39,7 @@ pub const MODULE_URI: &str = "http://nino.db/";
 pub const MAIN_MODULE: &str = "nino_main";
 pub const MAIN_DB: &str = "nino_main";
 pub const DB_TYPE_POSTGRES: &str = "postgres";
+pub const JWT_USER: &str = "user";
 
 /// SETTINGS table constants
 

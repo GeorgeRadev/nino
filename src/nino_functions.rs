@@ -136,13 +136,13 @@ pub fn password_verify(password: &str, hash: &str) -> Result<bool, Error> {
     }
 }
 
-pub fn jwt_from_map(secret: &String, map: HashMap<String, String>) -> Result<String, Error> {
+pub fn jwt_from_map(secret: &str, map: HashMap<String, String>) -> Result<String, Error> {
     let key: Hmac<Sha256> = Hmac::new_from_slice(secret.as_bytes())?;
     let jwt = map.sign_with_key(&key)?;
     Ok(jwt)
 }
 
-pub fn jwt_to_map(secret: &String, jwt: &String) -> Result<HashMap<String, String>, Error> {
+pub fn jwt_to_map(secret: &str, jwt: &str) -> Result<HashMap<String, String>, Error> {
     let key: Hmac<Sha256> = Hmac::new_from_slice(secret.as_bytes())?;
     let map_decoded: HashMap<String, String> = jwt.verify_with_key(&key)?;
     Ok(map_decoded)

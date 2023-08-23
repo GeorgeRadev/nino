@@ -1,6 +1,6 @@
 use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
-use crate::nino_constants::info;
+use crate::nino_constants::{self, info};
 use crate::nino_functions;
 use crate::nino_structures::JSTask;
 use crate::web_dynamics::DynamicManager;
@@ -34,6 +34,7 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_tx_get_connection_name::DECL,
         op_tx_execute_query::DECL,
         op_tx_execute_upsert::DECL,
+        op_get_user_jwt::DECL,
     ]
 }
 
@@ -155,12 +156,13 @@ async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
 #[serde(rename_all = "camelCase")]
 pub struct HttpRequest {
     url: http_types::Url,
-    method: String,
     original_url: String,
+    method: String,
     host: String,
     path: String,
     query: String,
     parameters: HashMap<String, Vec<String>>,
+    user: String,
 }
 
 #[op]
@@ -197,6 +199,7 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
                     path: String::from(url.path()),
                     query,
                     parameters,
+                    user: servlet.user.clone(),
                 };
                 //deno_core::serde_json::to_string(&request).unwrap()
                 Ok(request)
@@ -525,9 +528,16 @@ fn op_get_request_body(state: &mut OpState) -> Result<String, Error> {
         if let Some(JSTask::Servlet(servlet)) = context.task.as_mut() {
             Ok(servlet.body.clone())
         } else {
-            return Err(Error::msg("task is not a request"));
+            Err(Error::msg("task is not a request"))
         }
     } else {
-        return Err(Error::msg("no current task"));
+        Err(Error::msg("no current task"))
     }
+}
+
+#[op]
+fn op_get_user_jwt(_state: &mut OpState, user: String) -> Result<String, Error> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    map.insert(nino_constants::JWT_USER.to_string(), user);
+    nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map)
 }

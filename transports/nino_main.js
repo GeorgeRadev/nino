@@ -34,6 +34,9 @@ async function main() {
                 request.getBody = function () {
                     return core.ops.op_get_request_body();
                 };
+                request.getJWT = function (username) {
+                    return core.ops.op_get_user_jwt(username.toString());
+                };
 
                 const send_response = async function (response) {
                     core.print('response typeof ' + (typeof response) + '\n');

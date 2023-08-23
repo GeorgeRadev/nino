@@ -1,4 +1,4 @@
-use crate::nino_constants::info;
+use crate::nino_constants::{self, info};
 use crate::nino_functions;
 use crate::web_dynamics::DynamicManager;
 use crate::web_requests::RequestManager;
@@ -133,9 +133,10 @@ impl WebManager {
         let method = request.method();
         let url = request.url().clone();
         let path = nino_functions::normalize_path(url.path().to_string());
-        
+        let mut current_user = String::new();
+
         println!("REQUEST: {} {} {}", method, from_address, url);
-        
+
         match requests.get_request(&path).await? {
             None => {
                 Self::response_404(stream, &url).await;
@@ -145,20 +146,38 @@ impl WebManager {
                 if request_info.redirect {
                     Self::response_307_redirect(stream, &request_info.name).await;
                     Ok(())
+                } else if request_info.authorize
+                    && !Self::check_authorization(&request, &mut current_user)
+                {
+                    // redirect to login
+                    // TODO: add this as parameter
+                    let mut redirect_url = url.clone();
+                    redirect_url.set_path("/login");
+                    Self::response_307_redirect(stream, &redirect_url.into()).await;
+                    Ok(())
                 } else if !request_info.dynamic {
                     //serve static resources
                     statics
-                    .serve_static(request_info, request.clone(), stream.clone())
-                    .await
+                        .serve_static(request_info, request.clone(), stream.clone())
+                        .await
                     //ok - stream should be served and closed
                 } else {
                     // serve from dynamic resources
                     if request_info.execute {
                         // execute the JS
-                        let body = request.body_string().await.map_err(|e| Error::msg(e.to_string()))?;
+                        let body = request
+                            .body_string()
+                            .await
+                            .map_err(|e| Error::msg(e.to_string()))?;
                         dynamics
-                        .execute_dynamic(request_info, request.clone(), stream.clone(), body)
-                        .await
+                            .execute_dynamic(
+                                request_info,
+                                request.clone(),
+                                stream.clone(),
+                                current_user,
+                                body,
+                            )
+                            .await
                         //ok - stream should be served and closed
                     } else {
                         // return js code as response
@@ -166,6 +185,55 @@ impl WebManager {
                         //ok - stream should be served and closed
                     }
                 }
+            }
+        }
+    }
+
+    fn check_authorization(request: &Request, current_user: &mut String) -> bool {
+        //check header for session cookie or athorization header value
+        //header : first "Cookie: nino=" then "Authorization: Bearer "
+        if let Some(cookies) = request.header("Cookie") {
+            // TODO: add config for this
+            let cookie_prefix = "nino=";
+            for cookie in cookies.iter() {
+                if cookie.as_str().starts_with(cookie_prefix) {
+                    let jwt = &cookie.as_str()[cookie_prefix.len()..];
+                    if Self::jwt_to_user(jwt, current_user) {
+                        return true;
+                    }
+                }
+            }
+        }
+        if let Some(authorizations) = request.header("Authorization") {
+            // TODO: add config for this
+            let auth_prefix = "Bearer ";
+            for authorization in authorizations.iter() {
+                if authorization.as_str().starts_with(auth_prefix) {
+                    let jwt = authorization.as_str()[auth_prefix.len()..].trim();
+                    if Self::jwt_to_user(jwt, current_user) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn jwt_to_user(jwt: &str, current_user: &mut String) -> bool {
+        // check if jwt is valid
+        // TODO: add config for this
+        match nino_functions::jwt_to_map(nino_constants::PROGRAM_NAME, jwt) {
+            Err(error) => {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+                false
+            }
+            Ok(map) => {
+                // jwt is valid
+                if let Some(username) = map.get(nino_constants::JWT_USER) {
+                    current_user.clear();
+                    current_user.push_str(username);
+                }
+                true
             }
         }
     }
