@@ -28,7 +28,7 @@ WebManager - listnens on port and upon requests decides what dynqmic or static r
                - JWT tokens are verified if Dynamic resource is marked as secured otherwize just passed
 
 requirements:
-to have a dynamic module "nino_main" for executing the dynamic executions.
+to have a dynamic module "_main" for executing the dynamic executions.
 
 
 

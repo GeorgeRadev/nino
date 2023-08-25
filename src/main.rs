@@ -96,7 +96,7 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         // transport initial db content
         let transport = nino_trasport::TransportManager::new(db.clone());
         transport
-            .transport_file("./transports/0_transport.json")
+            .transport_file("./transports/_transport.json")
             .await?;
     }
 
@@ -134,7 +134,7 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     );
     {
         // compile dynamics
-        let recompile_dynamics = fs::read_to_string("./transports/recompile_dynamics.js")?;
+        let recompile_dynamics = fs::read_to_string("./transports/_recompile_dynamics.js")?;
         js::JavaScriptManager::run(&recompile_dynamics).await?;
     }
 

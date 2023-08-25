@@ -1,4 +1,4 @@
-import db from 'db';
+import db from '_db';
 
 export default async function db_servlet(request) {
     debugger;
@@ -31,7 +31,7 @@ export default async function db_servlet(request) {
         const sql =
             SELECT db_alias, db_type, db_connection_string
             FROM nino_database 
-            WHERE db_alias = "nino_main";
+            WHERE db_alias = "_main";
         await conn.query(sql, function () {
             result += "line " + (++line) + " : " + JSON.stringify(arguments) + "\n";
             // return true to fetch next
@@ -46,7 +46,7 @@ export default async function db_servlet(request) {
         const update =
             UPDATE nino_database 
             SET db_connection_string = :currentDate 
-            WHERE db_alias = "nino_main";
+            WHERE db_alias = "_main";
         var affected = await conn.query(update);
         result += "affected " + affected + " lines \n";
 

@@ -10,7 +10,7 @@ const sql = SELECT id, username
 {
 const sql = SELECT * 
             FROM nino_database 
-            WHERE db_alias = "nino_main";
+            WHERE db_alias = "_main";
 await conn.query(sql, function (row) {
     result += "line " + (++line) + " : " + JSON.stringify(row) + "\\n";
     // return true to fetch next

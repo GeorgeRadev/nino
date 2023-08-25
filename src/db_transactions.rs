@@ -209,9 +209,9 @@ impl TransactionSession {
         }
     }
 
-    pub fn close_all(&mut self, error: bool) -> Result<(), Error> {
+    pub fn close_all(&mut self, commit: bool) -> Result<(), Error> {
         self.request_in
-            .send_blocking(TransactionSessionRequest::CloseAll(error))?;
+            .send_blocking(TransactionSessionRequest::CloseAll(commit))?;
         match self.response_out.recv_blocking()? {
             TransactionSessionResponse::Ok => Ok(()),
             TransactionSessionResponse::Error(msg) => Err(Error::msg(msg)),
@@ -340,8 +340,8 @@ impl TransactionsThread {
                                 )),
                             }
                         }
-                        TransactionSessionRequest::CloseAll(error) => {
-                            match self.close_transactions(error).await {
+                        TransactionSessionRequest::CloseAll(commit) => {
+                            match self.close_transactions(commit).await {
                                 Ok(_) => TransactionSessionResponse::Ok,
                                 Err(error) => TransactionSessionResponse::Error(format!(
                                     "ERROR {}:{}:{}",
@@ -471,24 +471,24 @@ impl TransactionsThread {
         }
     }
 
-    async fn close_transactions(&mut self, error: bool) -> Result<(), Error> {
-        if error {
-            info!("Rollback All");
+    async fn close_transactions(&mut self, commit: bool) -> Result<(), Error> {
+        if commit {
+            info!("Commit All");
             for (_, tx) in self.db_pool.iter_mut() {
                 match tx {
                     Transaction::Postgres(tx) => {
-                        if let Err(error) = tx.rollback().await {
+                        if let Err(error) = tx.commit().await {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                         }
                     }
                 }
             }
         } else {
-            info!("Commit All");
+            info!("Rollback All");
             for (_, tx) in self.db_pool.iter_mut() {
                 match tx {
                     Transaction::Postgres(tx) => {
-                        if let Err(error) = tx.commit().await {
+                        if let Err(error) = tx.rollback().await {
                             eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                         }
                     }

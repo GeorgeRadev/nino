@@ -111,9 +111,9 @@ async function main() {
                     throw new Error("Should never get this");
                 }
             }
-            const error = false;
-            core.ops.op_tx_end(error);
-            await core.opAsync('aop_broadcast_message', error);
+            const commit = true;
+            core.ops.op_tx_end(commit);
+            await core.opAsync('aop_broadcast_message', commit);
             await core.opAsync('aop_end_task');
 
         } catch (e) {
@@ -128,9 +128,9 @@ async function main() {
                 core.print(errorMessage + '\n');
             }
             try {
-                const error = true;
-                core.ops.op_tx_end(error);
-                await core.opAsync('aop_broadcast_message', error);
+                const commit = false;
+                core.ops.op_tx_end(commit);
+                await core.opAsync('aop_broadcast_message', commit);
                 await core.opAsync('aop_end_task');
             } catch (ex) {
                 let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;

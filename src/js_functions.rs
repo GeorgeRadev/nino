@@ -112,9 +112,9 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
 }
 
 #[op]
-fn op_tx_end(state: &mut OpState, error: bool) -> Result<(), Error> {
+fn op_tx_end(state: &mut OpState, commit: bool) -> Result<(), Error> {
     let tx = state.borrow_mut::<TransactionSession>();
-    if let Err(error) = tx.close_all(error) {
+    if let Err(error) = tx.close_all(commit) {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
     Ok(())
@@ -363,20 +363,20 @@ fn op_broadcast_message(state: &mut OpState, message: String) {
 }
 
 #[op]
-async fn aop_broadcast_message(op_state: Rc<RefCell<OpState>>, error: bool) {
+async fn aop_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) {
     let notifier;
     let mut messages: Vec<String> = Vec::with_capacity(8);
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
         notifier = context.notifier.clone();
-        if !error {
+        if commit {
             messages.append(&mut context.broadcast_messages);
         } else {
             context.broadcast_messages.clear();
         }
     };
-    if !error {
+    if !commit {
         for message in messages {
             if let Err(error) = notifier.notify(message).await {
                 eprintln!("ERROR {}:{}:{}", function!(), line!(), error);

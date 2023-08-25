@@ -1,4 +1,4 @@
-import jsqlx from 'jsqlx_core';
+import jsqlx from '_jsqlx';
 
 export default async function jsqlx_servlet(request, response) {
     debugger;
