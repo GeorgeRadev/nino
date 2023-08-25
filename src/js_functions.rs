@@ -5,9 +5,10 @@ use crate::nino_functions;
 use crate::nino_structures::JSTask;
 use crate::web_dynamics::DynamicManager;
 use async_channel::Receiver;
-use chrono::{DateTime, NaiveDateTime, Utc};
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
 use http_types::StatusCode;
+use hyper::Client;
+use hyper_tls::HttpsConnector;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
@@ -35,6 +36,7 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_tx_execute_query::DECL,
         op_tx_execute_upsert::DECL,
         op_get_user_jwt::DECL,
+        aop_fetch::DECL,
     ]
 }
 
@@ -100,7 +102,7 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
                     }
                 }
             }
-            info!("new js task");
+            // info!("new js task");
         }
         Err(error) => {
             context.clear();
@@ -458,8 +460,8 @@ fn query_types_to_params(
                 Ok(v) => {
                     let secs = v / 1000;
                     let ns = (v % 1000) * 1_000_000;
-                    let ndt = NaiveDateTime::from_timestamp_opt(secs, ns as u32).unwrap();
-                    let dt = DateTime::<Utc>::from_utc(ndt, Utc);
+                    let ndt = chrono::NaiveDateTime::from_timestamp_opt(secs, ns as u32).unwrap();
+                    let dt = chrono::DateTime::<chrono::Utc>::from_utc(ndt, chrono::Utc);
                     let v = dt.to_rfc3339();
                     query_params.push(QueryParam::Date(v));
                 }
@@ -540,4 +542,53 @@ fn op_get_user_jwt(_state: &mut OpState, user: String) -> Result<String, Error> 
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert(nino_constants::JWT_USER.to_string(), user);
     nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map)
+}
+
+#[op]
+async fn aop_fetch(
+    _op_state: Rc<RefCell<OpState>>,
+    url: String,
+    timeout: i64,
+    method: String,
+    headers: HashMap<String, String>,
+    body: String,
+) -> Result<String, Error> {
+    let uri: hyper::Uri = url.parse()?;
+    let https = uri.scheme_str() == Some("https");
+    // Build out our request
+    let mut request_builder = hyper::Request::builder();
+    request_builder = request_builder.uri(uri);
+    request_builder = if method.is_empty() {
+        request_builder.method(hyper::Method::GET)
+    } else {
+        request_builder.method(hyper::Method::from_bytes(method.as_bytes())?)
+    };
+    for (key, value) in headers.iter() {
+        request_builder = request_builder.header(key, value);
+    }
+    let request = request_builder.body(hyper::Body::from(body))?;
+
+    let response_future = if https {
+        let https = HttpsConnector::new();
+        let client = Client::builder().build::<_, hyper::Body>(https);
+        client.request(request)
+    } else {
+        let client = Client::new();
+        client.request(request)
+    };
+
+    match tokio::time::timeout(
+        tokio::time::Duration::from_millis(timeout as u64),
+        response_future,
+    )
+    .await
+    {
+        Err(_) => Err(Error::msg("Connection Timeout")),
+        Ok(Err(e)) => Err(e.into()),
+        Ok(Ok(response)) => {
+            let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
+            let body = String::from_utf8(body_bytes.to_vec())?;
+            Ok(body)
+        }
+    }
 }

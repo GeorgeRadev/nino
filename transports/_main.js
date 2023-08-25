@@ -39,7 +39,7 @@ async function main() {
                 };
 
                 const send_response = async function (response) {
-                    core.print('response typeof ' + (typeof response) + '\n');
+                    // core.print('response typeof ' + (typeof response) + '\n');
                     if (response === undefined || response === null) {
                         throw new Error("response should not be undefined nor null");
                     }
@@ -54,7 +54,7 @@ async function main() {
                     }
                 }
 
-                if (handler_arguments_count == 1) {
+                if (handler_arguments_count <= 1) {
                     // rest handler with request param
                     // core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
                     let response = await handler(request);
@@ -90,14 +90,13 @@ async function main() {
                     // core.print('result = ' + (result) + '\n');
 
                 } else {
-                    throw new Error("module '" + module + "' default async function should take 1 or 2 parameters for rest and servlet modes");
+                    throw new Error("module '" + module + "' default async function should take up to 2 parameters for rest and servlet modes");
                 }
 
             } else {
                 const invalidation_message = core.ops.op_get_invalidation_message();
                 if (invalidation_message) {
-                    const threadId = core.ops.op_get_thread_id();
-                    core.print('MSG:js:' + threadId + ': ' + invalidation_message + '\n');
+                    core.print('MSG:js: ' + invalidation_message + '\n');
                     //request for cache invalidation
                     if (invalidation_message.startsWith(module_invalidation_prefix)) {
                         // modules has been changed

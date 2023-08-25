@@ -206,6 +206,15 @@
             "authorize": false,
             "dynamic": true,
             "execute": true
+        },
+        {
+            "path": "fetch_servlet",
+            "name": "fetch_servlet",
+            "mime": "application/json;charset=UTF-8",
+            "redirect": false,
+            "authorize": false,
+            "dynamic": true,
+            "execute":true
         }
     ],
     "statics": [
@@ -259,6 +268,11 @@
             "transpile": false
         },
         {
+            "name": "_fetch",
+            "file": "./_fetch.js",
+            "transpile": false
+        },
+        {
             "name": "dynamic_json",
             "file": "./dynamic_json.js",
             "transpile": true
@@ -291,6 +305,11 @@
         {
             "name": "nino_login",
             "file": "./nino_login.js",
+            "transpile": true
+        },
+        {
+            "name": "fetch_servlet",
+            "file": "./fetch_servlet.js",
             "transpile": true
         }
     ]

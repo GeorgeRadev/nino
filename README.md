@@ -1,15 +1,75 @@
-The main loading sequence:
+#NINO
+
+Scalable distributed Javascript platform for developing web services.  
+Uses deno v8 for executing Javascript in isolated distributed environment.  
+Ultimate goal is to be an accelerator for web-based solutions.
+
+#JSQLX
+The JS environment can transpile a jsx dialiect called **JSQLX**:  
+Javascript with jsx(react) transpiling and SQL to array convertion.  
+
+the convertion can be explained better with example.  
+The following code:
+
+```jsx
+var line = 0;
+const sql =
+    SELECT db_alias, db_type, db_connection_string
+    FROM nino_database 
+    WHERE db_alias = "_main";
+await conn.query(sql, function () {
+    result += "line " + (++line) + " : " + JSON.stringify(arguments) + "\n";
+    // return true to fetch next
+    return false;
+});
+
+const html = <><h><span>{sql[0]}</span></h></>;
+```
+
+will be transpiled as:
+```js 
+import { jsx as _jsx } from "react/jsx-runtime";
+import { Fragment as _Fragment } from "react/jsx-runtime";
+
+var line = 0;
+const sql = [`SELECT db_alias, db_type, db_connection_string
+              FROM nino_database 
+              WHERE db_alias =  $1 `, "_main"];
+await conn.query(sql, function () {
+  result += "line " + ++line + " : " + JSON.stringify(arguments) + "\n";
+  // return true to fetch next
+  return false;
+});
+
+const html = /*#__PURE__*/_jsx(_Fragment, {
+  children: /*#__PURE__*/_jsx("h", {
+    children: /*#__PURE__*/_jsx("span", {
+      children: sql[0]
+    })
+  })
+});
+```
+
+Using the same transpiler for frontend (jsx) and backend(jsql) code.  
+The transpiler source is in **/jsqlx** folder.
+
+
+##Dependencies
+Requires postgreSQL for storing all data, code, configuration and message broadcasting.  
+
+
+##Loading sequence:
+
 - check database for existance and connect to DB
 - create mem cache for settings. 
-- create local(./cache/...) cache for static and dynamic resources
-- create DB message listener.
-- create local static queue for serving threads based on the settings
-- create local dynamic queue for serving threads based on the settings
-- create local web server and stast pushing requests to sttic and dynamic queues
+- create DB message listener/broadcaster.
+- create local(./cache/...) cache for static resources
+- create local dynamic javascript threads based on the settings
+- create local web server, and dispach requests to the static/dynamic content.
 
-Components:
+##Components:
 
-DBSyncManager - the sinc version to access the DB - used only to extract some settings for starting the environment.
+DBManager - used only internaly for extracting settings.
 DBNotificationManager - gives connections and serves also as messenger for broadcasting and receiving messages
   - getConnectionFromPool
   - addMessageListener
@@ -29,32 +89,3 @@ WebManager - listnens on port and upon requests decides what dynqmic or static r
 
 requirements:
 to have a dynamic module "_main" for executing the dynamic executions.
-
-
-
-
-DB
-nino_setting - all settings related to the platform
-  - setting_key
-  - setting_value
-  CREATE TABLE IF NOT EXISTS nino_settings (setting_key VARCHAR(256) PRIMARY KEY, setting_value VARCHAR(4096))
-
-nino_request - contains all path mapings and the type of response behind:
-  - path - /this/is/a/path
-  - dynamic - to look into nino_static or nino_dynamic 
-  - execute - to execute and return the result or to return the code itself
-  - name - the path to look into nino_static or nino_dynamic 
-  CREATE TABLE IF NOT EXISTS nino_request (path VARCHAR(1024) PRIMARY KEY, name VARCHAR(1024) NOT NULL, dynamic boolean, execute boolean, authorize boolean)
-
-nino_static - all static resources behind
-  - name - /this/is/a/path
-  - mime
-  - length
-  - content 
-  CREATE TABLE IF NOT EXISTS nino_static (name VARCHAR(1024) PRIMARY KEY, mime VARCHAR(64), NOT NULL, length INT, content BYTEA)
-
-nino_dynamic - all dynamic code and modules are here
-  - name - /module/will/be/loaded/from/here
-  - code - the module code
-  - js - transpiled code to js
-  CREATE TABLE IF NOT EXISTS nino_dynamic (name VARCHAR(1024) PRIMARY KEY, code_length INT, js_length INT, code BYTEA, js BYTEA)
