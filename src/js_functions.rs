@@ -378,7 +378,7 @@ async fn aop_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) {
             context.broadcast_messages.clear();
         }
     };
-    if !commit {
+    if commit {
         for message in messages {
             if let Err(error) = notifier.notify(message).await {
                 eprintln!("ERROR {}:{}:{}", function!(), line!(), error);

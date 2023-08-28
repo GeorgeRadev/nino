@@ -7,7 +7,6 @@ pub struct InitialSettings {
     pub thread_count: usize,
     pub db_pool_size: usize,
     pub js_thread_count: usize,
-    pub server_port: u16,
     pub debug_port: u16,
 }
 

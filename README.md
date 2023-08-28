@@ -1,6 +1,6 @@
 #NINO
 
-Scalable distributed Javascript platform for developing web services.  
+Scalable distributed Javascript platform for developing web portals/services.  
 Uses deno v8 for executing Javascript in isolated distributed environment.  
 Ultimate goal is to be an accelerator for web-based solutions.
 
@@ -69,7 +69,7 @@ Requires postgreSQL for storing all data, code, configuration and message broadc
 
 ##Components:
 
-DBManager - used only internaly for extracting settings.
+DBManager - used only internaly for extracting database info.
 DBNotificationManager - gives connections and serves also as messenger for broadcasting and receiving messages
   - getConnectionFromPool
   - addMessageListener

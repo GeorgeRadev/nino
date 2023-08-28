@@ -69,17 +69,21 @@
         {
             "key": "nino_debug_port",
             "value": "9229"
+        },
+        {
+            "key": "nino_web_request_timeout_ms",
+            "value": "10000"
         }
     ],
     "requests": [
         {
             "path": "/",
             "name": "index.html",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": false,
             "dynamic": false,
-            "execute":true
+            "execute": true
         },
         {
             "path": "favicon.ico",
@@ -88,7 +92,7 @@
             "redirect": false,
             "authorize": false,
             "dynamic": false,
-            "execute":true
+            "execute": true
         },
         {
             "path": "static.json",
@@ -97,7 +101,7 @@
             "redirect": false,
             "authorize": false,
             "dynamic": false,
-            "execute":true
+            "execute": true
         },
         {
             "path": "dynamic.json",
@@ -106,34 +110,34 @@
             "redirect": false,
             "authorize": true,
             "dynamic": true,
-            "execute":true
+            "execute": true
         },
         {
             "path": "test_servlet",
             "name": "test_servlet",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": true,
-            "execute":true
+            "execute": true
         },
         {
             "path": "notify_servlet",
             "name": "notify_servlet",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": true,
-            "execute":true
+            "execute": true
         },
         {
             "path": "jsqlx_servlet",
             "name": "jsqlx_servlet",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": true,
-            "execute":true
+            "execute": true
         },
         {
             "path": "ide",
@@ -142,7 +146,7 @@
             "redirect": false,
             "authorize": true,
             "dynamic": false,
-            "execute":false
+            "execute": false
         },
         {
             "path": "ide/ide.css",
@@ -151,7 +155,7 @@
             "redirect": false,
             "authorize": false,
             "dynamic": false,
-            "execute":false
+            "execute": false
         },
         {
             "path": "ide/ide.js",
@@ -165,7 +169,7 @@
         {
             "path": "db_servlet",
             "name": "db_servlet",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": true,
             "dynamic": true,
@@ -174,7 +178,7 @@
         {
             "path": "db_list",
             "name": "db_list",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": false,
             "dynamic": true,
@@ -183,7 +187,7 @@
         {
             "path": "google",
             "name": "http://www.google.com",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": true,
             "authorize": false,
             "dynamic": false,
@@ -192,16 +196,16 @@
         {
             "path": "login",
             "name": "login.html",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
-            "authorize": false, 
+            "authorize": false,
             "dynamic": false,
             "execute": false
         },
         {
             "path": "nino_login",
             "name": "nino_login",
-            "mime": "text/html;charset=UTF-8", 
+            "mime": "text/html;charset=UTF-8",
             "redirect": false,
             "authorize": false,
             "dynamic": true,
@@ -214,7 +218,7 @@
             "redirect": false,
             "authorize": false,
             "dynamic": true,
-            "execute":true
+            "execute": true
         }
     ],
     "statics": [
@@ -252,7 +256,8 @@
             "name": "_main",
             "file": "_main.js",
             "transpile": false
-        },{
+        },
+        {
             "name": "_notify",
             "file": "_notify.js",
             "transpile": true

@@ -1,3 +1,4 @@
+use crate::db_settings::SettingsManager;
 use crate::nino_constants::{self, info};
 use crate::nino_functions;
 use crate::web_dynamics::DynamicManager;
@@ -12,20 +13,34 @@ use std::sync::Arc;
 /// A Web Server with dispatching requests to static and dynamic manager
 pub struct WebManager {
     port: u16,
+    request_timeout_ms: u32,
     requests: Arc<RequestManager>,
     statics: Arc<StaticManager>,
     dynamics: Arc<DynamicManager>,
 }
 
 impl WebManager {
-    pub fn new(
-        port: u16,
+    pub async fn new(
+        settings: Arc<SettingsManager>,
         requests: Arc<RequestManager>,
         statics: Arc<StaticManager>,
         dynamics: Arc<DynamicManager>,
     ) -> WebManager {
+        let port = settings
+            .get_setting_i32(
+                nino_constants::SETTINGS_NINO_WEB_SERVER_PORT,
+                nino_constants::SETTINGS_NINO_WEB_SERVER_PORT_DEFAULT,
+            )
+            .await as u16;
+        let request_timeout_ms = settings
+            .get_setting_i32(
+                nino_constants::SETTINGS_NINO_WEB_REQUEST_TIMEOUT,
+                nino_constants::SETTINGS_NINO_WEB_REQUEST_TIMEOUT_DEFAULT,
+            )
+            .await as u32;
         WebManager {
             port,
+            request_timeout_ms,
             requests,
             statics,
             dynamics,
@@ -38,6 +53,7 @@ impl WebManager {
         let bl = Box::new(listener);
         Self::listening(
             bl,
+            self.request_timeout_ms,
             self.requests.clone(),
             self.statics.clone(),
             self.dynamics.clone(),
@@ -48,6 +64,7 @@ impl WebManager {
 
     async fn listening(
         listener: Box<TcpListener>,
+        request_timeout_ms: u32,
         requests: Arc<RequestManager>,
         statics: Arc<StaticManager>,
         dynamics: Arc<DynamicManager>,
@@ -59,6 +76,7 @@ impl WebManager {
                 Ok((stream, _socket_addr)) => {
                     // spawn new task
                     tokio::task::spawn(Self::serve_request(
+                        request_timeout_ms,
                         Box::new(stream),
                         requests.clone(),
                         statics.clone(),
@@ -73,6 +91,7 @@ impl WebManager {
     }
 
     async fn serve_request(
+        request_timeout_ms: u32,
         stream: Box<TcpStream>,
         requests: Arc<RequestManager>,
         statics: Arc<StaticManager>,
@@ -85,36 +104,41 @@ impl WebManager {
                 return;
             }
         };
-        // info!("starting new connection from {}", from_addres);
-        /* match timeout(timeout_duration, fut).await {
-            Ok(Ok(Some(r))) => r,
-            Ok(Ok(None)) | Err(TimeoutError { .. }) => return Ok(ConnectionStatus::Close), /* EOF or timeout */
-            Ok(Err(e)) => return Err(e),
-        }*/
-        match async_h1::server::decode(stream.clone()).await {
-            Ok(result) => {
-                if let Some(request) = result {
-                    let (request, _) = request;
-                    // queue task with request
-                    if let Err(error) = Self::dispatch_request(
-                        from_addres,
-                        request,
-                        stream.clone(),
-                        requests,
-                        statics,
-                        dynamics,
-                    )
-                    .await
-                    {
-                        // requestor has closed the stream
-                        info!("ERROR {}:{}:{}", file!(), line!(), error);
-                        //Self::response_500(stream, error).await;
+
+        // add request timeout - to avoid slow lorry attacks
+        match tokio::time::timeout(
+            tokio::time::Duration::from_millis(request_timeout_ms as u64),
+            async_h1::server::decode(stream.clone()),
+        )
+        .await
+        {
+            Err(error) => info!("OK {}:{}:{}", file!(), line!(), error),
+            Ok(Err(error)) => info!("ERROR {}:{}:{}", file!(), line!(), error),
+            Ok(Ok(request)) => {
+                match request {
+                    Some(request) => {
+                        let (request, _) = request;
+                        // queue task with request
+                        if let Err(error) = Self::dispatch_request(
+                            from_addres,
+                            request,
+                            stream.clone(),
+                            requests,
+                            statics,
+                            dynamics,
+                        )
+                        .await
+                        {
+                            // requestor has closed the stream
+                            info!("ERROR {}:{}:{}", file!(), line!(), error);
+                        }
+                        return;
                     }
-                    return;
+                    None => {
+                        // requestor has closed the stream
+                        // info!("ERROR {}:{}:{}", file!(), line!(), "should not happen");
+                    }
                 }
-            }
-            Err(error) => {
-                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
             }
         }
         //invalid/unrecognized request

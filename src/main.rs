@@ -60,11 +60,30 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
     info!("Database ok");
 
     let settings = SettingsManager::new(db, None);
-    let thread_count = settings.get_thread_count().await;
-    let js_thread_count = settings.get_js_thread_count().await;
-    let server_port = settings.get_server_port().await;
-    let debug_port = settings.get_debug_port().await;
-    let mut db_pool_size = settings.get_db_pool_size().await;
+    let thread_count = settings
+        .get_setting_usize(
+            nino_constants::SETTINGS_NINO_THREAD_COUNT,
+            nino_constants::SETTINGS_NINO_THREAD_COUNT_DEFAULT,
+        )
+        .await;
+    let js_thread_count = settings
+        .get_setting_usize(
+            nino_constants::SETTINGS_JS_THREAD_COUNT,
+            nino_constants::SETTINGS_JS_THREAD_COUNT_DEFAULT,
+        )
+        .await;
+    let debug_port = settings
+        .get_setting_i32(
+            nino_constants::SETTINGS_NINO_DEBUG_PORT,
+            nino_constants::SETTINGS_NINO_DEBUG_PORT_DEFAULT,
+        )
+        .await as u16;
+    let mut db_pool_size = settings
+        .get_setting_usize(
+            nino_constants::SETTINGS_DB_CONNECTION_POOL_SIZE,
+            nino_constants::SETTINGS_DB_CONNECTION_POOL_SIZE_DEFAULT,
+        )
+        .await;
     if db_pool_size == 0 {
         // match db pool to serving threads + js threads
         db_pool_size = thread_count + js_thread_count;
@@ -73,7 +92,6 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
     InitialSettings {
         connection_string: connection_string.clone(),
         thread_count,
-        server_port,
         debug_port,
         db_pool_size,
         js_thread_count,
@@ -139,11 +157,12 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     }
 
     let web = web::WebManager::new(
-        settings.server_port,
+        settings_manager.clone(),
         requests.clone(),
         statics.clone(),
         dynamics.clone(),
-    );
+    )
+    .await;
 
     // brodcast initial message
     tokio::spawn(async move { notifier.notify("to all".to_string()).await });

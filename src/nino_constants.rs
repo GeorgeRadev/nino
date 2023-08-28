@@ -62,3 +62,7 @@ pub const SETTINGS_DB_CONNECTION_POOL_SIZE_DEFAULT: i32 = 0;
 /// debug port
 pub const SETTINGS_NINO_DEBUG_PORT: &str = "nino_debug_port";
 pub const SETTINGS_NINO_DEBUG_PORT_DEFAULT: i32 = 0;
+
+/// defines web request timeout
+pub const SETTINGS_NINO_WEB_REQUEST_TIMEOUT: &str = "nino_web_request_timeout_ms";
+pub const SETTINGS_NINO_WEB_REQUEST_TIMEOUT_DEFAULT: i32 = 30000;
