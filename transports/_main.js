@@ -5,6 +5,51 @@ async function main() {
     const core = Deno[Deno.internal].core;
     const module_invalidation_prefix = core.ops.op_get_module_invalidation_prefix();
     const database_invalidation_prefix = core.ops.op_get_database_invalidation_prefix();
+
+    const header_set = function (key, value) {
+        if (typeof key === 'string' && typeof value === 'string') {
+            core.ops.op_set_response_header(key, value);
+        } else {
+            throw new Error("response.set() parameters needs to be both strings not "
+                + JSON.stringify(key) + ", "
+                + JSON.stringify(value)
+            );
+        }
+    };
+
+    const response_status = function (status) {
+        if (typeof status == 'number') {
+            core.ops.op_set_response_status(status);
+        } else {
+            throw new Error("response.status() needs to be a number not " + JSON.stringify(status));
+        }
+    };
+
+    const get_body = function () {
+        return core.ops.op_get_request_body();
+    };
+
+    const send_response = async function (response) {
+        // core.print('response typeof ' + (typeof response) + '\n');
+        if (response === undefined || response === null) {
+            throw new Error("response should not be undefined nor null");
+        }
+        if (typeof response === 'string') {
+            await core.opAsync('aop_set_response_send_text', response);
+        } else if (typeof response === "number") {
+            await core.opAsync('aop_set_response_send_text', String.valueOf(response));
+        } else if (response instanceof ArrayBuffer) {
+            await core.opAsync('aop_set_response_send_buf', response);
+        } else {
+            await core.opAsync('aop_set_response_send_text', JSON.stringify(response));
+        }
+    };
+
+    const get_jwt = function (username) {
+        return core.ops.op_get_user_jwt(username.toString());
+    };
+
+    // main loop
     for (; ;) {
         try {
             // core.print('_main try\n');
@@ -26,33 +71,11 @@ async function main() {
 
                 const handler_arguments_count = handler.length;
                 // core.print('default handler with ' + handler_arguments_count + ' arguments\n');
-
                 const request = core.ops.op_get_request();
-                request.set = function (key, value) {
-                    core.ops.op_set_response_header(key, value);
-                };
-                request.getBody = function () {
-                    return core.ops.op_get_request_body();
-                };
-                request.getJWT = function (username) {
-                    return core.ops.op_get_user_jwt(username.toString());
-                };
-
-                const send_response = async function (response) {
-                    // core.print('response typeof ' + (typeof response) + '\n');
-                    if (response === undefined || response === null) {
-                        throw new Error("response should not be undefined nor null");
-                    }
-                    if (typeof response === 'string') {
-                        await core.opAsync('aop_set_response_send_text', response);
-                    } else if (typeof response === "number") {
-                        await core.opAsync('aop_set_response_send_text', String.valueOf(response));
-                    } else if (response instanceof ArrayBuffer) {
-                        await core.opAsync('aop_set_response_send_buf', response);
-                    } else {
-                        await core.opAsync('aop_set_response_send_text', JSON.stringify(response));
-                    }
-                }
+                request.set = header_set;
+                request.status = response_status;
+                request.getBody = get_body;
+                request.getJWT = get_jwt;
 
                 if (handler_arguments_count <= 1) {
                     // rest handler with request param
@@ -64,23 +87,8 @@ async function main() {
                 } else if (handler_arguments_count == 2) {
                     // servlet handler with request and response params
                     const response = {
-                        set: function (key, value) {
-                            if (typeof key === 'string' && typeof value === 'string') {
-                                core.ops.op_set_response_header(key, value);
-                            } else {
-                                throw new Error("response.set() parameters needs to be both strings not "
-                                    + JSON.stringify(key) + ", "
-                                    + JSON.stringify(value)
-                                );
-                            }
-                        },
-                        status: function (status) {
-                            if (typeof status == 'number') {
-                                core.ops.op_set_response_status(status);
-                            } else {
-                                throw new Error("response.status() needs to be a number not " + JSON.stringify(status));
-                            }
-                        },
+                        set: header_set,
+                        status: response_status,
                         send: async function (response) {
                             await send_response(response);
                         },

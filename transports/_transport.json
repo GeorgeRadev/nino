@@ -263,6 +263,11 @@
             "transpile": true
         },
         {
+            "name": "_log",
+            "file": "./_log.js",
+            "transpile": false
+        },
+        {
             "name": "_db",
             "file": "./_db.js",
             "transpile": false

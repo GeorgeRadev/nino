@@ -6,7 +6,7 @@ use crate::nino_structures::JSTask;
 use crate::web_dynamics::DynamicManager;
 use async_channel::Receiver;
 use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
-use http_types::StatusCode;
+use http_types::{StatusCode, Url};
 use hyper::Client;
 use hyper_tls::HttpsConnector;
 use std::collections::HashMap;
@@ -164,6 +164,7 @@ pub struct HttpRequest {
     path: String,
     query: String,
     parameters: HashMap<String, Vec<String>>,
+    post_parameters: HashMap<String, Vec<String>>,
     user: String,
 }
 
@@ -193,6 +194,27 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
                     }
                 }
 
+                let mut post_parameters: HashMap<String, Vec<String>> = HashMap::new();
+                if !servlet.body.contains(" ") {
+                    let post_url_str = format!("{}?{}", nino_constants::MODULE_URI, servlet.body);
+                    if let Ok(url) = Url::parse(&post_url_str) {
+                        for (key, value) in url.query_pairs() {
+                            let key = key.to_string();
+                            let value = value.to_string();
+                            match post_parameters.get_mut(&key) {
+                                None => {
+                                    let mut vec: Vec<String> = Vec::with_capacity(2);
+                                    vec.push(value);
+                                    post_parameters.insert(key, vec);
+                                }
+                                Some(vec) => {
+                                    vec.push(value);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let request = HttpRequest {
                     url: url.clone(),
                     method: servlet.request.method().to_string(),
@@ -201,6 +223,7 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
                     path: String::from(url.path()),
                     query,
                     parameters,
+                    post_parameters,
                     user: servlet.user.clone(),
                 };
                 //deno_core::serde_json::to_string(&request).unwrap()

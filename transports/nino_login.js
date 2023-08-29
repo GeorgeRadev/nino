@@ -1,14 +1,13 @@
-export default async function servlet(request) {
+import log from "_log";
+
+export default async function servlet(request, response) {
     debugger;
-    var body = request.getBody();
+    log('post body: ' + request.getBody() + '\n');
+    log('post parameters: ' + JSON.stringify(request.postParameters) + '\n');
 
-    request.set("Set-Cookie", "nino=" + request.getJWT("admin"));
-
-    var result = "";
-    result += '<hr/>method: ' + request.method + '<br/>';
-    result += 'path: ' + request.path + '<hr/>';
-    result += JSON.stringify(request) + '<hr/>';
-    result += 'body: <br/>' + body + '<hr/>';
-
-    return result;
+    response.set("Set-Cookie", "nino=" + request.getJWT("admin"));
+    // redirect to GET test_servlet 
+    response.set("Location", "/test_servlet");
+    response.status(302);
+    return "";
 }
