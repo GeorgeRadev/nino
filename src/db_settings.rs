@@ -104,6 +104,16 @@ impl SettingsManager {
         }
     }
 
+    pub async fn get_setting_str(&self, settings_key: &str, def_value: String) -> String {
+        match self.get_setting(settings_key).await {
+            Ok(value) => match value {
+                Some(value) => value.str,
+                None => def_value,
+            },
+            Err(_) => def_value,
+        }
+    }
+
     pub async fn get_setting_i32(&self, settings_key: &str, def_value: i32) -> i32 {
         match self.get_setting(settings_key).await {
             Ok(value) => match value {

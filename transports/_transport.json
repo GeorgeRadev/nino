@@ -47,6 +47,18 @@
         {
             "break_on_error": true,
             "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('test', 'postgres', 'postgresql://dead_one@localhost/postgres?connect_timeout=10')"
+        },
+        {
+            "break_on_error": true,
+            "query": "DROP TABLE IF EXISTS nino_user"
+        },
+        {
+            "break_on_error": true,
+            "query": "CREATE TABLE IF NOT EXISTS nino_user (username VARCHAR(256) PRIMARY KEY, password VARCHAR(256) NOT NULL)"
+        },
+        {
+            "break_on_error": true,
+            "query": "INSERT INTO nino_user (username, password) VALUES ('admin', 'encripted_password_will be here')"
         }
     ],
     "settings": [
@@ -281,6 +293,11 @@
             "name": "_fetch",
             "file": "./_fetch.js",
             "transpile": false
+        },
+        {
+            "name": "_user",
+            "file": "./_user.js",
+            "transpile": true
         },
         {
             "name": "dynamic_json",

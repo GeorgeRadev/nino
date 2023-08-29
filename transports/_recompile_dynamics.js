@@ -24,6 +24,13 @@ async function main() {
         await conn.query(["UPDATE nino_dynamic SET js = $2 WHERE name = $1", name, transpiled_code]);
         core.print("done\n");
     }
+
+    // add admin user
+    {
+        const username = "admin";
+        const password = core.ops.op_password_hash("admin");
+        await conn.query(["UPDATE nino_user SET password = $2 WHERE username = $1", username, password]);
+    }
     // end with commit
     core.ops.op_tx_end(true);
     await core.opAsync('aop_end_task');

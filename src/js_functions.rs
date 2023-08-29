@@ -36,6 +36,8 @@ pub fn get_javascript_ops() -> Vec<OpDecl> {
         op_tx_execute_query::DECL,
         op_tx_execute_upsert::DECL,
         op_get_user_jwt::DECL,
+        op_password_hash::DECL,
+        op_password_verify::DECL,
         aop_fetch::DECL,
     ]
 }
@@ -195,7 +197,7 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
                 }
 
                 let mut post_parameters: HashMap<String, Vec<String>> = HashMap::new();
-                if !servlet.body.contains(" ") {
+                if !servlet.body.contains(' ') {
                     let post_url_str = format!("{}?{}", nino_constants::MODULE_URI, servlet.body);
                     if let Ok(url) = Url::parse(&post_url_str) {
                         for (key, value) in url.query_pairs() {
@@ -565,6 +567,16 @@ fn op_get_user_jwt(_state: &mut OpState, user: String) -> Result<String, Error> 
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert(nino_constants::JWT_USER.to_string(), user);
     nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map)
+}
+
+#[op]
+fn op_password_hash(_state: &mut OpState, password: String) -> Result<String, Error> {
+    nino_functions::password_hash(&password)
+}
+
+#[op]
+fn op_password_verify(_state: &mut OpState, password: String, hash: String) -> Result<bool, Error> {
+    nino_functions::password_verify(&password, &hash)
 }
 
 #[op]
