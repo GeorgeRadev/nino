@@ -5,7 +5,7 @@ var code = `
 const n = 1;
 const sql = SELECT id, username 
             FROM users 
-            WHERE active = :active AND department=:('test'+n) AND department = 'test';
+            WHERE active = :active AND department=: ('test'+n) AND department = 'test';
 }
 {
 const sql = SELECT * 

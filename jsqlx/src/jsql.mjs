@@ -81,7 +81,9 @@ export function sqlToArray(code) {
                 } else if (t.type == "C") {
                     // read ID or expression and move it as array parameter
                     const c_start = t.offset;
-                    t = lexer.next();
+                    do {
+                        t = lexer.next();
+                    } while (t.type == 'WS')
                     if (t.type == "ID") {
                         variables.push(t.value);
                         sql_string += " $" + variables.length + " ";
@@ -122,14 +124,14 @@ export function sqlToArray(code) {
                     sql_string += t.value;
                 }
             }
-        // } else if (t.type == "S1" || t.type == "S2") {
-        //     // escape non terminal characters
-        //     var str = t.value
-        //     if ((str.charAt(0) === '"' && str.charAt(str.length - 1) === '"') ||
-        //         (str.charAt(0) === "'" && str.charAt(str.length - 1) === "'")) {
-        //         str = str.substr(1, str.length - 2);
-        //     }
-        //     result += JSON.stringify(str);
+            // } else if (t.type == "S1" || t.type == "S2") {
+            //     // escape non terminal characters
+            //     var str = t.value
+            //     if ((str.charAt(0) === '"' && str.charAt(str.length - 1) === '"') ||
+            //         (str.charAt(0) === "'" && str.charAt(str.length - 1) === "'")) {
+            //         str = str.substr(1, str.length - 2);
+            //     }
+            //     result += JSON.stringify(str);
         } else {
             result += t.value;
         }
