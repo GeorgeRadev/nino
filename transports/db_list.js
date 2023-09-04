@@ -3,10 +3,11 @@ import jsqlx from '_jsqlx';
 
 export default async function db_servlet(request, response) {
     debugger;
-    request.set('Content-Type', 'text/plain;charset=UTF-8');
     var result = "";
     const conn = await db();
-    const sql = ['SELECT js FROM nino_dynamic WHERE name = $1', 'db_servlet'];
+    const sql = SELECT js 
+                FROM nino_dynamic 
+                WHERE name = 'portlet_test.js';
     await conn.query(sql, function (js) {
         result = js;
         return true;
@@ -14,7 +15,11 @@ export default async function db_servlet(request, response) {
 
     if (request.query) {
         var transpiled_code = jsqlx(result);
-        await conn.query(["UPDATE nino_dynamic SET js = $2 WHERE name = $1", 'db_servlet', transpiled_code]);
+        await conn.query(
+            UPDATE nino_dynamic 
+            SET js = : transpiled_code 
+            WHERE name = 'portlet_test.js';
+        );
     }
 
     await response.send(result);

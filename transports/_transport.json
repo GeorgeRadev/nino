@@ -5,60 +5,70 @@
             "query": "DROP TABLE IF EXISTS nino_setting"
         },
         {
-            "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_setting (setting_key VARCHAR(256) PRIMARY KEY, setting_value VARCHAR(4096))"
         },
         {
-            "break_on_error": true,
             "query": "DROP TABLE IF EXISTS nino_request"
         },
         {
-            "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_request (path VARCHAR(1024) PRIMARY KEY, name VARCHAR(1024) NOT NULL, mime VARCHAR(64) NOT NULL, redirect boolean, authorize boolean, dynamic boolean, execute boolean)"
         },
         {
-            "break_on_error": true,
             "query": "DROP TABLE IF EXISTS nino_static"
         },
         {
-            "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_static (name VARCHAR(1024) PRIMARY KEY, length INT, content BYTEA)"
         },
         {
-            "break_on_error": true,
             "query": "DROP TABLE IF EXISTS nino_dynamic"
         },
         {
-            "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_dynamic (name VARCHAR(1024) PRIMARY KEY, code_length INT, js_length INT, transpile boolean, code BYTEA, js BYTEA)"
         },
         {
-            "break_on_error": true,
             "query": "DROP TABLE IF EXISTS nino_database"
         },
         {
-            "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_database (db_alias VARCHAR(1024) PRIMARY KEY, db_type VARCHAR(256) NOT NULL, db_connection_string VARCHAR(4096) NOT NULL)"
         },
         {
-            "break_on_error": true,
             "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('_main', 'postgres', 'reserved name for the defailt db alias of the main application')"
         },
         {
-            "break_on_error": true,
             "query": "INSERT INTO nino_database (db_alias, db_type, db_connection_string) VALUES ('test', 'postgres', 'postgresql://dead_one@localhost/postgres?connect_timeout=10')"
         },
         {
-            "break_on_error": true,
             "query": "DROP TABLE IF EXISTS nino_user"
         },
         {
-            "break_on_error": true,
             "query": "CREATE TABLE IF NOT EXISTS nino_user (username VARCHAR(256) PRIMARY KEY, password VARCHAR(256) NOT NULL)"
         },
         {
-            "break_on_error": true,
             "query": "INSERT INTO nino_user (username, password) VALUES ('admin', 'encripted_password_will be here')"
+        },
+        {
+            "query": "DROP TABLE IF EXISTS nino_user_role"
+        },
+        {
+            "query": "CREATE TABLE IF NOT EXISTS nino_user_role (username VARCHAR(256) NOT NULL, user_role VARCHAR(256) NOT NULL)"
+        },
+        {
+            "query": "INSERT INTO nino_user_role (username, user_role) VALUES ('admin', '/about/')"
+        },
+        {
+            "query": "INSERT INTO nino_user_role (username, user_role) VALUES ('admin', '/test/')"
+        },
+        {
+            "query": "DROP TABLE IF EXISTS nino_role_portlet"
+        },
+        {
+            "query": "CREATE TABLE IF NOT EXISTS nino_role_portlet (user_role VARCHAR(256) NOT NULL, portlet VARCHAR(256) NOT NULL)"
+        },
+        {
+            "query": "INSERT INTO nino_role_portlet (user_role, portlet) VALUES ('/about/','portlet_about.js')"
+        },
+        {
+            "query": "INSERT INTO nino_role_portlet (user_role, portlet) VALUES ('/test/','portlet_test.js')"
         }
     ],
     "settings": [
@@ -95,32 +105,22 @@
             "redirect": false,
             "authorize": false,
             "dynamic": false,
-            "execute": true
+            "execute": false
         },
         {
             "path": "favicon.ico",
             "name": "favicon.ico",
-            "mime": "image/x-icon",
-            "redirect": false,
-            "authorize": false,
-            "dynamic": false,
-            "execute": true
+            "mime": "image/x-icon"
         },
         {
             "path": "static.json",
             "name": "static.json",
-            "mime": "application/json;charset=UTF-8",
-            "redirect": false,
-            "authorize": false,
-            "dynamic": false,
-            "execute": true
+            "mime": "application/json;charset=UTF-8"
         },
         {
             "path": "dynamic.json",
             "name": "dynamic_json",
             "mime": "application/json;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
             "dynamic": true,
             "execute": true
         },
@@ -128,8 +128,6 @@
             "path": "test_servlet",
             "name": "test_servlet",
             "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
             "dynamic": true,
             "execute": true
         },
@@ -137,8 +135,6 @@
             "path": "notify_servlet",
             "name": "notify_servlet",
             "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
             "dynamic": true,
             "execute": true
         },
@@ -146,53 +142,35 @@
             "path": "jsqlx_servlet",
             "name": "jsqlx_servlet",
             "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
             "dynamic": true,
             "execute": true
         },
         {
             "path": "ide",
             "name": "ide/index.html",
-            "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
-            "dynamic": false,
-            "execute": false
+            "mime": "text/html;charset=UTF-8"
         },
         {
             "path": "ide/ide.css",
             "name": "ide/ide.css",
-            "mime": "text/css;charset=UTF-8",
-            "redirect": false,
-            "authorize": false,
-            "dynamic": false,
-            "execute": false
+            "mime": "text/css;charset=UTF-8"
         },
         {
             "path": "ide/ide.js",
             "name": "ide/ide.js",
-            "mime": "text/javascript;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
-            "dynamic": false,
-            "execute": false
+            "mime": "application/javascript;charset=UTF-8"
         },
         {
             "path": "db_servlet",
             "name": "db_servlet",
             "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": true,
             "dynamic": true,
             "execute": true
         },
         {
             "path": "db_list",
             "name": "db_list",
-            "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": false,
+            "mime": "text/plain;charset=UTF-8",
             "dynamic": true,
             "execute": true
         },
@@ -200,26 +178,17 @@
             "path": "google",
             "name": "http://www.google.com",
             "mime": "text/html;charset=UTF-8",
-            "redirect": true,
-            "authorize": false,
-            "dynamic": false,
-            "execute": false
+            "redirect": true
         },
         {
             "path": "login",
             "name": "login.html",
-            "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": false,
-            "dynamic": false,
-            "execute": false
+            "mime": "text/html;charset=UTF-8"
         },
         {
             "path": "nino_login",
             "name": "nino_login",
             "mime": "text/html;charset=UTF-8",
-            "redirect": false,
-            "authorize": false,
             "dynamic": true,
             "execute": true
         },
@@ -227,10 +196,30 @@
             "path": "fetch_servlet",
             "name": "fetch_servlet",
             "mime": "application/json;charset=UTF-8",
-            "redirect": false,
-            "authorize": false,
             "dynamic": true,
             "execute": true
+        },
+        {
+            "path": "portal",
+            "name": "portal",
+            "mime": "text/html;charset=UTF-8",
+            "authorize": true,
+            "dynamic": true,
+            "execute": true
+        },
+        {
+            "path": "portlet_about.js",
+            "name": "portlet_about.js",
+            "mime": "application/javascript;charset=UTF-8",
+            "authorize": true,
+            "dynamic": true
+        },
+        {
+            "path": "portlet_test.js",
+            "name": "portlet_test.js",
+            "mime": "application/javascript;charset=UTF-8",
+            "authorize": true,
+            "dynamic": true
         }
     ],
     "statics": [
@@ -327,7 +316,7 @@
         {
             "name": "db_list",
             "file": "./db_list.js",
-            "transpile": false
+            "transpile": true
         },
         {
             "name": "nino_login",
@@ -337,6 +326,21 @@
         {
             "name": "fetch_servlet",
             "file": "./fetch_servlet.js",
+            "transpile": true
+        },
+        {
+            "name": "portal",
+            "file": "./portal.js",
+            "transpile": true
+        },
+        {
+            "name": "portlet_about.js",
+            "file": "./portlet_about.js",
+            "transpile": true
+        },
+        {
+            "name": "portlet_test.js",
+            "file": "./portlet_test.js",
             "transpile": true
         }
     ]

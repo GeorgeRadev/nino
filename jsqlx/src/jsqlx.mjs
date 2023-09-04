@@ -6,7 +6,7 @@ export default function jsqlx(code) {
     const output = babel.transform(code, {
         presets: [
             ['react', {
-                runtime: "automatic",
+                runtime: "classic",
                 // pragma: "_jsx",
                 // pragmaFrag: "_Fragment"
             }]]

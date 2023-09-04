@@ -179,13 +179,7 @@ impl WebManager {
                     redirect_url.set_path("/login");
                     Self::response_307_redirect(stream, &redirect_url.into()).await;
                     Ok(())
-                } else if !request_info.dynamic {
-                    //serve static resources
-                    statics
-                        .serve_static(request_info, request.clone(), stream.clone())
-                        .await
-                    //ok - stream should be served and closed
-                } else {
+                } else if request_info.dynamic {
                     // serve from dynamic resources
                     if request_info.execute {
                         // execute the JS
@@ -208,6 +202,12 @@ impl WebManager {
                         dynamics.serve_dynamic(request_info, stream.clone()).await
                         //ok - stream should be served and closed
                     }
+                } else {
+                    //serve static resources
+                    statics
+                        .serve_static(request_info, request.clone(), stream.clone())
+                        .await
+                    //ok - stream should be served and closed
                 }
             }
         }

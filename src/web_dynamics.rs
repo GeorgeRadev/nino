@@ -78,7 +78,6 @@ impl DynamicManager {
         }
     }
 
-    // returns the longest matching path
     async fn get_matching_path(&self, path: &str) -> Result<String, Error> {
         let query: String = format!(
             "SELECT name FROM {} WHERE name = $1",
@@ -93,6 +92,24 @@ impl DynamicManager {
             Some(row) => {
                 let path: String = row.get(0);
                 Ok(path)
+            }
+        }
+    }
+
+    async fn get_matching_path_code(&self, path: &str) -> Result<String, Error> {
+        let query: String = format!(
+            "SELECT js FROM {} WHERE name = $1",
+            nino_constants::DYNAMICS_TABLE
+        );
+        let row = self.db.query_opt(&query, &[&path]).await?;
+        match row {
+            None => Err(Error::msg(format!(
+                "dynamic '{}' does not exist in the database",
+                path
+            ))),
+            Some(row) => {
+                let code: Vec<u8> = row.get(0);
+                Ok(String::from_utf8(code)?)
             }
         }
     }
@@ -123,7 +140,7 @@ impl DynamicManager {
         stream: Box<TcpStream>,
     ) -> Result<(), Error> {
         // look for matching path
-        let js_module = self.get_matching_path(&request_info.name).await?;
+        let js_module = self.get_matching_path_code(&request_info.name).await?;
         let mut response = Response::new(StatusCode::Ok);
         response.set_content_type(request_info.mime);
         response.set_body(http_types::Body::from(js_module));
