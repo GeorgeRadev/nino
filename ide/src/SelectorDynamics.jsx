@@ -5,18 +5,20 @@ export default function SelectorDB({ IDEContext }) {
     const [visible, setVisible] = React.useState(false);
 
     function onOk() {
-        IDEContext.addTab("setting:new setting");
+        IDEContext.addTab("dynamic:new setting");
     }
     function onClose() {
         setVisible(false);
 
     }
     function newSetting() {
-        setVisible(true);
+
+        IDEContext.addTab("dynamic:new setting");
+        //setVisible(true);
     }
     return (
         <div>
-            <div className='nino-ide-selector-title'>SETTINGS</div>
+            <div className='nino-ide-selector-title'>DYNAMICS</div>
             <br />
             filter:
             <br />
@@ -26,30 +28,21 @@ export default function SelectorDB({ IDEContext }) {
             <table className="nino_list_fixed_header">
                 <thead>
                     <tr>
-                        <th>Setting</th>
-                        <th>Value</th>
+                        <th>Dynamic</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
                         <td>nino_key 1</td>
-                        <td>There should be the value of each property</td>
                     </tr>
                     <tr>
                         <td>nino_key 1</td>
-                        <td>There should be the value of each property</td>
                     </tr>
                     <tr>
                         <td>nino_key 1</td>
-                        <td>There should be the value of each property</td>
                     </tr>
                     <tr>
                         <td>nino_key 1</td>
-                        <td>There should be the value of each property</td>
-                    </tr>
-                    <tr>
-                        <td>nino_key 1</td>
-                        <td>There should be the value of each property</td>
                     </tr>
                 </tbody>
             </table>
@@ -58,7 +51,7 @@ export default function SelectorDB({ IDEContext }) {
             <button onClick={() => newSetting()}>New</button>
 
             <Dialog visible={visible} onOk={() => onOk()} onClose={() => onClose()} >
-                <span>from parent</span>
+                <span>name of dynamic : </span>
             </Dialog>
         </div>
     );

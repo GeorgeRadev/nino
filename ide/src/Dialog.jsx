@@ -1,20 +1,20 @@
-import React, { useRef } from 'react';
+import React from 'react';
 
 
-export default function Dialog({ children }) {
-    const dialogRef = useRef(null);
-    function close(e) {
-        debugger;
-        dialogRef.close();
+export default function Dialog({ children, visible, onClose, onOk }) {
+    function close() {
+        onClose();
+    } function ok() {
+        onOk();
+        onClose();
     }
     return (
-        <div className='nino-ide-dialog'>
-            <div className='nino-ide-dialog-background'></div>
-            <div className='nino-ide-dialog-content' ref={dialogRef}>
-                text here <br />
-                {children}<br />
-                <button onClick={close}>close</button>
-
+        <div className="nino-ide-dialog-background" style={{ display: (visible) ? "block" : "none" }}>
+            <div className="nino-ide-dialog-content">
+                {children}
+                <hr />
+                <button onClick={() => close()}>close</button>
+                <button onClick={() => ok()}>ok</button>
             </div>
         </div>
     );

@@ -1,6 +1,7 @@
 import React from 'react';
 import EditorRequests from './EditorRequests';
 import EditorDB from './EditorDB';
+import EditorDynamics from './EditorDynamics';
 
 function instantiateObjectID(objectID) {
   var component;
@@ -8,6 +9,8 @@ function instantiateObjectID(objectID) {
     component = <EditorDB objectID={objectID} />;
   } else if (objectID.startsWith("path:")) {
     component = <EditorRequests objectID={objectID} />;
+  } else if (objectID.startsWith("dynamic:")) {
+    component = <EditorDynamics objectID={objectID} />;
   }
   return component;
 }
@@ -61,16 +64,17 @@ function EditorTabs({ IDEContext }) {
 function EditorToggable({ IDEContext }) {
   function mapTabsToggle(tab) {
     return (
-      <div key={tab.objectID} style={{ display: tab.objectID === IDEContext.tabSelected ? "block" : "none" }}>
+      <div key={tab.objectID} style={{
+        display: tab.objectID === IDEContext.tabSelected ? "block" : "none",
+        height: "calc(100% - 11px)", padding: "5px"
+      }}>
         {tab.component}
       </div>
     );
   }
   return (
     <div className='nino-ide-editor-container'>
-      <div style={{ padding: "10px" }}>
-        {IDEContext.tabs.map(mapTabsToggle)}
-      </div>
+      {IDEContext.tabs.map(mapTabsToggle)}
     </div>
   );
 }
@@ -97,7 +101,6 @@ export default function Editors({ IDEContext }) {
       </div>
       <EditorTabs IDEContext={IDEContext} />
       <EditorToggable IDEContext={IDEContext} />
-
     </div>
   );
 };
