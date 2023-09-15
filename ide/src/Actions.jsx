@@ -30,7 +30,7 @@ function Action({ name, image, alt, IDEContext }) {
   }
   return (
     <li key={name} className={selectedAction === name ? "active" : ""} >
-      <a href={"#" + name} alt={alt} title={alt} onClick={() => setSelection(name)}>
+      <a alt={alt} title={alt} onClick={() => setSelection(name)}>
         <span className="material-symbols-outlined">{image}</span>
       </a>
     </li>

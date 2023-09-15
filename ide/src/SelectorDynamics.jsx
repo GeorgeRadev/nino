@@ -51,8 +51,17 @@ export default function SelectorDB({ IDEContext }) {
             <button onClick={() => newSetting()}>New</button>
 
             <Dialog visible={visible} onOk={() => onOk()} onClose={() => onClose()} >
-                <span>name of dynamic : </span>
-            </Dialog>
-        </div>
+                <span>name of dynamic : <br />
+                    <input list="browsers" />
+                    <datalist id="browsers">
+                        <option value="Internet Explorer" />
+                        <option value="Firefox" />
+                        <option value="Google Chrome" />
+                        <option value="Opera" />
+                        <option value="Safari" />
+                    </datalist>
+                </span>
+            </Dialog >
+        </div >
     );
 }
