@@ -1,47 +1,60 @@
 import React from 'react';
 import Dialog from './Dialog';
 
+function optionsReload(setOptions) {
+    //fetch content
+    setOptions(['1', '2', '3']);
+}
 
-function SelectionOption() {
-    var arr = ['1', '2', '3'];
-    const listItems = arr.map((e) => <option value={e}>{e}</option>);
+function OptionsRender({ options }) {
+    const listItems = options.map((e) => <option key={e} value={e}>{e}</option>);
     return (<>{listItems}</>);
 }
 
 export default function SelectorDB({ IDEContext }) {
-    const [visible, setVisible] = React.useState(false);
+    const [dialogVisible, setDialogVisible] = React.useState(false);
+    const [options, setOptions] = React.useState([]);
     const [selection, setSelection] = React.useState("");
     const [newName, setNewName] = React.useState("");
     const inputReference = React.useRef(null);
 
+    function optionsRefresh() {
+        optionsReload(setOptions);
+    }
     React.useEffect(() => {
-        if (visible && inputReference.current) {
+        optionsRefresh();
+    }, []);
+
+    function dialogOpen() {
+        setNewName("");
+        setDialogVisible(true);
+    }
+    // select dialog field
+    React.useEffect(() => {
+        if (dialogVisible && inputReference.current) {
             inputReference.current.focus();
         }
-    }, [visible]);
-
-    function onOk() {
+    }, [dialogVisible]);
+    function dialogOnOk() {
         if (newName) {
             IDEContext.addTab("setting:" + newName);
         }
     }
-    function onClose() {
-        setVisible(false);
-
+    function dialogOnClose() {
+        setDialogVisible(false);
     }
-    function selectionNew() {
-        setNewName("");
-        setVisible(true);
-    }
-    function selectionEdit() {
+    function optionsEdit() {
+        debugger;
         if (selection) {
             IDEContext.addTab("setting:" + selection);
+        } else {
+            alert("Selection needed to edit it");
         }
     }
-    function selectionClick(event) {
-        // console.log("click on: " + event.target.value + " " + event.detail + " times");
+    function optionsClick(event) {
+        console.log("click on: " + event.target.value + " " + event.detail + " times");
         if (event.detail === 1) {
-            setSelection(String(event.target.value));
+            setSelection(event.target.value);
         } else if (event.detail === 2) {
             IDEContext.addTab("setting:" + event.target.value);
         }
@@ -50,8 +63,9 @@ export default function SelectorDB({ IDEContext }) {
         <div>
             <div className='nino-ide-selector-title'>SETTINGS</div>
             <br />
-            <button onClick={selectionNew}>New</button>&nbsp;&nbsp;&nbsp;
-            <button onClick={selectionEdit}>Edit</button>
+            <button onClick={dialogOpen}>New</button>&nbsp;&nbsp;&nbsp;
+            <button onClick={optionsEdit}>Edit</button>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <button onClick={optionsRefresh}>Refresh</button>
             <br />
             filter:
             <br />
@@ -59,12 +73,12 @@ export default function SelectorDB({ IDEContext }) {
             <br />
             Settings:
             <br />
-            <select className="selector_field" name="cars" size="20" onClick={selectionClick}>
-                <SelectionOption />
+            <select className="selector_field" name="cars" size="20" onClick={optionsClick}>
+                <OptionsRender options={options} />
             </select>
             <br />
 
-            <Dialog visible={visible} onOk={() => onOk()} onClose={() => onClose()} >
+            <Dialog visible={dialogVisible} onOk={dialogOnOk} onClose={dialogOnClose} >
                 Setting name:&nbsp;&nbsp;&nbsp;
                 <input type="text" className="selector_field" ref={inputReference} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
             </Dialog>

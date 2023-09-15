@@ -7,15 +7,14 @@ export const ActionDetails = [
   { name: 'requests', image: 'rebase', alt: "request paths" },
   { name: 'statics', image: 'upload_file', alt: "statics" },
   { name: 'dynamics', image: 'file_present', alt: "dynamics" },
-  { name: 'users', image: 'school', alt: "Roles and Users" },
   { name: 'databases', image: 'database', alt: "database" },
-  { name: 'schedules', image: 'update', alt: "schedule" },
+  { name: 'roles', image: 'school', alt: "Roles" },
+  { name: 'users', image: 'face', alt: "Users" },
   { name: "separator2" },
-  { name: 'user', image: 'face', alt: "user acount" },
+  { name: 'schedules', image: 'update', alt: "schedules" },
   { name: 'transports', image: 'local_shipping', alt: "transports" },
   { name: 'settings', image: 'settings', alt: "settings" },
 ]
-
 
 function Separator() {
   return <li >&nbsp;</li>;

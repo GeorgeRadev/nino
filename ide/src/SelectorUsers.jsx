@@ -61,7 +61,7 @@ export default function SelectorDB({ IDEContext }) {
     }
     return (
         <div>
-            <div className='nino-ide-selector-title'>REQUESTS</div>
+            <div className='nino-ide-selector-title'>USERS</div>
             <br />
             <button onClick={dialogOpen}>New</button>&nbsp;&nbsp;&nbsp;
             <button onClick={optionsEdit}>Edit</button>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
