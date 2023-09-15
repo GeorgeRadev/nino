@@ -1,7 +1,7 @@
 import React from 'react';
 import Actions from './Actions';
 import Selector from './Selector';
-import Editors from './Editors';
+import Editor from './Editor';
 
 export default function IDE() {
   const IDEContext = {
@@ -12,7 +12,7 @@ export default function IDE() {
     <div id='nino-ide-container'>
       <Actions IDEContext={IDEContext} />
       <Selector IDEContext={IDEContext} />
-      <Editors IDEContext={IDEContext} />
+      <Editor IDEContext={IDEContext} />
     </div>
   );
 };
