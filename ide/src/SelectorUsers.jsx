@@ -69,18 +69,18 @@ export default function SelectorDB({ IDEContext }) {
             <br />
             filter:
             <br />
-            <input type="text" className="selector_field" name="filter settings" maxLength="1024" />
+            <input type="text" className="selector-field" name="filter settings" maxLength="1024" />
             <br />
             Settings:
             <br />
-            <select className="selector_field" name="cars" size="20" onClick={optionsClick}>
+            <select className="selector-field" name="cars" size="20" onClick={optionsClick}>
                 <OptionsRender options={options} />
             </select>
             <br />
 
             <Dialog visible={dialogVisible} onOk={dialogOnOk} onClose={dialogOnClose} >
                 Setting name:&nbsp;&nbsp;&nbsp;
-                <input type="text" className="selector_field" ref={inputReference} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
+                <input type="text" className="selector-field" ref={inputReference} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
             </Dialog>
         </div>
     );

@@ -179,6 +179,12 @@ code {
   display: inline;
 }
 
+.nino-ide-editor-field {
+  width: 90%;
+  border: 1px solid #888;
+  overflow: auto;
+}
+
 .nino-ide-editor-container {
   top: 36px;
   width: 100%;
@@ -188,14 +194,19 @@ code {
   overflow: auto;
 }
 
+.nino-ide-ui-container-100 {
+  width: 90%;
+  display: inline-block;
+}
+
 .nino-ide-ui-container-50 {
-  width: 50%;
+  width: 49%;
   display: inline-block;
 }
 
 @media (max-width: 1024px) {
   .nino-ide-ui-container-50 {
-    width: 100%;
+    width: 99%;
     display: inline-block;
   }
 
@@ -231,32 +242,24 @@ code {
   width: 290px;
 }
 
-.selector_field {
+.selector-field {
   width: 282px;
   border: 1px solid #888;
+  overflow: auto;
 }
 
 .nino-ide-dialog-background {
   display: none;
-  /* Hidden by default */
   position: fixed;
-  /* Stay in place */
   z-index: 1;
-  /* Sit on top */
   padding-top: 100px;
-  /* Location of the box */
   left: 0;
   top: 0;
   width: 100%;
-  /* Full width */
   height: 100%;
-  /* Full height */
   overflow: auto;
-  /* Enable scroll if needed */
   background-color: rgb(0, 0, 0);
-  /* Fallback color */
   background-color: rgba(0, 0, 0, 0.4);
-  /* Black w/ opacity */
 }
 
 /* Modal Content */

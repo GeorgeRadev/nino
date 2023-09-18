@@ -1,22 +1,36 @@
 import React from 'react';
 
-export default function EditorRequests() {
+export default function EditorRequests({ objectID }) {
+    const requestPath = objectID.split(":")[1];
+    var requestName;
+    const requestNameReference = React.useRef(null);
+
+    function settingSave() {
+
+    }
+    function settingRefresh() {
+        requestName = "name";
+    }
+
+    settingRefresh();
     return (
-        <div>Path editor will be here
-            <div>
-                <span className="material-symbols-outlined">favorite</span>
-                <span className="material-symbols-outlined size-20">favorite</span>
-                <span className="material-symbols-outlined size-32">favorite</span>
-                <br />
-                <span className="material-symbols-outlined size-48">publish</span>
-                <span className="material-symbols-outlined size-48">add_box</span>
-                <span className="material-symbols-outlined size-48">check_box</span>
-                <span className="material-symbols-outlined size-48">more_horiz</span>
-                <span className="material-symbols-outlined size-48">menu</span>
-                <span className="material-symbols-outlined size-48">keyboard_arrow_down</span>
-                <span className="material-symbols-outlined size-48">keyboard_arrow_right</span>
-                <span className="material-symbols-outlined size-48">keyboard_double_arrow_right</span>
-                <span className="material-symbols-outlined size-48">keyboard_double_arrow_down</span>
+        <div style={{ padding: "5px" }}>
+            <button onClick={settingSave}>Save</button>&nbsp;&nbsp;&nbsp;
+            <button onClick={settingRefresh}>Refresh</button>
+            <hr />
+            <div className='nino-ide-ui-container-100'>
+                request path: <br />
+                <input type="text" className="nino-ide-editor-field" name="request-name" value={requestPath} readOnly={true} maxLength="1024" />
+            </div>
+            <div className='nino-ide-ui-container-100'>
+                to resource name: <br />
+                <input type="text" className="nino-ide-editor-field" name="settings-value" value={requestName} ref={requestNameReference} maxLength="1024" />
+            </div>
+            <div className='nino-ide-ui-container-100'>
+                <label><input type="checkbox" name="redirect" /> Redirect</label><br />
+                <label><input type="checkbox" name="authorize" /> Authorize</label><br />
+                <label><input type="checkbox" name="dynamic" /> Dynamic</label><br />
+                <label><input type="checkbox" name="execute" /> Execute</label><br />
             </div>
         </div>
     );

@@ -1,13 +1,20 @@
 import React from 'react';
 import Dialog from './Dialog';
 
-function optionsReload(setOptions) {
+const prefix = "setting";
+async function optionsReload(setOptions) {
     //fetch content
-    setOptions(['1', '2', '3']);
+    try {
+        const response = await fetch("/ide_rest?op=/settings/get");
+        const settings = await response.json();
+        setOptions(settings);
+    } catch (error) {
+        setOptions([{ key: "error", value: "cannot load settings: " + error.message }]);
+    }
 }
 
 function OptionsRender({ options }) {
-    const listItems = options.map((e) => <option key={e} value={e}>{e}</option>);
+    const listItems = options.map((e) => <option key={e.key} value={e.key}>{e.key + " = " + e.value}</option>);
     return (<>{listItems}</>);
 }
 
@@ -18,8 +25,8 @@ export default function SelectorDB({ IDEContext }) {
     const [newName, setNewName] = React.useState("");
     const inputReference = React.useRef(null);
 
-    function optionsRefresh() {
-        optionsReload(setOptions);
+    async function optionsRefresh() {
+        await optionsReload(setOptions);
     }
     React.useEffect(() => {
         optionsRefresh();
@@ -37,7 +44,7 @@ export default function SelectorDB({ IDEContext }) {
     }, [dialogVisible]);
     function dialogOnOk() {
         if (newName) {
-            IDEContext.addTab("setting:" + newName);
+            IDEContext.addTab(prefix + ":" + newName);
         }
     }
     function dialogOnClose() {
@@ -46,7 +53,7 @@ export default function SelectorDB({ IDEContext }) {
     function optionsEdit() {
         debugger;
         if (selection) {
-            IDEContext.addTab("setting:" + selection);
+            IDEContext.addTab(prefix + ":" + selection);
         } else {
             alert("Selection needed to edit it");
         }
@@ -69,18 +76,18 @@ export default function SelectorDB({ IDEContext }) {
             <br />
             filter:
             <br />
-            <input type="text" className="selector_field" name="filter settings" maxLength="1024" />
+            <input type="text" className="selector-field" name="filter settings" maxLength="1024" />
             <br />
             Settings:
             <br />
-            <select className="selector_field" name="cars" size="20" onClick={optionsClick}>
+            <select className="selector-field" name="cars" size="20" onClick={optionsClick}>
                 <OptionsRender options={options} />
             </select>
             <br />
 
             <Dialog visible={dialogVisible} onOk={dialogOnOk} onClose={dialogOnClose} >
                 Setting name:&nbsp;&nbsp;&nbsp;
-                <input type="text" className="selector_field" ref={inputReference} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
+                <input type="text" className="selector-field" ref={inputReference} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
             </Dialog>
         </div>
     );
