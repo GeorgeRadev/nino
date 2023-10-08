@@ -1,6 +1,7 @@
 import React from 'react';
 import Dialog from './Dialog';
 
+const prefix = "schedule:"
 function optionsReload(setOptions) {
     //fetch content
     setOptions(['1', '2', '3']);
@@ -37,7 +38,7 @@ export default function SelectorDB({ IDEContext }) {
     }, [dialogVisible]);
     function dialogOnOk() {
         if (newName) {
-            IDEContext.addTab("setting:" + newName);
+            IDEContext.addTab(prefix + newName);
         }
     }
     function dialogOnClose() {
@@ -46,7 +47,7 @@ export default function SelectorDB({ IDEContext }) {
     function optionsEdit() {
         debugger;
         if (selection) {
-            IDEContext.addTab("setting:" + selection);
+            IDEContext.addTab(prefix + selection);
         } else {
             alert("Selection needed to edit it");
         }
@@ -56,7 +57,7 @@ export default function SelectorDB({ IDEContext }) {
         if (event.detail === 1) {
             setSelection(event.target.value);
         } else if (event.detail === 2) {
-            IDEContext.addTab("setting:" + event.target.value);
+            IDEContext.addTab(prefix + event.target.value);
         }
     }
     return (

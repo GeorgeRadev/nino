@@ -1,16 +1,19 @@
 import React from 'react';
-import EditorRequests from './EditorRequests';
-import EditorDynamics from './EditorDynamics';
-import EditorSettings from './EditorSettings';
+import EditorRequest from './EditorRequest';
+import EditorDynamic from './EditorDynamic';
+import EditorSetting from './EditorSetting';
+import EditorStatic from './EditorStatic';
 
 function instantiateObjectID(objectID) {
   var component;
   if (objectID.startsWith("request:")) {
-    component = <EditorRequests objectID={objectID} />;
+    component = <EditorRequest objectID={objectID} />;
+  } else if (objectID.startsWith("static:")) {
+    component = <EditorStatic objectID={objectID} />;
   } else if (objectID.startsWith("dynamic:")) {
-    component = <EditorDynamics objectID={objectID} />;
+    component = <EditorDynamic objectID={objectID} />;
   } else if (objectID.startsWith("setting:")) {
-    component = <EditorSettings objectID={objectID} />;
+    component = <EditorSetting objectID={objectID} />;
   }
   return component;
 }

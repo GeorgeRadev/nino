@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import MonacoEditor from 'react-monaco-editor';
 
-export default function EditorDynamic({ objectID }) {
+export default function EditorDynamics({ objectID }) {
     const [code, setCode] = useState('');
     const [language, setLanguage] = useState('javascript');
     const options = {

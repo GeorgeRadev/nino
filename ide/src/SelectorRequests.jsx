@@ -1,8 +1,7 @@
 import React from 'react';
 import Dialog from './Dialog';
 
-
-const prefix = "request";
+const prefix = "request:";
 
 function optionsReload(setOptions) {
     //fetch content
@@ -40,7 +39,7 @@ export default function SelectorDB({ IDEContext }) {
     }, [dialogVisible]);
     function dialogOnOk() {
         if (newName) {
-            IDEContext.addTab(prefix + ":" + newName);
+            IDEContext.addTab(prefix + newName);
         }
     }
     function dialogOnClose() {
@@ -49,7 +48,7 @@ export default function SelectorDB({ IDEContext }) {
     function optionsEdit() {
         debugger;
         if (selection) {
-            IDEContext.addTab(prefix+ ":" + selection);
+            IDEContext.addTab(prefix + selection);
         } else {
             alert("Selection needed to edit it");
         }

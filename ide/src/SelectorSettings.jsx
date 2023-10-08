@@ -1,13 +1,12 @@
 import React from 'react';
 import Dialog from './Dialog';
+import NinoREST from './NinoRest';
 
-const prefix = "setting";
+const prefix = "setting:";
+
 async function optionsReload(setOptions) {
-    //fetch content
     try {
-        const response = await fetch("/ide_rest?op=/settings/get");
-        const settings = await response.json();
-        setOptions(settings);
+        setOptions(NinoREST.settingsGet());
     } catch (error) {
         setOptions([{ key: "error", value: "cannot load settings: " + error.message }]);
     }
@@ -44,7 +43,7 @@ export default function SelectorDB({ IDEContext }) {
     }, [dialogVisible]);
     function dialogOnOk() {
         if (newName) {
-            IDEContext.addTab(prefix + ":" + newName);
+            IDEContext.addTab(prefix + newName);
         }
     }
     function dialogOnClose() {
@@ -53,7 +52,7 @@ export default function SelectorDB({ IDEContext }) {
     function optionsEdit() {
         debugger;
         if (selection) {
-            IDEContext.addTab(prefix + ":" + selection);
+            IDEContext.addTab(prefix + selection);
         } else {
             alert("Selection needed to edit it");
         }
@@ -63,7 +62,7 @@ export default function SelectorDB({ IDEContext }) {
         if (event.detail === 1) {
             setSelection(event.target.value);
         } else if (event.detail === 2) {
-            IDEContext.addTab("setting:" + event.target.value);
+            IDEContext.addTab(prefix + event.target.value);
         }
     }
     return (
