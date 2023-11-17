@@ -2,22 +2,38 @@
 # db start | stop
 
 pwd=$(pwd)
+version="16.1.0"
+
 if [ ! -f "./pg/bin/pg_ctl" ] 
 then
     if [ -f "./pg/pg.jar" ] 
     then
         echo "postgres jar found" 
     else
+        platform="linux"
+        name=$(uname)
+        if [[ "$name" -eq "Darwin" ]]
+        then
+            platform="darwin"
+        fi
+
+        echo "Platform: $platform"
+        echo "Version: $version"
         echo "Downloading postgress..."
         mkdir -p pg
-        curl https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-linux-amd64/14.5.0/embedded-postgres-binaries-linux-amd64-14.5.0.jar \
-        --output ./pg/pg.jar
+        pgurl="https://repo1.maven.org/maven2/io/zonky/test/postgres/embedded-postgres-binaries-$platform-amd64/$version/embedded-postgres-binaries-$platform-amd64-$version.jar"
+        echo "Downloading: $pgurl"
+        curl  "$pgurl" --output ./pg/pg.jar
+        if [ $? -ne 0 ] 
+        then 
+            exit 1
+        fi
     fi
    #exctract jar
    cd ./pg
    jar -xvf pg.jar
-   7z x -aoa postgres-linux-x86_64.txz
-   tar -xvf postgres-linux-x86_64.tar
+   7zz x -aoa postgres-$platform-x86_64.txz
+   tar -xvf postgres-$platform-x86_64.tar
    cd ..
 fi
 if [ ! -d "./pg/db" ] 

@@ -20,6 +20,7 @@ use deno_core::anyhow::Error;
 use nino_structures::InitialSettings;
 use std::{fs, sync::Arc};
 
+// export NINO=postgresql://george.radev@localhost/postgres?connect_timeout=5
 fn main() {
     setup_panic_hook();
 
