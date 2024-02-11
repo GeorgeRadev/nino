@@ -1,4 +1,4 @@
-use deno_core::anyhow::Error;
+use deno_runtime::deno_core::anyhow::Error;
 use http_types::Mime;
 
 use crate::{

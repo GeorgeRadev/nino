@@ -1,6 +1,7 @@
 export default async function notify(message) {
+    const core = Deno.core;
     debugger;
-    const core = Deno[Deno.internal].core;
+
     if (typeof message === 'string' || message instanceof ArrayBuffer) {
         //ok
     } else if (typeof message === "number") {
@@ -8,5 +9,5 @@ export default async function notify(message) {
     } else {
         message = JSON.stringify(message);
     }
-    return core.ops.op_broadcast_message(message);
+    return core.ops.nino_broadcast_message(message);
 }

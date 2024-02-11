@@ -1,5 +1,5 @@
 export default async function getDB() {
-    const core = Deno[Deno.internal].core;
+    const core = Deno.core;
 
     var name;
     if (arguments.length > 0) {
@@ -7,7 +7,7 @@ export default async function getDB() {
     } else {
         name = "_main";
     }
-    const db_alias = core.ops.op_tx_get_connection_name(name);
+    const db_alias = core.ops.nino_tx_get_connection_name(name);
     core.print('db alias :' + db_alias + '\n');
 
     var normalizeParams = function (args) {
@@ -42,7 +42,7 @@ export default async function getDB() {
         var { params, paramTypes } = normalizeParams(queryArray);
 
         if (params[0].startsWith("SELECT")) {
-            const queryResult = core.ops.op_tx_execute_query(name, params, paramTypes);
+            const queryResult = core.ops.nino_tx_execute_query(name, params, paramTypes);
             if (callback) {
                 for (var row of queryResult.rows) {
                     const params = [...row, queryResult.rowNames, queryResult.rowTypes];
@@ -55,7 +55,7 @@ export default async function getDB() {
                 return queryResult;
             }
         } else {
-            const queryResult = core.ops.op_tx_execute_upsert(name, params, paramTypes);
+            const queryResult = core.ops.nino_tx_execute_upsert(name, params, paramTypes);
             return queryResult;
         }
     }

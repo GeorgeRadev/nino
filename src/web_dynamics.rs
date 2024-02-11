@@ -10,9 +10,8 @@ use crate::{
 };
 use async_channel::{Receiver, Sender};
 use async_std::net::TcpStream;
-use deno_core::anyhow::Error;
-use http_types::Request;
-use http_types::{Response, StatusCode};
+use deno_runtime::deno_core::anyhow::Error;
+use http_types::{Request, Response, StatusCode};
 use std::sync::Arc;
 
 #[derive(Clone)]

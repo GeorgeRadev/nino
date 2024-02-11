@@ -1,5 +1,5 @@
 async function main() {
-    const core = Deno[Deno.internal].core;
+    const core = Deno.core;
     const db = (await import('_db')).default;
     const jsqlx = (await import('_jsqlx')).default;
 
@@ -28,12 +28,12 @@ async function main() {
     // add admin user
     {
         const username = "admin";
-        const password = core.ops.op_password_hash("admin");
+        const password = core.ops.nino_password_hash("admin");
         await conn.query(["UPDATE nino_user SET password = $2 WHERE username = $1", username, password]);
     }
     // end with commit
-    core.ops.op_tx_end(true);
-    await core.opAsync('aop_end_task');
+    core.ops.nino_tx_end(true);
+    await core.ops.nino_a_end_task();
 }
 
 (async () => {

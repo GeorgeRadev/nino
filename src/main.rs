@@ -4,6 +4,7 @@ mod db_settings;
 mod db_transactions;
 mod js;
 mod js_functions;
+mod js_worker;
 mod js_test;
 mod js_test_debug;
 mod nino_constants;
@@ -16,7 +17,7 @@ mod web_requests;
 mod web_statics;
 
 use crate::{db_settings::SettingsManager, nino_constants::info};
-use deno_core::anyhow::Error;
+use deno_runtime::deno_core::anyhow::Error;
 use nino_structures::InitialSettings;
 use std::{fs, sync::Arc};
 

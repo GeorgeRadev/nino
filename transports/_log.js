@@ -1,5 +1,6 @@
 export default async function log() {
-    const core = Deno[Deno.internal].core;
+    const core = Deno.core;
+
     if (arguments.length > 0) {
         for (var arg of arguments) {
             if (!arg) {

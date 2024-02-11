@@ -6,7 +6,7 @@ export default class user {
         if (!username || !password) {
             return false;
         }
-        const core = Deno[Deno.internal].core;
+        const core = Deno.core;
         const conn = await db();
         const sql = SELECT password FROM nino_user WHERE username = : username;
         var pass;
@@ -14,7 +14,7 @@ export default class user {
             pass = password;
             return false;
         });
-        return core.ops.op_password_verify(password, pass);
+        return core.ops.nino_password_verify(password, pass);
     }
 
 }

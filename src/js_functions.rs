@@ -1,44 +1,46 @@
 use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
-use crate::nino_constants::{self, info};
-use crate::nino_functions;
+use crate::nino_constants::info;
 use crate::nino_structures::JSTask;
 use crate::web_dynamics::DynamicManager;
+use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
-use deno_core::{anyhow::Error, op, Op, OpDecl, OpState};
+use deno_runtime::deno_core::{self, anyhow::Error, op2, Op, OpDecl, OpState};
+use deno_runtime::deno_fetch::reqwest::header::{HeaderName, HeaderValue};
+use deno_runtime::deno_fetch::reqwest::{Body, Client, Method, Request};
+use http_types::convert::Serialize;
 use http_types::{StatusCode, Url};
-use hyper::Client;
-use hyper_tls::HttpsConnector;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
 
-pub fn get_javascript_ops() -> Vec<OpDecl> {
+pub fn get_nino_functions() -> Vec<OpDecl> {
     vec![
-        aop_sleep::DECL,
-        op_begin_task::DECL,
-        aop_end_task::DECL,
-        op_get_request::DECL,
-        op_get_request_body::DECL,
-        op_set_response_status::DECL,
-        op_set_response_header::DECL,
-        aop_set_response_send_text::DECL,
-        aop_set_response_send_buf::DECL,
-        op_get_invalidation_message::DECL,
-        op_get_thread_id::DECL,
-        op_broadcast_message::DECL,
-        aop_broadcast_message::DECL,
-        op_get_module_invalidation_prefix::DECL,
-        op_get_database_invalidation_prefix::DECL,
-        op_reload_database_aliases::DECL,
-        op_tx_end::DECL,
-        op_tx_get_connection_name::DECL,
-        op_tx_execute_query::DECL,
-        op_tx_execute_upsert::DECL,
-        op_get_user_jwt::DECL,
-        op_password_hash::DECL,
-        op_password_verify::DECL,
-        aop_fetch::DECL,
+        nino_begin_task::DECL,
+        nino_a_end_task::DECL,
+        nino_a_sleep::DECL,
+        nino_get_request::DECL,
+        nino_get_request_body::DECL,
+        nino_set_response_status::DECL,
+        nino_set_response_header::DECL,
+        nino_a_set_response_send_text::DECL,
+        nino_a_set_response_send_buf::DECL,
+        nino_get_invalidation_message::DECL,
+        nino_get_thread_id::DECL,
+        nino_broadcast_message::DECL,
+        nino_a_broadcast_message::DECL,
+        nino_get_module_invalidation_prefix::DECL,
+        nino_get_database_invalidation_prefix::DECL,
+        nino_reload_database_aliases::DECL,
+        nino_tx_end::DECL,
+        nino_tx_get_connection_name::DECL,
+        nino_tx_execute_query::DECL,
+        nino_tx_execute_upsert::DECL,
+        nino_get_user_jwt::DECL,
+        nino_password_hash::DECL,
+        nino_password_verify::DECL,
+        nino_a_fetch::DECL,
     ]
 }
 
@@ -76,8 +78,8 @@ macro_rules! function {
 }
 
 // sync to async
-// #[op]
-// async fn op_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
+// #[op2]
+// async fn nino_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
 //     let future = tokio::task::spawn_blocking(move || {
 //         // do some job here
 //     });
@@ -85,8 +87,9 @@ macro_rules! function {
 //     Ok(())
 // }
 
-#[op]
-fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
+#[op2]
+#[string]
+fn nino_begin_task(state: &mut OpState) -> Result<String, Error> {
     let mut module = String::new();
     let context = state.borrow_mut::<JSContext>();
     let result = context.web_task_rx.recv_blocking();
@@ -115,17 +118,16 @@ fn op_begin_task(state: &mut OpState) -> Result<String, Error> {
     Ok(module)
 }
 
-#[op]
-fn op_tx_end(state: &mut OpState, commit: bool) -> Result<(), Error> {
+#[op2(fast)]
+fn nino_tx_end(state: &mut OpState, commit: bool) {
     let tx = state.borrow_mut::<TransactionSession>();
     if let Err(error) = tx.close_all(commit) {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
-    Ok(())
 }
 
-#[op]
-async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
+#[op2(async)]
+async fn nino_a_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
     let stream;
     let mut response;
     {
@@ -156,7 +158,7 @@ async fn aop_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
     Ok(true)
 }
 
-#[derive(deno_core::serde::Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HttpRequest {
     url: http_types::Url,
@@ -170,8 +172,9 @@ pub struct HttpRequest {
     user: String,
 }
 
-#[op]
-fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
+#[op2]
+#[serde]
+fn nino_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
     let context = state.borrow_mut::<JSContext>();
 
     if let Some(task) = &context.task {
@@ -238,8 +241,8 @@ fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
     }
 }
 
-#[op]
-fn op_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
+#[op2(fast)]
+fn nino_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
     let context = state.borrow_mut::<JSContext>();
 
     if let Some(task) = &mut context.task {
@@ -256,8 +259,12 @@ fn op_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error>
     }
 }
 
-#[op]
-fn op_set_response_header(state: &mut OpState, key: String, value: String) -> Result<(), Error> {
+#[op2(fast)]
+fn nino_set_response_header(
+    state: &mut OpState,
+    #[string] key: String,
+    #[string] value: String,
+) -> Result<(), Error> {
     let context = state.borrow_mut::<JSContext>();
 
     if let Some(task) = &mut context.task {
@@ -275,15 +282,18 @@ fn op_set_response_header(state: &mut OpState, key: String, value: String) -> Re
     }
 }
 
-#[op]
-async fn aop_set_response_send_text(
+#[op2(async)]
+async fn nino_a_set_response_send_text(
+    op_state: Rc<RefCell<OpState>>,
+    #[string] body: String,
+) -> Result<(), Error> {
+    nino_a_set_response_send(op_state, body).await
+}
+
+async fn nino_a_set_response_send(
     op_state: Rc<RefCell<OpState>>,
     body: String,
 ) -> Result<(), Error> {
-    aop_set_response_send(op_state, body).await
-}
-
-async fn aop_set_response_send(op_state: Rc<RefCell<OpState>>, body: String) -> Result<(), Error> {
     let stream;
     let mut response;
     {
@@ -314,10 +324,10 @@ async fn aop_set_response_send(op_state: Rc<RefCell<OpState>>, body: String) -> 
     Ok(())
 }
 
-#[op]
-async fn aop_set_response_send_buf(
+#[op2(async)]
+async fn nino_a_set_response_send_buf(
     op_state: Rc<RefCell<OpState>>,
-    buffer: Vec<u8>,
+    #[serde] bytes: Vec<u8>,
 ) -> Result<(), Error> {
     let stream;
     let mut response;
@@ -341,7 +351,7 @@ async fn aop_set_response_send_buf(
         }
     }
 
-    response.set_body(buffer);
+    response.set_body(bytes);
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -349,8 +359,8 @@ async fn aop_set_response_send_buf(
     Ok(())
 }
 
-#[op]
-async fn aop_sleep(op_state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Error> {
+#[op2(async)]
+async fn nino_a_sleep(op_state: Rc<RefCell<OpState>>, #[bigint] millis: u64) -> Result<(), Error> {
     // Future must be Poll::Pending on first call
     let v;
     {
@@ -363,8 +373,9 @@ async fn aop_sleep(op_state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Er
     Ok(())
 }
 
-#[op]
-fn op_get_invalidation_message(state: &mut OpState) -> String {
+#[op2]
+#[string]
+fn nino_get_invalidation_message(state: &mut OpState) -> String {
     let context = state.borrow_mut::<JSContext>();
 
     if context.task.is_some() {
@@ -377,20 +388,20 @@ fn op_get_invalidation_message(state: &mut OpState) -> String {
     }
 }
 
-#[op]
-fn op_get_thread_id(state: &mut OpState) -> i16 {
+#[op2(fast)]
+fn nino_get_thread_id(state: &mut OpState) -> i16 {
     let context = state.borrow_mut::<JSContext>();
     context.id
 }
 
-#[op]
-fn op_broadcast_message(state: &mut OpState, message: String) {
+#[op2(fast)]
+fn nino_broadcast_message(state: &mut OpState, #[string] message: String) {
     let context = state.borrow_mut::<JSContext>();
     context.broadcast_messages.push(message);
 }
 
-#[op]
-async fn aop_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) {
+#[op2(async)]
+async fn nino_a_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) {
     let notifier;
     let mut messages: Vec<String> = Vec::with_capacity(8);
     {
@@ -412,17 +423,19 @@ async fn aop_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) {
     }
 }
 
-#[op]
-fn op_get_module_invalidation_prefix() -> String {
+#[op2]
+#[string]
+fn nino_get_module_invalidation_prefix() -> String {
     String::from(db_notification::NOTIFICATION_PREFIX_DYNAMICS)
 }
 
-#[op]
-fn op_get_database_invalidation_prefix() -> String {
+#[op2]
+#[string]
+fn nino_get_database_invalidation_prefix() -> String {
     String::from(db_notification::NOTIFICATION_PREFIX_DBNAME)
 }
 
-#[derive(deno_core::serde::Serialize)]
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     pub rows: Vec<Vec<String>>,
@@ -482,14 +495,15 @@ fn query_types_to_params(
         } else if query_types[ix] == 4 {
             //date
             match value.parse::<i64>() {
-                Ok(v) => {
-                    let secs = v / 1000;
-                    let ns = (v % 1000) * 1_000_000;
-                    let ndt = chrono::NaiveDateTime::from_timestamp_opt(secs, ns as u32).unwrap();
-                    let dt = chrono::DateTime::<chrono::Utc>::from_utc(ndt, chrono::Utc);
-                    let v = dt.to_rfc3339();
-                    query_params.push(QueryParam::Date(v));
-                }
+                Ok(v) => match chrono::DateTime::<chrono::Utc>::from_timestamp_millis(v) {
+                    Some(dt) => {
+                        let v = dt.to_rfc3339();
+                        query_params.push(QueryParam::Date(v));
+                    }
+                    None => {
+                        query_params.push(QueryParam::Null);
+                    }
+                },
                 Err(error) => {
                     return Err(Error::msg(format!(
                         "parameter {} `{}` is not UTC miliseconds: {}",
@@ -505,24 +519,29 @@ fn query_types_to_params(
     Ok((query[0].clone(), query_params))
 }
 
-#[op]
-fn op_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
+#[op2(fast)]
+fn nino_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
     let tx = state.borrow_mut::<TransactionSession>();
     tx.reload_database_aliases()
 }
 
-#[op]
-fn op_tx_get_connection_name(state: &mut OpState, db_alias: String) -> Result<String, Error> {
+#[op2]
+#[string]
+fn nino_tx_get_connection_name(
+    state: &mut OpState,
+    #[string] db_alias: String,
+) -> Result<String, Error> {
     let tx = state.borrow_mut::<TransactionSession>();
     tx.create_transaction(db_alias)
 }
 
-#[op]
-fn op_tx_execute_query(
+#[op2]
+#[serde]
+fn nino_tx_execute_query(
     state: &mut OpState,
-    db_alias: String,
-    query: Vec<String>,
-    query_types: Vec<i16>,
+    #[string] db_alias: String,
+    #[serde] query: Vec<String>,
+    #[serde] query_types: Vec<i16>,
 ) -> Result<QueryResult, Error> {
     let (query, params) = query_types_to_params(query, query_types)?;
     let tx = state.borrow_mut::<TransactionSession>();
@@ -535,20 +554,22 @@ fn op_tx_execute_query(
     })
 }
 
-#[op]
-fn op_tx_execute_upsert(
+#[op2]
+#[bigint]
+fn nino_tx_execute_upsert(
     state: &mut OpState,
-    db_alias: String,
-    query: Vec<String>,
-    query_types: Vec<i16>,
+    #[string] db_alias: String,
+    #[serde] query: Vec<String>,
+    #[serde] query_types: Vec<i16>,
 ) -> Result<u64, Error> {
     let (query, params) = query_types_to_params(query, query_types)?;
     let tx = state.borrow_mut::<TransactionSession>();
     tx.upsert(db_alias, query, params)
 }
 
-#[op]
-fn op_get_request_body(state: &mut OpState) -> Result<String, Error> {
+#[op2]
+#[string]
+fn nino_get_request_body(state: &mut OpState) -> Result<String, Error> {
     let context = state.borrow_mut::<JSContext>();
 
     if context.task.is_some() {
@@ -562,54 +583,59 @@ fn op_get_request_body(state: &mut OpState) -> Result<String, Error> {
     }
 }
 
-#[op]
-fn op_get_user_jwt(_state: &mut OpState, user: String) -> Result<String, Error> {
+#[op2]
+#[string]
+fn nino_get_user_jwt(_state: &mut OpState, #[string] user: String) -> Result<String, Error> {
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert(nino_constants::JWT_USER.to_string(), user);
     nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map)
 }
 
-#[op]
-fn op_password_hash(_state: &mut OpState, password: String) -> Result<String, Error> {
+#[op2]
+#[string]
+fn nino_password_hash(_state: &mut OpState, #[string] password: String) -> Result<String, Error> {
     nino_functions::password_hash(&password)
 }
 
-#[op]
-fn op_password_verify(_state: &mut OpState, password: String, hash: String) -> Result<bool, Error> {
+#[op2(fast)]
+fn nino_password_verify(
+    _state: &mut OpState,
+    #[string] password: String,
+    #[string] hash: String,
+) -> Result<bool, Error> {
     nino_functions::password_verify(&password, &hash)
 }
 
-#[op]
-async fn aop_fetch(
+#[op2(async)]
+#[string]
+async fn nino_a_fetch(
     _op_state: Rc<RefCell<OpState>>,
-    url: String,
-    timeout: i64,
-    method: String,
-    headers: HashMap<String, String>,
-    body: String,
+    #[string] url: String,
+    #[bigint] timeout: i64,
+    #[string] method: String,
+    #[serde] headers: HashMap<String, String>,
+    #[string] body: String,
 ) -> Result<String, Error> {
-    let uri: hyper::Uri = url.parse()?;
-    let https = uri.scheme_str() == Some("https");
-    // Build out our request
-    let mut request_builder = hyper::Request::builder();
-    request_builder = request_builder.uri(uri);
-    request_builder = if method.is_empty() {
-        request_builder.method(hyper::Method::GET)
-    } else {
-        request_builder.method(hyper::Method::from_bytes(method.as_bytes())?)
-    };
-    for (key, value) in headers.iter() {
-        request_builder = request_builder.header(key, value);
-    }
-    let request = request_builder.body(hyper::Body::from(body))?;
+    // Build out the request
+    let url = Url::from_str(&url)?;
+    let method = Method::from_bytes(method.as_bytes())?;
+    let mut request = Request::new(method, url);
 
-    let response_future = if https {
-        let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, hyper::Body>(https);
-        client.request(request)
-    } else {
+    for (key, value) in headers.iter() {
+        request
+            .headers_mut()
+            .insert(
+                HeaderName::from_str(key).unwrap(),
+                HeaderValue::from_str(value).unwrap(),
+            )
+            .unwrap();
+    }
+    request.body_mut().replace(Body::from(body));
+
+    let response_future = {
+        // let https = HttpsConnector::new();
         let client = Client::new();
-        client.request(request)
+        client.execute(request)
     };
 
     match tokio::time::timeout(
@@ -621,8 +647,8 @@ async fn aop_fetch(
         Err(_) => Err(Error::msg("Connection Timeout")),
         Ok(Err(e)) => Err(e.into()),
         Ok(Ok(response)) => {
-            let body_bytes = hyper::body::to_bytes(response.into_body()).await?;
-            let body = String::from_utf8(body_bytes.to_vec())?;
+            let bytes = response.bytes().await?;
+            let body = String::from_utf8(bytes.to_vec())?;
             Ok(body)
         }
     }

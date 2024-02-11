@@ -5,7 +5,7 @@ use crate::web_dynamics::DynamicManager;
 use crate::web_requests::RequestManager;
 use crate::web_statics::StaticManager;
 use async_std::net::{TcpListener, TcpStream};
-use deno_core::anyhow::Error;
+use deno_runtime::deno_core::anyhow::Error;
 use http_types::{Request, Response, StatusCode, Url};
 use std::net::SocketAddr;
 use std::sync::Arc;

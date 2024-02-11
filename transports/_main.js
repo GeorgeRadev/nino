@@ -2,13 +2,13 @@
  * This is the main entry point for the nino js threads
  */
 async function main() {
-    const core = Deno[Deno.internal].core;
-    const module_invalidation_prefix = core.ops.op_get_module_invalidation_prefix();
-    const database_invalidation_prefix = core.ops.op_get_database_invalidation_prefix();
+    const core = Deno.core;
+    const module_invalidation_prefix = core.ops.nino_get_module_invalidation_prefix();
+    const database_invalidation_prefix = core.ops.nino_get_database_invalidation_prefix();
 
     const header_set = function (key, value) {
         if (typeof key === 'string' && typeof value === 'string') {
-            core.ops.op_set_response_header(key, value);
+            core.ops.nino_set_response_header(key, value);
         } else {
             throw new Error("response.set() parameters needs to be both strings not "
                 + JSON.stringify(key) + ", "
@@ -19,14 +19,14 @@ async function main() {
 
     const response_status = function (status) {
         if (typeof status == 'number') {
-            core.ops.op_set_response_status(status);
+            core.ops.nino_set_response_status(status);
         } else {
             throw new Error("response.status() needs to be a number not " + JSON.stringify(status));
         }
     };
 
     const get_body = function () {
-        return core.ops.op_get_request_body();
+        return core.ops.nino_get_request_body();
     };
 
     const send_response = async function (response) {
@@ -35,25 +35,25 @@ async function main() {
             throw new Error("response should not be undefined nor null");
         }
         if (typeof response === 'string') {
-            await core.opAsync('aop_set_response_send_text', response);
+            await core.ops.nino_a_set_response_send_text(response);
         } else if (typeof response === "number") {
-            await core.opAsync('aop_set_response_send_text', String.valueOf(response));
+            await core.ops.nino_a_set_response_send_text(String.valueOf(response));
         } else if (response instanceof ArrayBuffer) {
-            await core.opAsync('aop_set_response_send_buf', response);
+            await core.ops.nino_a_set_response_send_buf(response);
         } else {
-            await core.opAsync('aop_set_response_send_text', JSON.stringify(response));
+            await core.ops.nino_a_set_response_send_text(JSON.stringify(response));
         }
     };
 
     const get_jwt = function (username) {
-        return core.ops.op_get_user_jwt(username.toString());
+        return core.ops.nino_get_user_jwt(username.toString());
     };
 
     // main loop
     for (; ;) {
         try {
             // core.print('_main try\n');
-            const module = core.ops.op_begin_task();
+            const module = core.ops.nino_begin_task();
 
             debugger;
             if (module) {
@@ -71,7 +71,7 @@ async function main() {
 
                 const handler_arguments_count = handler.length;
                 // core.print('default handler with ' + handler_arguments_count + ' arguments\n');
-                const request = core.ops.op_get_request();
+                const request = core.ops.nino_get_request();
                 request.set = header_set;
                 request.status = response_status;
                 request.getBody = get_body;
@@ -102,7 +102,7 @@ async function main() {
                 }
 
             } else {
-                const invalidation_message = core.ops.op_get_invalidation_message();
+                const invalidation_message = core.ops.nino_get_invalidation_message();
                 if (invalidation_message) {
                     core.print('MSG:js: ' + invalidation_message + '\n');
                     //request for cache invalidation
@@ -110,7 +110,7 @@ async function main() {
                         // modules has been changed
                         break;
                     } else if (invalidation_message.startsWith(database_invalidation_prefix)) {
-                        await core.ops.op_reload_database_aliases();
+                        core.ops.nino_reload_database_aliases();
                     } else {
                         // future  js message listeners could be implemented here
                     }
@@ -119,26 +119,26 @@ async function main() {
                 }
             }
             const commit = true;
-            core.ops.op_tx_end(commit);
-            await core.opAsync('aop_broadcast_message', commit);
-            await core.opAsync('aop_end_task');
+            core.ops.nino_tx_end(commit);
+            await core.ops.nino_a_broadcast_message(commit);
+            await core.ops.nino_a_end_task();
 
         } catch (e) {
             try {
                 let errorMessage = 'JS_ERROR: ' + e + '\n' + e.stack;
                 core.print(errorMessage + '\n');
-                core.ops.op_set_response_status(500);
-                core.ops.op_set_response_header('Content-Type', 'text/plain;charset=UTF-8');
-                await core.opAsync('aop_set_response_send_text', errorMessage);
+                core.ops.nino_set_response_status(500);
+                core.ops.nino_set_response_header('Content-Type', 'text/plain;charset=UTF-8');
+                await core.ops.nino_a_set_response_send_text(errorMessage);
             } catch (ex) {
                 let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
                 core.print(errorMessage + '\n');
             }
             try {
                 const commit = false;
-                core.ops.op_tx_end(commit);
-                await core.opAsync('aop_broadcast_message', commit);
-                await core.opAsync('aop_end_task');
+                core.ops.nino_tx_end(commit);
+                await core.ops.nino_a_broadcast_message(commit);
+                await core.ops.nino_a_end_task();
             } catch (ex) {
                 let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
                 core.print(errorMessage + '\n');

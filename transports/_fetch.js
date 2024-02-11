@@ -1,6 +1,7 @@
 export default async function fetch(url, options) {
-    const core = Deno[Deno.internal].core;
+    const core = Deno.core;
     debugger;
+
     if (!url || typeof url !== 'string') {
         throw new Error("first parameter must be a non empty string with url");
     }
@@ -32,7 +33,7 @@ export default async function fetch(url, options) {
     } else {
         body = "";
     }
-    const response = await core.opAsync('aop_fetch', url,
+    const response = await core.ops.nino_a_fetch(url,
         timeout,
         method,
         headers,

@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-use std::sync::{Arc, OnceLock, RwLock};
-
-use deno_core::anyhow::Error;
-
 use crate::db::DBManager;
 use crate::{db_notification, nino_constants, nino_structures};
+use deno_runtime::deno_core::anyhow::Error;
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock, RwLock};
 
 /// A Postgres DB connector and listener
 /// plus a connection pool for executing transaction

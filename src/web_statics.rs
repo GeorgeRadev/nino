@@ -5,7 +5,7 @@ use crate::{
     web_requests::RequestInfo,
 };
 use async_std::net::TcpStream;
-use deno_core::anyhow::Error;
+use deno_runtime::deno_core::anyhow::Error;
 use http_types::{Method, Request, Response, StatusCode};
 use std::sync::Arc;
 

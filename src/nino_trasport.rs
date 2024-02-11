@@ -1,5 +1,5 @@
 use crate::{db::DBManager, nino_constants};
-use deno_core::{
+use deno_runtime::deno_core::{
     anyhow::Error,
     serde_json::{self, Map, Value},
 };
