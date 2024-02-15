@@ -622,13 +622,10 @@ async fn nino_a_fetch(
     let mut request = Request::new(method, url);
 
     for (key, value) in headers.iter() {
-        request
-            .headers_mut()
-            .insert(
-                HeaderName::from_str(key).unwrap(),
-                HeaderValue::from_str(value).unwrap(),
-            )
-            .unwrap();
+        request.headers_mut().insert(
+            HeaderName::from_str(key).unwrap(),
+            HeaderValue::from_str(value).unwrap(),
+        );
     }
     request.body_mut().replace(Body::from(body));
 
