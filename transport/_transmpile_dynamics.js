@@ -26,11 +26,11 @@ async function main() {
     }
 
     // add admin user
-    {
-        const username = "admin";
-        const password = core.ops.nino_password_hash("admin");
-        await conn.query(["UPDATE nino_user SET password = $2 WHERE username = $1", username, password]);
-    }
+    // {
+    //     const username = "admin";
+    //     const password = core.ops.nino_password_hash("admin");
+    //     await conn.query(["UPDATE nino_user SET password = $2 WHERE username = $1", username, password]);
+    // }
     // end with commit
     core.ops.nino_tx_end(true);
     await core.ops.nino_a_end_task();

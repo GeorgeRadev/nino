@@ -167,14 +167,6 @@ mod tests {
     }
 
     #[test]
-    fn test_password_hashing() {
-        let password = String::from("p@ssw0rd");
-        let hash = password_hash(&password).unwrap();
-        assert!(password_verify(&password, &hash).unwrap());
-        assert!(!password_verify("test", &hash).unwrap());
-    }
-
-    #[test]
     fn test_normalize_path() {
         assert_eq!(
             normalize_path(String::from("///////remove//duplicate/////slashes")),
@@ -197,5 +189,20 @@ mod tests {
             String::from("exploits/should.get.normalized"),
         );
         assert_eq!(normalize_path(String::from("")), String::from("/"),);
+    }
+
+    #[test]
+    fn test_password_hashing() {
+        let password = String::from("p@ssw0rd");
+        let hash = password_hash(&password).unwrap();
+        assert!(password_verify(&password, &hash).unwrap());
+        assert!(!password_verify("test", &hash).unwrap());
+    }
+
+    #[test]
+    fn test_print_password_hash() {
+        let password = String::from("admin");
+        let hash = password_hash(&password).unwrap();
+        println!("password: {}", hash);
     }
 }

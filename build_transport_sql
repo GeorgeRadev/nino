@@ -1,0 +1,101 @@
+#!/bin/bash
+# script that creates the initial sql.
+# each nino executable checks for nino.sql in the current folder to execute as initial script before starting.
+
+pwd=$(pwd)
+out_file="$pwd/nino.sql"
+echo "CREATING: $out_file "
+
+echo "copy: init db sql"
+cp "$pwd/transport/db_init.sql" "$out_file"
+
+#add new line
+echo "" >> "$out_file"
+
+# write_request: "path" "name" "mime" "redirect" "authorize" "dynamic" "execute"
+write_request () {
+   echo "add request: $1"
+   echo "INSERT INTO nino_request (path, name, mime, redirect, authorize, dynamic, execute) " >> "$out_file"
+   echo "VALUES ('$1', '$2', '$3', $4, $5, $6, $7);" >> "$out_file"
+}
+
+#add requests
+write_request "/"                   "index.html"            "text/html;charset=UTF-8"                   false false false false
+write_request "favicon.ico"         "favicon.ico"           "image/x-icon"                              false false false false
+write_request "static.json"         "static.json"           "application/json;charset=UTF-8"            false false false false
+write_request "dynamic.json"        "dynamic_json"          "application/json;charset=UTF-8"            false false true  true
+write_request "test_servlet"        "test_servlet"          "text/html;charset=UTF-8"                   false false true  true
+write_request "notify_servlet"      "notify_servlet"        "text/html;charset=UTF-8"                   false false true  true
+write_request "jsqlx_servlet"       "jsqlx_servlet"         "text/html;charset=UTF-8"                   false false true  true
+write_request "ide"                 "ide/index.html"        "text/html;charset=UTF-8"                   false false false false 
+write_request "ide/ide.css"         "ide/ide.css"           "text/css;charset=UTF-8"                    false false false false 
+write_request "ide/ide.js"          "ide/ide.js"            "application/javascript;charset=UTF-8"      false false false false 
+write_request "db_servlet"          "db_servlet"            "text/html;charset=UTF-8"                   false false true  true
+write_request "db_list"             "db_list"               "text/plain;charset=UTF-8"                  false false true  true
+write_request "login"               "login.html"            "text/html;charset=UTF-8"                   false false false false 
+write_request "nino_login"          "nino_login"            "text/html;charset=UTF-8"                   false false true  true
+write_request "fetch_servlet"       "fetch_servlet"         "application/json;charset=UTF-8"            false false true  true
+write_request "portal"              "portal"                "text/html;charset=UTF-8"                   false true  true  true
+write_request "portlet_about.js"    "portlet_about.js"      "application/javascript;charset=UTF-8"      false true  true  false
+write_request "portlet_test.js"     "portlet_test.js"       "application/javascript;charset=UTF-8"      false true  true  false
+write_request "google"              "http://www.google.com" "text/html;charset=UTF-8"                   true  false false false
+
+
+# write_static: "name" "file"
+write_static () {
+   echo "add static: $1"
+   echo "INSERT INTO nino_static (name, content) " >> "$out_file"
+   echo -n "VALUES ('$1', '\x" >> "$out_file"
+   hexdump -v -e '1/1 "%02x" ""' $2 >> "$out_file"
+   echo "'::bytea);" >> "$out_file"
+}
+
+#add statics
+write_static "index.html"       "transport/index.html"
+write_static "favicon.ico"      "transport/favicon.ico"
+write_static "static.json"      "transport/static.json"
+write_static "ide/index.html"   "transport/ide/index.html"
+write_static "ide/ide.css"      "transport/ide/ide.css"
+write_static "ide/ide.js"       "transport/ide/ide.js"
+write_static "login.html"       "transport/login.html"
+
+# update lengths
+echo "UPDATE nino_static SET content_length = length(content);" >> "$out_file"
+
+
+# write_dynamic: "name" "file" "transpile"
+write_dynamic () {
+   echo "add dynamic: $1"
+   echo "INSERT INTO nino_dynamic (name, code, transpile) " >> "$out_file"
+   echo -n "VALUES ('$1', '\x" >> "$out_file"
+   hexdump -v -e '1/1 "%02x" ""' $2 >> "$out_file"
+   echo "'::bytea, $3);" >> "$out_file"
+   echo "" >> "$out_file"
+}
+
+#add dynamics
+write_dynamic "_main"                "transport/_main.js"                false
+write_dynamic "_notify"              "transport/_notify.js"              true
+write_dynamic "_log"                 "transport/_log.js"                 false
+write_dynamic "_db"                  "transport/_db.js"                  false
+write_dynamic "_jsqlx"               "transport/_jsqlx.min.js"           false
+write_dynamic "_transmpile_dynamics" "transport/_transmpile_dynamics.js" false
+write_dynamic "_fetch"               "transport/_fetch.js"               false
+write_dynamic "_user"                "transport/_user.js"                true
+write_dynamic "dynamic_json"         "transport/dynamic_json.js"         true
+write_dynamic "test_servlet"         "transport/test_servlet.js"         false
+write_dynamic "notify_servlet"       "transport/notify_servlet.js"       false
+write_dynamic "jsqlx_servlet"        "transport/jsqlx_servlet.js"        false
+write_dynamic "db_servlet"           "transport/db_servlet.js"           true
+write_dynamic "db_list"              "transport/db_list.js"              true
+write_dynamic "nino_login"           "transport/nino_login.js"           true
+write_dynamic "fetch_servlet"        "transport/fetch_servlet.js"        true
+write_dynamic "portal"               "transport/portal.js"               true
+write_dynamic "portlet_about.js"     "transport/portlet_about.js"        true
+write_dynamic "portlet_test.js"      "transport/portlet_test.js"         true
+
+# update lengths
+echo "UPDATE nino_dynamic SET code_length = length(code), js = code, js_length = length(code);" >> "$out_file"
+
+
+echo "DONE"

@@ -4,13 +4,12 @@ mod db_settings;
 mod db_transactions;
 mod js;
 mod js_functions;
-mod js_worker;
 mod js_test;
 mod js_test_debug;
+mod js_worker;
 mod nino_constants;
 mod nino_functions;
 mod nino_structures;
-mod nino_trasport;
 mod web;
 mod web_dynamics;
 mod web_requests;
@@ -19,7 +18,8 @@ mod web_statics;
 use crate::{db_settings::SettingsManager, nino_constants::info};
 use deno_runtime::deno_core::anyhow::Error;
 use nino_structures::InitialSettings;
-use std::{fs, sync::Arc};
+use std::sync::Arc;
+use tokio::io::AsyncBufReadExt;
 
 // export NINO=postgresql://george.radev@localhost/postgres?connect_timeout=5
 fn main() {
@@ -35,7 +35,7 @@ fn main() {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(get_db_settings(connection_string))
+            .block_on(main_init(connection_string))
     };
 
     // async functionalities goes here
@@ -47,12 +47,22 @@ fn main() {
         .block_on(main_async(initial_settings));
 }
 
-async fn get_db_settings(connection_string: String) -> InitialSettings {
-    let db;
+async fn main_init(connection_string: String) -> InitialSettings {
+    // wait for DB availability
+    wait_for_db_connection(connection_string.clone()).await;
+    // check if there is a .sql file available and execute it in the DB
+    // used for initial DB setup and migration purposes
+    execute_migration_sql_if_needed(connection_string.clone())
+        .await
+        .unwrap();
+    // get db settings
+    get_db_settings(connection_string).await
+}
+
+async fn wait_for_db_connection(connection_string: String) {
     loop {
-        match db::DBManager::instance(connection_string.clone(), 2).await {
-            Ok(inst) => {
-                db = Arc::new(inst);
+        match db::DBManager::instance(connection_string.clone(), 1).await {
+            Ok(_) => {
                 break;
             }
             Err(error) => eprintln!("Waiting for database...({})", error),
@@ -60,7 +70,45 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
     info!("Database ok");
+}
 
+async fn execute_migration_sql_if_needed(connection_string: String) -> Result<(), Error> {
+    let db = db::DBManager::instance(connection_string.clone(), 1)
+        .await
+        .unwrap();
+
+    let file = match tokio::fs::File::open(format!("{}.sql", nino_constants::PROGRAM_NAME)).await {
+        Ok(file) => file,
+        Err(_) => {
+            // error opening the init sql script
+            // just continue
+            return Ok(());
+        }
+    };
+    let reader = tokio::io::BufReader::new(file);
+    let mut lines = reader.lines();
+
+    let mut sql = String::new();
+    while let Some(line) = lines.next_line().await? {
+        if line.ends_with(";") {
+            // execute
+            sql.push_str(&line);
+            db.execute(&sql, &[]).await?;
+            sql.clear();
+        } else {
+            sql.push_str(&line);
+            sql.push('\n');
+        }
+    }
+    Ok(())
+}
+
+async fn get_db_settings(connection_string: String) -> InitialSettings {
+    let db = Arc::new(
+        db::DBManager::instance(connection_string.clone(), 1)
+            .await
+            .unwrap(),
+    );
     let settings = SettingsManager::new(db, None);
     let thread_count = settings
         .get_setting_usize(
@@ -112,13 +160,6 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     );
 
     let db_notifier = db_notification::DBNotificationManager::new(db.clone());
-    {
-        // transport initial db content
-        let transport = nino_trasport::TransportManager::new(db.clone());
-        transport
-            .transport_file("./transports/_transport.json")
-            .await?;
-    }
 
     let settings_manager = Arc::new(SettingsManager::new(
         db.clone(),
@@ -152,10 +193,10 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         dynamics.clone(),
         settings_manager.clone(),
     );
-    {
-        // compile dynamics
-        let recompile_dynamics = fs::read_to_string("./transports/_recompile_dynamics.js")?;
-        js::JavaScriptManager::run(&recompile_dynamics).await?;
+
+    // compile dynamics
+    if let Ok(transpile_code) = dynamics.get_module_code("_transmpile_dynamics").await {
+        js::JavaScriptManager::run(&transpile_code).await?;
     }
 
     let web = web::WebManager::new(

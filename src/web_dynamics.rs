@@ -114,6 +114,26 @@ impl DynamicManager {
     }
 
     // returns the longest matching path
+    pub async fn get_module_code(&self, name: &str) -> Result<String, Error> {
+        let query: String = format!(
+            "SELECT code FROM {} WHERE name = $1",
+            nino_constants::DYNAMICS_TABLE
+        );
+        let row = self.db.query_opt(&query, &[&name]).await?;
+        match row {
+            None => Err(Error::msg(format!(
+                "dynamic '{}' does not exist in database",
+                name
+            ))),
+            Some(row) => {
+                let js_bytes: Vec<u8> = row.get(0);
+                let js = String::from_utf8(js_bytes).unwrap();
+                Ok(js)
+            }
+        }
+    }
+
+    // returns the longest matching path
     pub async fn get_module_js(&self, path: &str) -> Result<String, Error> {
         let query: String = format!(
             "SELECT js FROM {} WHERE name = $1",
