@@ -4,7 +4,7 @@
 
 pwd=$(pwd)
 out_file="$pwd/nino.sql"
-echo "CREATING: $out_file "
+echo "CREATING: $out_file ..."
 
 echo "copy: init db sql"
 cp "$pwd/transport/db_init.sql" "$out_file"
@@ -12,10 +12,22 @@ cp "$pwd/transport/db_init.sql" "$out_file"
 #add new line
 echo "" >> "$out_file"
 
-# write_request: "path" "name" "mime" "redirect" "authorize" "dynamic" "execute"
+
+# write_db: "db_alias" "db_type" "db_connection_string"
+write_db () {
+   echo "add db: $1"
+   echo "INSERT INTO nino_database (db_alias, db_type, db_connection_string) " >> "$out_file"
+   echo "VALUES ('$1', '$2', '$3');" >> "$out_file"
+}
+
+# add test db to point to the current one
+write_db "test" "postgres" "$NINO"
+
+
+# write_request: "request_path" "request_name" "request_mime_type" "redirect_flag" "authorize_flag" "dynamic_flag" "execute_flag"
 write_request () {
    echo "add request: $1"
-   echo "INSERT INTO nino_request (path, name, mime, redirect, authorize, dynamic, execute) " >> "$out_file"
+   echo "INSERT INTO nino_request (request_path, request_name, request_mime_type, redirect_flag, authorize_flag, dynamic_flag, execute_flag) " >> "$out_file"
    echo "VALUES ('$1', '$2', '$3', $4, $5, $6, $7);" >> "$out_file"
 }
 
@@ -35,17 +47,14 @@ write_request "db_list"             "db_list"               "text/plain;charset=
 write_request "login"               "login.html"            "text/html;charset=UTF-8"                   false false false false 
 write_request "nino_login"          "nino_login"            "text/html;charset=UTF-8"                   false false true  true
 write_request "fetch_servlet"       "fetch_servlet"         "application/json;charset=UTF-8"            false false true  true
-write_request "portal"              "portal"                "text/html;charset=UTF-8"                   false true  true  true
-write_request "portlet_about.js"    "portlet_about.js"      "application/javascript;charset=UTF-8"      false true  true  false
-write_request "portlet_test.js"     "portlet_test.js"       "application/javascript;charset=UTF-8"      false true  true  false
 write_request "google"              "http://www.google.com" "text/html;charset=UTF-8"                   true  false false false
 
 
 # write_static: "name" "file"
 write_static () {
    echo "add static: $1"
-   echo "INSERT INTO nino_static (name, content) " >> "$out_file"
-   echo -n "VALUES ('$1', '\x" >> "$out_file"
+   echo "INSERT INTO nino_static (static_name, static_content_length, static_content) " >> "$out_file"
+   echo -n "VALUES ('$1', 0, '\x" >> "$out_file"
    hexdump -v -e '1/1 "%02x" ""' $2 >> "$out_file"
    echo "'::bytea);" >> "$out_file"
 }
@@ -60,17 +69,16 @@ write_static "ide/ide.js"       "transport/ide/ide.js"
 write_static "login.html"       "transport/login.html"
 
 # update lengths
-echo "UPDATE nino_static SET content_length = length(content);" >> "$out_file"
+echo "UPDATE nino_static SET static_content_length = length(static_content);" >> "$out_file"
 
 
-# write_dynamic: "name" "file" "transpile"
+# write_dynamic: "name" "file" "transpile_flag"
 write_dynamic () {
    echo "add dynamic: $1"
-   echo "INSERT INTO nino_dynamic (name, code, transpile) " >> "$out_file"
-   echo -n "VALUES ('$1', '\x" >> "$out_file"
+   echo "INSERT INTO nino_dynamic (dynamic_name, transpile_flag, code) " >> "$out_file"
+   echo -n "VALUES ('$1', $3, '\x" >> "$out_file"
    hexdump -v -e '1/1 "%02x" ""' $2 >> "$out_file"
-   echo "'::bytea, $3);" >> "$out_file"
-   echo "" >> "$out_file"
+   echo "'::bytea);" >> "$out_file"
 }
 
 #add dynamics
@@ -79,9 +87,9 @@ write_dynamic "_notify"              "transport/_notify.js"              true
 write_dynamic "_log"                 "transport/_log.js"                 false
 write_dynamic "_db"                  "transport/_db.js"                  false
 write_dynamic "_jsqlx"               "transport/_jsqlx.min.js"           false
-write_dynamic "_transmpile_dynamics" "transport/_transmpile_dynamics.js" false
+write_dynamic "_nino"                "transport/_nino.js"                true
+write_dynamic "_transpile_dynamics"  "transport/_transpile_dynamics.js"  false
 write_dynamic "_fetch"               "transport/_fetch.js"               false
-write_dynamic "_user"                "transport/_user.js"                true
 write_dynamic "dynamic_json"         "transport/dynamic_json.js"         true
 write_dynamic "test_servlet"         "transport/test_servlet.js"         false
 write_dynamic "notify_servlet"       "transport/notify_servlet.js"       false
@@ -90,12 +98,29 @@ write_dynamic "db_servlet"           "transport/db_servlet.js"           true
 write_dynamic "db_list"              "transport/db_list.js"              true
 write_dynamic "nino_login"           "transport/nino_login.js"           true
 write_dynamic "fetch_servlet"        "transport/fetch_servlet.js"        true
-write_dynamic "portal"               "transport/portal.js"               true
-write_dynamic "portlet_about.js"     "transport/portlet_about.js"        true
-write_dynamic "portlet_test.js"      "transport/portlet_test.js"         true
 
 # update lengths
-echo "UPDATE nino_dynamic SET code_length = length(code), js = code, js_length = length(code);" >> "$out_file"
+echo "UPDATE nino_dynamic SET code_length = length(code), javascript = code, javascript_length = length(code);" >> "$out_file"
 
+
+echo "PORTLETS..."
+
+# write_portlet: "portlet_name" "user_role" "portlet_index" "portlet_menu" 
+write_portlet () {
+   echo "add portlet: $1"
+   echo "INSERT INTO nino_portlet (portlet_name, user_role, portlet_index, portlet_menu) " >> "$out_file"
+   echo "VALUES ('$1', '$2', $3, '$4');" >> "$out_file"
+}
+
+write_request "portal"              "portal"                "text/html;charset=UTF-8"                   false true  true  true
+write_request "portlet_counter.js"  "portlet_counter.js"    "application/javascript;charset=UTF-8"      false true  true  false
+write_request "portlet_about.js"    "portlet_about.js"      "application/javascript;charset=UTF-8"      false true  true  false
+
+write_dynamic "portal"               "transport/portal.js"               true
+write_dynamic "portlet_counter.js"   "transport/portlet_counter.js"      true
+write_dynamic "portlet_about.js"     "transport/portlet_about.js"        true
+
+write_portlet "portlet_counter.js"   "admin" 80 "demo/counter"
+write_portlet "portlet_about.js"     "admin" 99 "about"
 
 echo "DONE"

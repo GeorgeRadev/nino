@@ -763,7 +763,7 @@ impl TransactionPostgres {
                             }
                         }
                     },
-                    Err(error) => {
+                    Err(_) => {
                         // info!("OK {}:{}: {}", file!(), line!(), error);
                         // channel has been closed
                         // just return

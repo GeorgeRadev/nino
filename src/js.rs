@@ -178,7 +178,7 @@ type ModuleLoadingFunction =
 fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
     async move {
         let instance = JS_INSTANCE.get().unwrap();
-        instance.dynamics.get_module_js(name.clone().as_str()).await
+        instance.dynamics.get_module_javascript(name.clone().as_str()).await
     }
     .boxed_local()
 }

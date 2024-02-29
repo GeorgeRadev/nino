@@ -45,7 +45,7 @@ impl StaticManager {
 
     async fn get_static(&self, path: &str) -> Result<Option<Vec<u8>>, Error> {
         let query: String = format!(
-            "SELECT content FROM {} WHERE name = $1",
+            "SELECT static_content FROM {} WHERE static_name = $1",
             nino_constants::STATICS_TABLE
         );
         match self.db.query_opt(&query, &[&path]).await {

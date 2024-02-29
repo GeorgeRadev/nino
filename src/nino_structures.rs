@@ -3,6 +3,7 @@ use http_types::{Request, Response};
 
 #[derive(Clone)]
 pub struct InitialSettings {
+    pub system_id: String,
     pub connection_string: String,
     pub thread_count: usize,
     pub db_pool_size: usize,

@@ -1,5 +1,5 @@
-use crate::db_notification::Notifier;
-use crate::nino_constants::info;
+use crate::db_notification::{self, Notifier};
+use crate::nino_constants::{info, USE_DYNAMIC_CACHE};
 use crate::nino_functions;
 use crate::nino_structures::ServletTask;
 use crate::web_requests::RequestInfo;
@@ -10,9 +10,10 @@ use crate::{
 };
 use async_channel::{Receiver, Sender};
 use async_std::net::TcpStream;
-use deno_runtime::deno_core::anyhow::Error;
+use deno_runtime::deno_core::anyhow::{self, Error};
 use http_types::{Request, Response, StatusCode};
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, OnceLock, RwLock};
 
 #[derive(Clone)]
 pub struct DynamicManager {
@@ -23,6 +24,8 @@ pub struct DynamicManager {
     notifier: Arc<Notifier>,
 }
 
+static DYNAMIC_CACHE: OnceLock<RwLock<HashSet<String>>> = OnceLock::new();
+
 impl DynamicManager {
     pub fn new(
         db: Arc<DBManager>,
@@ -30,6 +33,7 @@ impl DynamicManager {
         notifier: Arc<Notifier>,
         db_subscribe: tokio::sync::broadcast::Receiver<nino_structures::NotificationMessage>,
     ) -> DynamicManager {
+        DYNAMIC_CACHE.get_or_init(|| RwLock::new(HashSet::new()));
         // web_task channel is used to send tasks to the js threads
         let (web_task_sx, web_task_rx) = async_channel::unbounded::<nino_structures::JSTask>();
         let this = Self {
@@ -41,6 +45,7 @@ impl DynamicManager {
         };
         let thizz = this.clone();
         tokio::spawn(async move {
+            thizz.reload_dynamics().await;
             thizz.invalidator(db_subscribe).await;
         });
         this
@@ -65,6 +70,15 @@ impl DynamicManager {
                 }
                 Ok(message) => {
                     info!("MSG:dymnamics: {}", message.text);
+
+                    if message
+                        .text
+                        .starts_with(db_notification::NOTIFICATION_PREFIX_DYNAMICS)
+                    {
+                        //reload the db aliases
+                        self.reload_dynamics().await;
+                    }
+
                     // send invalidation messages to the js threads
                     let web_task = nino_structures::JSTask::Message(message.text);
                     for _ in 0..self.js_thread_count {
@@ -77,46 +91,49 @@ impl DynamicManager {
         }
     }
 
-    async fn get_matching_path(&self, path: &str) -> Result<String, Error> {
+    async fn reload_dynamics(&self) {
+        //reload the db aliases
         let query: String = format!(
-            "SELECT name FROM {} WHERE name = $1",
+            "SELECT dynamic_name FROM {} ORDER BY dynamic_name",
             nino_constants::DYNAMICS_TABLE
         );
-        let row = self.db.query_opt(&query, &[&path]).await?;
-        match row {
-            None => Err(Error::msg(format!(
-                "dynamic '{}' does not exist in the database",
-                path
-            ))),
-            Some(row) => {
-                let path: String = row.get(0);
-                Ok(path)
+        match self.db.query(&query, &[]).await {
+            Err(error) => {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            }
+            Ok(rows) => {
+                let mut map = DYNAMIC_CACHE.get().unwrap().write().unwrap();
+                map.clear();
+                for row in rows {
+                    let dynamic_name: String = row.get(0);
+                    map.insert(dynamic_name);
+                }
             }
         }
     }
 
-    async fn get_matching_path_code(&self, path: &str) -> Result<String, Error> {
+    async fn is_dynamic_path_exists(&self, path: &str) -> bool {
+        if USE_DYNAMIC_CACHE {
+            let map = DYNAMIC_CACHE.get().unwrap().read().unwrap();
+            return map.contains(path);
+        }
         let query: String = format!(
-            "SELECT js FROM {} WHERE name = $1",
+            "SELECT dynamic_name FROM {} WHERE dynamic_name = $1",
             nino_constants::DYNAMICS_TABLE
         );
-        let row = self.db.query_opt(&query, &[&path]).await?;
-        match row {
-            None => Err(Error::msg(format!(
-                "dynamic '{}' does not exist in the database",
-                path
-            ))),
-            Some(row) => {
-                let code: Vec<u8> = row.get(0);
-                Ok(String::from_utf8(code)?)
-            }
+        match self.db.query_opt(&query, &[&path]).await {
+            Ok(row) => match row {
+                None => false,
+                Some(_) => true,
+            },
+            Err(_) => false,
         }
     }
 
-    // returns the longest matching path
+    // returns the dynamic original code (before transpiling)
     pub async fn get_module_code(&self, name: &str) -> Result<String, Error> {
         let query: String = format!(
-            "SELECT code FROM {} WHERE name = $1",
+            "SELECT code FROM {} WHERE dynamic_name = $1",
             nino_constants::DYNAMICS_TABLE
         );
         let row = self.db.query_opt(&query, &[&name]).await?;
@@ -133,10 +150,10 @@ impl DynamicManager {
         }
     }
 
-    // returns the longest matching path
-    pub async fn get_module_js(&self, path: &str) -> Result<String, Error> {
+    // returns the dynamic transpiled code
+    pub async fn get_module_javascript(&self, path: &str) -> Result<String, Error> {
         let query: String = format!(
-            "SELECT js FROM {} WHERE name = $1",
+            "SELECT javascript FROM {} WHERE dynamic_name = $1",
             nino_constants::DYNAMICS_TABLE
         );
         let row = self.db.query_opt(&query, &[&path]).await?;
@@ -147,7 +164,7 @@ impl DynamicManager {
             ))),
             Some(row) => {
                 let js_bytes: Vec<u8> = row.get(0);
-                let js = String::from_utf8(js_bytes).unwrap();
+                let js = String::from_utf8(js_bytes)?;
                 Ok(js)
             }
         }
@@ -159,7 +176,7 @@ impl DynamicManager {
         stream: Box<TcpStream>,
     ) -> Result<(), Error> {
         // look for matching path
-        let js_module = self.get_matching_path_code(&request_info.name).await?;
+        let js_module = self.get_module_javascript(&request_info.name).await?;
         let mut response = Response::new(StatusCode::Ok);
         response.set_content_type(request_info.mime);
         response.set_body(http_types::Body::from(js_module));
@@ -175,9 +192,16 @@ impl DynamicManager {
         body: String,
     ) -> Result<(), Error> {
         // look for matching path
-        let js_module = self.get_matching_path(&request_info.name).await?;
+        let exists = self.is_dynamic_path_exists(&request_info.name).await;
+        if !exists {
+            return Err(anyhow::anyhow!(
+                "dynamic name does not exist: {}",
+                request_info.name
+            ));
+        }
         // default response
         let mut response = Response::new(200);
+        let js_module = request_info.name.clone();
         response.set_content_type(request_info.mime);
         //send new task to the javascript threads
         let js_task_request = ServletTask {

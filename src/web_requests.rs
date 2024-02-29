@@ -71,7 +71,7 @@ impl RequestManager {
     async fn reload_requests(&self) {
         //reload the db aliases
         let query: String = format!(
-            "SELECT path, name, mime, redirect, authorize, dynamic, execute FROM {}",
+            "SELECT request_path, request_name, request_mime_type, redirect_flag, authorize_flag, dynamic_flag, execute_flag FROM {}",
             nino_constants::REQUESTS_TABLE
         );
         match self.db.query(&query, &[]).await {
@@ -112,7 +112,7 @@ impl RequestManager {
             Ok(map.get(path).cloned())
         } else {
             let query: String = format!(
-                "SELECT name, mime, redirect, authorize, dynamic, execute FROM {} WHERE path = $1",
+                "SELECT request_name, request_mime_type, redirect_flag, authorize_flag, dynamic_flag, execute_flag FROM {} WHERE path = $1",
                 nino_constants::REQUESTS_TABLE
             );
             let result = self.db.query_opt(&query, &[&path]).await?;

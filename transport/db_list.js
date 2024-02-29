@@ -5,9 +5,9 @@ export default async function db_servlet(request, response) {
     debugger;
     var result = "";
     const conn = await db();
-    const sql = SELECT js 
+    const sql = SELECT javascript 
                 FROM nino_dynamic 
-                WHERE name = 'portlet_test.js';
+                WHERE dynamic_name = 'portlet_counter.js';
     await conn.query(sql, function (js) {
         result = js;
         return true;
@@ -17,8 +17,8 @@ export default async function db_servlet(request, response) {
         var transpiled_code = jsqlx(result);
         await conn.query(
             UPDATE nino_dynamic 
-            SET js = : transpiled_code 
-            WHERE name = 'portlet_test.js';
+            SET javascript = : transpiled_code 
+            WHERE dynamic_name = 'portlet_counter.js';
         );
     }
 

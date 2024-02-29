@@ -1,8 +1,8 @@
 import db from "_db";
 
-export default class user {
+export default class nino_core {
 
-    static async verifyUser(username, password) {
+    static async isValidUserAndPassword(username, password) {
         if (!username || !password) {
             return false;
         }

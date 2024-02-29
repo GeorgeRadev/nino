@@ -69,7 +69,7 @@ you need Linux or MacOS environment for this:
 - Start the application: **cargo run**  
 - Open **http://localhost:8080/** to play with the environment
 
-to stop the application just tesrminate it (ctrl-c usually do the trick).  
+to stop the application just terminate it (ctrl-c usually do the trick).  
 to stop the db : **./db stop**  
 
 

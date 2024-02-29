@@ -110,6 +110,13 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
             .unwrap(),
     );
     let settings = SettingsManager::new(db, None);
+
+    let system_id = settings
+        .get_setting_str(
+            nino_constants::SETTINGS_NINO_SYSTEM_ID,
+            nino_constants::SETTINGS_NINO_SYSTEM_ID_DEFAULT.to_string(),
+        )
+        .await;
     let thread_count = settings
         .get_setting_usize(
             nino_constants::SETTINGS_NINO_THREAD_COUNT,
@@ -140,6 +147,7 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
     }
 
     InitialSettings {
+        system_id,
         connection_string: connection_string.clone(),
         thread_count,
         debug_port,
@@ -194,8 +202,11 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         settings_manager.clone(),
     );
 
-    // compile dynamics
-    if let Ok(transpile_code) = dynamics.get_module_code("_transmpile_dynamics").await {
+    // transpile dynamics
+    if let Ok(transpile_code) = dynamics
+        .get_module_code(crate::nino_constants::TRANSPILE_MODULE)
+        .await
+    {
         js::JavaScriptManager::run(&transpile_code).await?;
     }
 

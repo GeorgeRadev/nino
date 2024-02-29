@@ -21,6 +21,7 @@ pub const PROGRAM_VERSION: &str = PKG_VERSION!();
 
 /// use cache parameters
 pub static USE_REQUEST_CACHE: bool = true;
+pub static USE_DYNAMIC_CACHE: bool = true;
 
 /// SETTINGS table name
 pub const SETTINGS_TABLE: &str = concat!(PKG_NAME!(), "_setting");
@@ -37,11 +38,16 @@ pub const DATABASE_TABLE: &str = concat!(PKG_NAME!(), "_database");
 ///
 pub const MODULE_URI: &str = "http://nino.db/";
 pub const MAIN_MODULE: &str = "_main";
+pub const TRANSPILE_MODULE: &str = "_transpile_dynamics";
 pub const MAIN_DB: &str = "_main";
 pub const DB_TYPE_POSTGRES: &str = "postgres";
 pub const JWT_USER: &str = "user";
 
 /// SETTINGS table constants
+
+/// defines how many threads the system will set in tokio
+pub const SETTINGS_NINO_SYSTEM_ID: &str = "nino_system_id";
+pub const SETTINGS_NINO_SYSTEM_ID_DEFAULT: &str = "N1N0";
 
 /// defines how many threads the system will set in tokio
 pub const SETTINGS_NINO_THREAD_COUNT: &str = "nino_core_thread_count";
