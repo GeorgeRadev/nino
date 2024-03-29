@@ -1,14 +1,3 @@
--- nino_database is for storing DB connection strings
-DROP TABLE IF EXISTS nino_database;
-CREATE TABLE IF NOT EXISTS nino_database (
-    db_alias VARCHAR(1024) PRIMARY KEY,
-    db_type VARCHAR(256) NOT NULL,
-    db_connection_string VARCHAR(4096) NOT NULL
-);
-
-INSERT INTO nino_database (db_alias, db_type, db_connection_string)
-VALUES ('_main', 'postgres', 'reserved name for the defailt db alias of the main application');
-
 -- nino_setting default environment parameters
 DROP TABLE IF EXISTS nino_setting;
 
@@ -25,33 +14,37 @@ INSERT INTO nino_setting (setting_key, setting_value) VALUES ('nino_db_connectio
 INSERT INTO nino_setting (setting_key, setting_value) VALUES ('nino_debug_port','9229');
 INSERT INTO nino_setting (setting_key, setting_value) VALUES ('nino_web_request_timeout_ms','10000');
 
--- request tables for static and dynamic code
+-- nino_database is for storing DB connection strings
+DROP TABLE IF EXISTS nino_database;
+CREATE TABLE IF NOT EXISTS nino_database (
+    db_alias VARCHAR(1024) PRIMARY KEY,
+    db_type VARCHAR(256) NOT NULL,
+    db_connection_string VARCHAR(4096) NOT NULL
+);
+
+INSERT INTO nino_database (db_alias, db_type, db_connection_string)
+VALUES ('_main', 'postgres', 'reserved name for the defailt db alias of the main application');
+
+-- request table for defining the requests
 DROP TABLE IF EXISTS nino_request;
 CREATE TABLE IF NOT EXISTS nino_request (
     request_path VARCHAR(1024) PRIMARY KEY,
-    request_name VARCHAR(1024) NOT NULL,
-    request_mime_type VARCHAR(64) NOT NULL,
+    response_name VARCHAR(1024) NOT NULL,
     redirect_flag BOOLEAN DEFAULT FALSE,
     authorize_flag BOOLEAN DEFAULT FALSE, 
-    dynamic_flag BOOLEAN DEFAULT FALSE,
-    execute_flag BOOLEAN DEFAULT FALSE
 );
 
-DROP TABLE IF EXISTS nino_static;
-CREATE TABLE IF NOT EXISTS nino_static (
-    static_name VARCHAR(1024) PRIMARY KEY,
-    static_content_length INT NOT NULL,
-    static_content BYTEA NOT NULL
-);
-
-DROP TABLE IF EXISTS nino_dynamic;
-CREATE TABLE IF NOT EXISTS nino_dynamic (
-    dynamic_name VARCHAR(1024) PRIMARY KEY,
-    code BYTEA NOT NULL,
-    code_length INT DEFAULT 0, 
+-- response table for defining static and dynamic requests
+DROP TABLE IF EXISTS nino_response;
+CREATE TABLE IF NOT EXISTS nino_response (
+    response_name VARCHAR(1024) PRIMARY KEY,
+    response_mime_type VARCHAR(64) NOT NULL,
+    execute_flag BOOLEAN DEFAULT FALSE,
     transpile_flag BOOLEAN DEFAULT FALSE,
-    javascript BYTEA,
-    javascript_length INT DEFAULT 0
+    response_content_length INT DEFAULT 0,
+    response_content BYTEA NOT NULL, 
+    javascript_length INT DEFAULT 0,
+    javascript BYTEA
 );
 
 -- user and role tables

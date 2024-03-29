@@ -110,3 +110,54 @@ WebManager - listnens on port and upon requests decides what dynqmic or static r
 
 requirements:
 to have a dynamic module "_main" for executing the dynamic executions.
+
+
+## database schema
+
+### Settings table
+Used to store global settings for all running instances
+  
+table: **nino_setting**
+|: column |: type |: description |
+|---------|-------|--------------|
+| setting_key   | VARCHAR(256) PRIMARY KEY | the setting name  |
+| setting_value | VARCHAR(4096)            | the setting value |
+  
+NINO is using the following settings to initialize the environment:  
+
+|: setting |: default value |: description |
+|---------|-------|--------------|
+| nino_system_id | D01 | the nino environment identificator    |
+| nino_core_thread_count | 3 |  the number of serving threads per instance   |
+| nino_js_thread_count | 1 |  the number of JS V8 instances that will execute dynamic requests per instance    |
+| nino_web_server_port | 8080 |  the serving port. same for all instances   |
+| nino_db_connection_pool_size | 4 |  how many connections to keep in the connection pool   |
+| nino_debug_port | 9229 |  the debug port for the instance. set 0 to disable the debugging. multiple  nino_js_thread_count will use sequential ports   |
+| nino_web_request_timeout_ms | 10000 | the fetch default timeout from JavaScript    |
+
+
+
+### Database connection table
+Used to store connection string definitions for external databases.  
+  
+table: **nino_setting**
+|: column |: type |: description |
+|---------|-------|--------------|
+| db_alias | VARCHAR(1024) PRIMARY KEY | database name that will be used in JavaScript   |
+| db_type | VARCHAR(256) NOT NULL | currently only **postgres** type is supported   |
+| db_connection_string | VARCHAR(4096) NOT NULL | the connection string used for the connection manager   |
+
+The default connection is **_main** of type **postgres** and it is reserved name for the defailt db alias of the main application and points to the NINO environment value when executed.  
+  
+
+### Database connection table
+Used to store connection string definitions for external databases.  
+  
+table: **nino_setting**
+|: column |: type |: description |
+|---------|-------|--------------|
+| db_alias   | VARCHAR(256) PRIMARY KEY | the setting name  |
+| setting_value | VARCHAR(4096)            | the setting value |
+
+
+
