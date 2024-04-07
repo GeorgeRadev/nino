@@ -1,12 +1,11 @@
 use crate::db_settings::SettingsManager;
-use crate::nino_constants::{self, info};
+use crate::nino_constants::{self, info, SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT};
 use crate::nino_functions;
-use crate::web_dynamics::DynamicManager;
 use crate::web_requests::RequestManager;
-use crate::web_statics::StaticManager;
+use crate::web_responses::ResponseManager;
 use async_std::net::{TcpListener, TcpStream};
-use deno_runtime::deno_core::anyhow::Error;
-use http_types::{Request, Response, StatusCode, Url};
+use deno_runtime::deno_core::anyhow::{self, Error};
+use http_types::{Method, Request, Response, StatusCode, Url};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -14,17 +13,16 @@ use std::sync::Arc;
 pub struct WebManager {
     port: u16,
     request_timeout_ms: u32,
+    settings: Arc<SettingsManager>,
     requests: Arc<RequestManager>,
-    statics: Arc<StaticManager>,
-    dynamics: Arc<DynamicManager>,
+    responses: Arc<ResponseManager>,
 }
 
 impl WebManager {
     pub async fn new(
         settings: Arc<SettingsManager>,
         requests: Arc<RequestManager>,
-        statics: Arc<StaticManager>,
-        dynamics: Arc<DynamicManager>,
+        responses: Arc<ResponseManager>,
     ) -> WebManager {
         let port = settings
             .get_setting_i32(
@@ -41,9 +39,9 @@ impl WebManager {
         WebManager {
             port,
             request_timeout_ms,
+            settings,
             requests,
-            statics,
-            dynamics,
+            responses,
         }
     }
 
@@ -54,9 +52,9 @@ impl WebManager {
         Self::listening(
             bl,
             self.request_timeout_ms,
+            self.settings.clone(),
             self.requests.clone(),
-            self.statics.clone(),
-            self.dynamics.clone(),
+            self.responses.clone(),
         )
         .await;
         Ok(())
@@ -65,9 +63,9 @@ impl WebManager {
     async fn listening(
         listener: Box<TcpListener>,
         request_timeout_ms: u32,
+        settings: Arc<SettingsManager>,
         requests: Arc<RequestManager>,
-        statics: Arc<StaticManager>,
-        dynamics: Arc<DynamicManager>,
+        responses: Arc<ResponseManager>,
     ) -> ! {
         // serving loop
         loop {
@@ -78,9 +76,9 @@ impl WebManager {
                     tokio::task::spawn(Self::serve_request(
                         request_timeout_ms,
                         Box::new(stream),
+                        settings.clone(),
                         requests.clone(),
-                        statics.clone(),
-                        dynamics.clone(),
+                        responses.clone(),
                     ));
                 }
                 Err(error) => {
@@ -93,9 +91,9 @@ impl WebManager {
     async fn serve_request(
         request_timeout_ms: u32,
         stream: Box<TcpStream>,
+        settings: Arc<SettingsManager>,
         requests: Arc<RequestManager>,
-        statics: Arc<StaticManager>,
-        dynamics: Arc<DynamicManager>,
+        responses: Arc<ResponseManager>,
     ) {
         let from_addres = match stream.peer_addr() {
             Ok(address) => address,
@@ -123,9 +121,9 @@ impl WebManager {
                             from_addres,
                             request,
                             stream.clone(),
+                            settings,
                             requests,
-                            statics,
-                            dynamics,
+                            responses,
                         )
                         .await
                         {
@@ -150,9 +148,9 @@ impl WebManager {
         from_address: SocketAddr,
         mut request: Request,
         stream: Box<TcpStream>,
+        settings: Arc<SettingsManager>,
         requests: Arc<RequestManager>,
-        statics: Arc<StaticManager>,
-        dynamics: Arc<DynamicManager>,
+        responses: Arc<ResponseManager>,
     ) -> Result<(), Error> {
         let method = request.method();
         let url = request.url().clone();
@@ -176,38 +174,61 @@ impl WebManager {
                     // redirect to login
                     // TODO: add this as parameter
                     let mut redirect_url = url.clone();
-                    redirect_url.set_path("/login");
+                    let login_path = settings.get_setting_str(SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT).await;
+                    redirect_url.set_path(&login_path);
                     Self::response_307_redirect(stream, &redirect_url.into()).await;
                     Ok(())
-                } else if request_info.dynamic {
-                    // serve from dynamic resources
-                    if request_info.execute {
-                        // execute the JS
-                        let body = request
-                            .body_string()
-                            .await
-                            .map_err(|e| Error::msg(e.to_string()))?;
-                        dynamics
-                            .execute_dynamic(
-                                request_info,
-                                request.clone(),
-                                stream.clone(),
-                                current_user,
-                                body,
-                            )
-                            .await
-                        //ok - stream should be served and closed
-                    } else {
-                        // return js code as response
-                        dynamics.serve_dynamic(request_info, stream.clone()).await
-                        //ok - stream should be served and closed
-                    }
                 } else {
-                    //serve static resources
-                    statics
-                        .serve_static(request_info, request.clone(), stream.clone())
-                        .await
-                    //ok - stream should be served and closed
+                    let response_info = responses.get_response(&request_info.name).await?;
+                    match response_info {
+                        None => {
+                            // no response defined
+                            eprintln!(
+                                "ERROR {}:{}:{}",
+                                file!(),
+                                line!(),
+                                anyhow::anyhow!(
+                                    "No response matching the request path: {}",
+                                    request_info.name
+                                )
+                            );
+                            Self::response_404(stream, &url).await;
+                            Ok(())
+                        }
+                        Some(response_info) => {
+                            if response_info.execute {
+                                // execute the JS
+                                let body = request
+                                    .body_string()
+                                    .await
+                                    .map_err(|e| Error::msg(e.to_string()))?;
+                                responses
+                                    .serve_dynamic(
+                                        request,
+                                        &request_info,
+                                        &response_info,
+                                        stream.clone(),
+                                        current_user,
+                                        body,
+                                    )
+                                    .await
+                                //ok - stream should be served and closed
+                            } else {
+                                // return static as response
+                                let method = request.method();
+                                if Method::Get != method {
+                                    // handle only GET static requests
+                                    return Err(Error::msg(
+                                        "static requests handles only GET requests",
+                                    ));
+                                }
+                                responses
+                                    .serve_static(request_info, response_info, stream.clone())
+                                    .await
+                                //ok - stream should be served and closed
+                            }
+                        }
+                    }
                 }
             }
         }

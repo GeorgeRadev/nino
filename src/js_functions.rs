@@ -2,7 +2,7 @@ use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_constants::info;
 use crate::nino_structures::JSTask;
-use crate::web_dynamics::DynamicManager;
+use crate::web_responses::ResponseManager;
 use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
 use deno_runtime::deno_core::{self, anyhow::Error, op2, Op, OpDecl, OpState};
@@ -46,7 +46,7 @@ pub fn get_nino_functions() -> Vec<OpDecl> {
 
 pub struct JSContext {
     pub id: i16,
-    pub dynamics: Arc<DynamicManager>,
+    pub dynamics: Arc<ResponseManager>,
     pub notifier: Arc<Notifier>,
     pub web_task_rx: Receiver<JSTask>,
     // close request will have a None Task
@@ -426,7 +426,7 @@ async fn nino_a_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) 
 #[op2]
 #[string]
 fn nino_get_module_invalidation_prefix() -> String {
-    String::from(db_notification::NOTIFICATION_PREFIX_DYNAMICS)
+    String::from(db_notification::NOTIFICATION_PREFIX_RESPONSE)
 }
 
 #[op2]

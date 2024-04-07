@@ -11,12 +11,11 @@ mod nino_constants;
 mod nino_functions;
 mod nino_structures;
 mod web;
-mod web_dynamics;
 mod web_requests;
-mod web_statics;
+mod web_responses;
 
 use crate::{db_settings::SettingsManager, nino_constants::info};
-use deno_runtime::deno_core::anyhow::Error;
+use deno_runtime::deno_core::anyhow::{anyhow, Error};
 use nino_structures::InitialSettings;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
@@ -93,7 +92,9 @@ async fn execute_migration_sql_if_needed(connection_string: String) -> Result<()
         if line.ends_with(";") {
             // execute
             sql.push_str(&line);
-            db.execute(&sql, &[]).await?;
+            if let Err(error) = db.execute(&sql, &[]).await {
+                return Err(anyhow!("sql:{}\nerror: {}", sql, error.to_string()));
+            }
             sql.clear();
         } else {
             sql.push_str(&line);
@@ -114,7 +115,7 @@ async fn get_db_settings(connection_string: String) -> InitialSettings {
     let system_id = settings
         .get_setting_str(
             nino_constants::SETTINGS_NINO_SYSTEM_ID,
-            nino_constants::SETTINGS_NINO_SYSTEM_ID_DEFAULT.to_string(),
+            nino_constants::SETTINGS_NINO_SYSTEM_ID_DEFAULT,
         )
         .await;
     let thread_count = settings
@@ -179,15 +180,10 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         db_notifier.get_subscriber(),
     ));
 
-    let statics = Arc::new(web_statics::StaticManager::new(
-        db.clone(),
-        db_notifier.get_subscriber(),
-    ));
-
     let dyn_subscriber = db_notifier.get_subscriber();
     let notifier = Arc::new(db_notification::Notifier::new(Arc::new(db_notifier)));
 
-    let dynamics = Arc::new(web_dynamics::DynamicManager::new(
+    let responses = Arc::new(web_responses::ResponseManager::new(
         db.clone(),
         settings.js_thread_count,
         notifier.clone(),
@@ -198,23 +194,23 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         settings.js_thread_count,
         settings.debug_port,
         db.get_connection_string(),
-        dynamics.clone(),
+        responses.clone(),
         settings_manager.clone(),
     );
 
     // transpile dynamics
-    if let Ok(transpile_code) = dynamics
-        .get_module_code(crate::nino_constants::TRANSPILE_MODULE)
+    if let Ok(transpile_code) = responses
+        .get_response_bytes(crate::nino_constants::TRANSPILE_MODULE)
         .await
     {
+        let transpile_code = String::from_utf8(transpile_code)?;
         js::JavaScriptManager::run(&transpile_code).await?;
     }
 
     let web = web::WebManager::new(
         settings_manager.clone(),
         requests.clone(),
-        statics.clone(),
-        dynamics.clone(),
+        responses.clone(),
     )
     .await;
 

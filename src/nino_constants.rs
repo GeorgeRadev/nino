@@ -21,16 +21,14 @@ pub const PROGRAM_VERSION: &str = PKG_VERSION!();
 
 /// use cache parameters
 pub static USE_REQUEST_CACHE: bool = true;
-pub static USE_DYNAMIC_CACHE: bool = true;
+pub static USE_RESPONSE_CACHE: bool = true;
 
 /// SETTINGS table name
 pub const SETTINGS_TABLE: &str = concat!(PKG_NAME!(), "_setting");
 /// REQUESTS table name
 pub const REQUESTS_TABLE: &str = concat!(PKG_NAME!(), "_request");
-/// STATICS table name
-pub const STATICS_TABLE: &str = concat!(PKG_NAME!(), "_static");
-/// DYNAMICS table name
-pub const DYNAMICS_TABLE: &str = concat!(PKG_NAME!(), "_dynamic");
+/// RESPONSE table name
+pub const RESPONSE_TABLE: &str = concat!(PKG_NAME!(), "_response");
 /// DATABASE table name with connection strings
 pub const DATABASE_TABLE: &str = concat!(PKG_NAME!(), "_database");
 
@@ -45,7 +43,8 @@ pub const JWT_USER: &str = "user";
 
 /// SETTINGS table constants
 
-/// defines how many threads the system will set in tokio
+/// defines the system name usually: XNN
+/// X = D-Devlopment, Q-Quality, S-Support, R-Regression, P-Production
 pub const SETTINGS_NINO_SYSTEM_ID: &str = "nino_system_id";
 pub const SETTINGS_NINO_SYSTEM_ID_DEFAULT: &str = "N1N0";
 
@@ -72,3 +71,7 @@ pub const SETTINGS_NINO_DEBUG_PORT_DEFAULT: i32 = 0;
 /// defines web request timeout
 pub const SETTINGS_NINO_WEB_REQUEST_TIMEOUT: &str = "nino_web_request_timeout_ms";
 pub const SETTINGS_NINO_WEB_REQUEST_TIMEOUT_DEFAULT: i32 = 30000;
+
+/// login servlet - gets the original path in the query
+pub const SETTINGS_NINO_LOGIN_PATH: &str = "nino_login_paths";
+pub const SETTINGS_NINO_LOGIN_PATH_DEFAULT: &str = "/login";

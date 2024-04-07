@@ -3,7 +3,7 @@ use crate::db_settings::SettingsManager;
 use crate::db_transactions::{TransactionManager, TransactionSession};
 use crate::js_worker::{MainWorker, WorkerOptions};
 use crate::nino_constants::info;
-use crate::web_dynamics::DynamicManager;
+use crate::web_responses::ResponseManager;
 use crate::{js_functions, nino_constants};
 use deno_runtime::deno_core::{
     anyhow::Error, futures::FutureExt, url::Url, Extension, FastString, JsRuntime,
@@ -26,7 +26,7 @@ pub struct JavaScriptManager {
     thread_count: usize,
     inspector_port: u16,
     connection_string: String,
-    dynamics: Arc<DynamicManager>,
+    dynamics: Arc<ResponseManager>,
     settings: Arc<SettingsManager>,
     notifier: Arc<Notifier>,
 }
@@ -41,7 +41,7 @@ impl JavaScriptManager {
         thread_count: usize,
         inspector_port: u16,
         connection_string: String,
-        dynamics: Arc<DynamicManager>,
+        dynamics: Arc<ResponseManager>,
         settings: Arc<SettingsManager>,
     ) {
         JS_INSTANCE.get_or_init(|| {
@@ -178,7 +178,8 @@ type ModuleLoadingFunction =
 fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
     async move {
         let instance = JS_INSTANCE.get().unwrap();
-        instance.dynamics.get_module_javascript(name.clone().as_str()).await
+        let content = instance.dynamics.get_response_javascript(name.clone().as_str()).await?;
+        Ok(String::from_utf8(content)?)
     }
     .boxed_local()
 }

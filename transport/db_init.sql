@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS nino_request (
     request_path VARCHAR(1024) PRIMARY KEY,
     response_name VARCHAR(1024) NOT NULL,
     redirect_flag BOOLEAN DEFAULT FALSE,
-    authorize_flag BOOLEAN DEFAULT FALSE, 
+    authorize_flag BOOLEAN DEFAULT FALSE
 );
 
 -- response table for defining static and dynamic requests

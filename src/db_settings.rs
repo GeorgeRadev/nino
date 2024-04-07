@@ -48,7 +48,7 @@ impl SettingsManager {
                     println!("MSG:settings: {}", message.text);
                     if message
                         .text
-                        .starts_with(db_notification::NOTIFICATION_PREFIX_SETTINGS)
+                        .starts_with(db_notification::NOTIFICATION_PREFIX_SETTING)
                     {
                         SETTING_CACHE.get().unwrap().write().unwrap().clear();
                     }
@@ -102,13 +102,13 @@ impl SettingsManager {
         }
     }
 
-    pub async fn get_setting_str(&self, settings_key: &str, def_value: String) -> String {
+    pub async fn get_setting_str(&self, settings_key: &str, def_value: &str) -> String {
         match self.get_setting(settings_key).await {
             Ok(value) => match value {
                 Some(value) => value.str,
-                None => def_value,
+                None => def_value.to_owned(),
             },
-            Err(_) => def_value,
+            Err(_) => def_value.to_owned(),
         }
     }
 
