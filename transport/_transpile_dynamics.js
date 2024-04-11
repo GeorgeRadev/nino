@@ -19,9 +19,11 @@ async function main() {
 
             var transpiled_code;
             await conn.query(["SELECT response_content FROM nino_response WHERE response_name = $1", name], function (code) {
-                transpiled_code = jsqlx(code);
+                transpiled_code = code;
                 return false;
             });
+            transpiled_code = jsqlx(transpiled_code);
+            // core.print("\n------------------------------------------\n" + transpiled_code + "\n");
 
             await conn.query(["UPDATE nino_response SET javascript = $2 WHERE response_name = $1", name, transpiled_code]);
             core.print("done\n");

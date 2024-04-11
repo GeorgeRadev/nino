@@ -20,20 +20,20 @@ const page = `<!DOCTYPE html>
   <hr/>
   <div id="about"></div>
   <hr/>
-  <div id="test"></div>
+  <div id="counter"></div>
   <hr/>
   
   <script type="module">
     import ReactDOM from 'react-dom';
     import about from './portlet_about.js';
-    import test from './portlet_test.js';
+    import counter from './portlet_counter.js';
 
     ReactDOM.render(
       ReactDOM.createElement(about, null), 
       document.getElementById('about'));
     ReactDOM.render(
-      ReactDOM.createElement(test, null), 
-      document.getElementById('test'));  
+      ReactDOM.createElement(counter, null), 
+      document.getElementById('counter'));  
   </script>
 </body>
 

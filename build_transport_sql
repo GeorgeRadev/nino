@@ -1,17 +1,14 @@
 #!/bin/bash
 # script that creates the initial sql.
 # each nino executable checks for nino.sql in the current folder to execute as initial script before starting.
-
 pwd=$(pwd)
 out_file="$pwd/nino.sql"
 echo "CREATING: $out_file ..."
-
 echo "copy: init db sql"
 cp "$pwd/transport/db_init.sql" "$out_file"
 
 #add new line
 echo "" >> "$out_file"
-
 
 # write_db: "db_alias" "db_type" "db_connection_string"
 write_db () {
@@ -23,33 +20,12 @@ write_db () {
 # add test db to point to the current one
 write_db "test" "postgres" "$NINO"
 
-
-
 # write_request: "request_path" "response_name" "redirect_flag" "authorize_flag"
 write_request () {
    echo "add request: $1"
    echo "INSERT INTO nino_request (request_path, response_name, redirect_flag, authorize_flag) " >> "$out_file"
    echo "VALUES ('$1', '$2', '$3', $4);" >> "$out_file"
 }
-
-#add requests
-write_request "/"                   "index.html"              false      false
-write_request "favicon.ico"         "favicon.ico"             false      false
-write_request "static.json"         "static.json"             false      false
-write_request "dynamic.json"        "dynamic_json"            false      false
-write_request "test_servlet"        "test_servlet"            false      false
-write_request "notify_servlet"      "notify_servlet"          false      false
-write_request "jsqlx_servlet"       "jsqlx_servlet"           false      false
-write_request "ide"                 "ide/index.html"          false      false
-write_request "ide/ide.css"         "ide/ide.css"             false      false
-write_request "ide/ide.js"          "ide/ide.js"              false      false
-write_request "db_servlet"          "db_servlet"              false      false
-write_request "db_list"             "db_list"                 false      false
-write_request "login"               "login.html"              false      false
-write_request "nino_login"          "nino_login"              false      false
-write_request "fetch_servlet"       "fetch_servlet"           false      false
-write_request "google"              "http://www.google.com"   true       false
-
 
 # write_response: "response_name" "response_mime_type" "execute_flag" "transpile_flag" "response_content_file"
 write_response () {
@@ -60,54 +36,77 @@ write_response () {
    echo "'::bytea);" >> "$out_file"
 }
 
-#add responses
-write_response   "index.html"           "text/html;charset=UTF-8"                false   false  "transport/index.html"
-write_response   "favicon.ico"          "image/x-icon"                           false   false  "transport/favicon.ico"
-write_response   "static.json"          "application/json;charset=UTF-8"         false   false  "transport/static.json"
-write_response   "ide/index.html"       "text/html;charset=UTF-8"                false   false  "transport/ide/index.html"
-write_response   "ide/ide.css"          "text/css;charset=UTF-8"                 false   false  "transport/ide/ide.css"
-write_response   "ide/ide.js"           "application/javascript;charset=UTF-8"   false   false  "transport/ide/ide.js"
-write_response   "login.html"           "text/html;charset=UTF-8"                false   false  "transport/login.html"
-
-write_response   "_main"                "application/javascript;charset=UTF-8"   true    false  "transport/_main.js"              
-write_response   "_notify"              "application/javascript;charset=UTF-8"   true    true   "transport/_notify.js"            
-write_response   "_log"                 "application/javascript;charset=UTF-8"   true    false  "transport/_log.js"               
-write_response   "_db"                  "application/javascript;charset=UTF-8"   true    false  "transport/_db.js"                
-write_response   "_jsqlx"               "application/javascript;charset=UTF-8"   true    false  "transport/_jsqlx.min.js"         
-write_response   "_nino"                "application/javascript;charset=UTF-8"   true    true   "transport/_nino.js"              
+#add main nino execution loop code and default transpile code
+write_response   "_main"                "application/javascript;charset=UTF-8"   true    false  "transport/_main.js"
 write_response   "_transpile_dynamics"  "application/javascript;charset=UTF-8"   true    false  "transport/_transpile_dynamics.js"
-write_response   "_fetch"               "application/javascript;charset=UTF-8"   true    false  "transport/_fetch.js"             
-write_response   "dynamic_json"         "application/json;charset=UTF-8"         true    true   "transport/dynamic_json.js"       
-write_response   "test_servlet"         "text/html;charset=UTF-8"                true    false  "transport/test_servlet.js"       
-write_response   "notify_servlet"       "text/html;charset=UTF-8"                true    false  "transport/notify_servlet.js"     
-write_response   "jsqlx_servlet"        "text/html;charset=UTF-8"                true    false  "transport/jsqlx_servlet.js"      
-write_response   "db_servlet"           "text/html;charset=UTF-8"                true    true   "transport/db_servlet.js"         
-write_response   "db_list"              "text/html;charset=UTF-8"                true    true   "transport/db_list.js"            
-write_response   "nino_login"           "text/html;charset=UTF-8"                true    true   "transport/nino_login.js"         
-write_response   "fetch_servlet"        "application/json;charset=UTF-8"         true    true   "transport/fetch_servlet.js"      
-     
-echo "PORTLETS..."
 
-# write_portlet: "portlet_name" "user_role" "portlet_index" "portlet_menu" 
+#add nino libraries
+write_response   "_log"                 "application/javascript;charset=UTF-8"   true    false  "transport/_log.js"
+write_response   "_db"                  "application/javascript;charset=UTF-8"   true    false  "transport/_db.js"
+write_response   "_jsqlx"               "application/javascript;charset=UTF-8"   true    false  "transport/_jsqlx.min.js"
+write_response   "_fetch"               "application/javascript;charset=UTF-8"   true    false  "transport/_fetch.js"
+write_response   "_notify"              "application/javascript;charset=UTF-8"   true    true   "transport/_notify.js"
+write_response   "_nino"                "application/javascript;charset=UTF-8"   true    true   "transport/_nino.js"
+
+#add global unauthorized resources
+write_request   "favicon.ico"   "favicon.ico"             false   false
+write_response  "favicon.ico"   "image/x-icon"            false   false    "transport/favicon.ico"
+
+#add demo redirect
+write_request   "google"        "http://www.google.com"   true    false
+
+#add demo requests and responses
+write_request    "demo"                   "demo.html"                      false   false
+write_response   "demo.html"              "text/html;charset=UTF-8"        false   false  "transport/demo.html"
+write_request    "demo_static.json"       "demo_static.json"               false   false
+write_response   "demo_static.json"       "application/json;charset=UTF-8" false   false  "transport/demo_static.json"
+write_request    "demo_dynamic.json"      "demo_dynamic.json"              false   false
+write_response   "demo_dynamic.json"      "application/json;charset=UTF-8" true    true   "transport/demo_dynamic_json.js"
+write_request    "demo_test_servlet"      "demo_test_servlet"              false   false
+write_response   "demo_test_servlet"      "text/html;charset=UTF-8"        true    false  "transport/demo_test_servlet.js"
+write_request    "demo_notify_servlet"    "demo_notify_servlet"            false   false
+write_response   "demo_notify_servlet"    "text/html;charset=UTF-8"        true    false  "transport/demo_notify_servlet.js"
+write_request    "demo_jsqlx_servlet"     "demo_jsqlx_servlet"             false   false
+write_response   "demo_jsqlx_servlet"     "text/html;charset=UTF-8"        true    false  "transport/demo_jsqlx_servlet.js"
+write_request    "demo_db_servlet"        "demo_db_servlet"                false   false
+write_response   "demo_db_servlet"        "text/html;charset=UTF-8"        true    true   "transport/demo_db_servlet.js"
+write_request    "demo_db_list"           "demo_db_list"                   false   false
+write_response   "demo_db_list"           "text/html;charset=UTF-8"        true    true   "transport/demo_db_list.js"
+write_request    "demo_fetch_servlet"     "demo_fetch_servlet"             false   false
+write_response   "demo_fetch_servlet"     "application/json;charset=UTF-8" true    true   "transport/demo_fetch_servlet.js"
+
+#add PORTAL code with login
+write_request    "login"                "login.html"                             false   false
+write_response   "login.html"           "text/html;charset=UTF-8"                false   false  "transport/login.html"
+write_request    "nino_login"           "nino_login"                             false   false
+write_response   "nino_login"           "text/html;charset=UTF-8"                true    true   "transport/nino_login.js"
+write_request    "/"                    "portal"                                 false   true
+write_request    "portal"               "portal"                                 false   true
+write_response   "portal"               "text/html;charset=UTF-8"                true    true    "transport/portal.js"
+write_request    "portlet_counter.js"   "portlet_counter.js"                     false   true
+write_response   "portlet_counter.js"   "application/javascript;charset=UTF-8"   false   true    "transport/portlet_counter.js"
+write_request    "portlet_about.js"     "portlet_about.js"                       false   true
+write_response   "portlet_about.js"     "application/javascript;charset=UTF-8"   false   true    "transport/portlet_about.js"
+
+#add ide in react
+write_request    "ide"               "ide/index.html"                         false   false
+write_response   "ide/index.html"    "text/html;charset=UTF-8"                false   false  "transport/ide/index.html"
+write_request    "ide/ide.js"        "ide/ide.js"                             false   false
+write_response   "ide/ide.js"        "application/javascript;charset=UTF-8"   false   false  "transport/ide/ide.js"
+write_request    "ide/ide.css"       "ide/ide.css"                            false   false
+write_response   "ide/ide.css"       "text/css;charset=UTF-8"                 false   false  "transport/ide/ide.css"
+
+echo "PORTLETS..."
+# write_portlet: "portlet_name" "user_role" "portlet_index" "portlet_menu"
 write_portlet () {
    echo "add portlet: $1"
    echo "INSERT INTO nino_portlet (portlet_name, user_role, portlet_index, portlet_menu) " >> "$out_file"
    echo "VALUES ('$1', '$2', $3, '$4');" >> "$out_file"
 }
 
-write_request "portal"               "portal"               false true
-write_request "portlet_counter.js"   "portlet_counter.js"   false true
-write_request "portlet_about.js"     "portlet_about.js"     false true
-
-write_response "portal"               "text/html;charset=UTF-8"                true    true    "transport/portal.js"         
-write_response "portlet_counter.js"   "application/javascript;charset=UTF-8"   true    true    "transport/portlet_counter.js"
-write_response "portlet_about.js"     "application/javascript;charset=UTF-8"   true    true    "transport/portlet_about.js"  
-
 write_portlet "portlet_counter.js"    "admin" 80 "demo/counter"
 write_portlet "portlet_about.js"      "admin" 99 "about"
 
-
 # update lengths
 echo "UPDATE nino_response SET response_content_length = length(response_content);" >> "$out_file"
-
 echo "DONE"

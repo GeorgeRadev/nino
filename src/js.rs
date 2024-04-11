@@ -179,7 +179,8 @@ fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Err
     async move {
         let instance = JS_INSTANCE.get().unwrap();
         let content = instance.dynamics.get_response_javascript(name.clone().as_str()).await?;
-        Ok(String::from_utf8(content)?)
+        let content_str = String::from_utf8(content)?;
+        Ok(content_str)
     }
     .boxed_local()
 }

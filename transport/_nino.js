@@ -8,7 +8,9 @@ export default class nino_core {
         }
         const core = Deno.core;
         const conn = await db();
-        const sql = SELECT password FROM nino_user WHERE username = : username;
+        const sql = SELECT user_password 
+                    FROM nino_user 
+                    WHERE user_name = : username;
         var pass;
         await conn.query(sql, function (password) {
             pass = password;

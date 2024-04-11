@@ -1,10 +1,13 @@
 use crate::db_settings::SettingsManager;
-use crate::nino_constants::{self, info, SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT};
+use crate::nino_constants::{
+    self, info, SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT,
+};
 use crate::nino_functions;
 use crate::web_requests::RequestManager;
 use crate::web_responses::ResponseManager;
 use async_std::net::{TcpListener, TcpStream};
 use deno_runtime::deno_core::anyhow::{self, Error};
+use http_types::headers::HeaderValues;
 use http_types::{Method, Request, Response, StatusCode, Url};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -174,7 +177,9 @@ impl WebManager {
                     // redirect to login
                     // TODO: add this as parameter
                     let mut redirect_url = url.clone();
-                    let login_path = settings.get_setting_str(SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT).await;
+                    let login_path = settings
+                        .get_setting_str(SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT)
+                        .await;
                     redirect_url.set_path(&login_path);
                     Self::response_307_redirect(stream, &redirect_url.into()).await;
                     Ok(())
@@ -234,19 +239,35 @@ impl WebManager {
         }
     }
 
-    fn check_authorization(request: &Request, current_user: &mut String) -> bool {
-        //check header for session cookie or athorization header value
-        //header : first "Cookie: nino=" then "Authorization: Bearer "
-        if let Some(cookies) = request.header("Cookie") {
-            // TODO: add config for this
-            let cookie_prefix = "nino=";
-            for cookie in cookies.iter() {
-                if cookie.as_str().starts_with(cookie_prefix) {
-                    let jwt = &cookie.as_str()[cookie_prefix.len()..];
+    fn check_cookie(cookies: &HeaderValues, current_user: &mut String) -> bool {
+        // TODO: add config for this
+        let cookie_prefix = "nino=";
+        for cookie in cookies.iter() {
+            let cookie_tokens = cookie.as_str().split(";");
+            for cookie_token in cookie_tokens {
+                let token = cookie_token.trim();
+                if token.starts_with(cookie_prefix) {
+                    let jwt = &token[cookie_prefix.len()..];
                     if Self::jwt_to_user(jwt, current_user) {
                         return true;
                     }
                 }
+            }
+        }
+        false
+    }
+
+    fn check_authorization(request: &Request, current_user: &mut String) -> bool {
+        //check header for session cookie or athorization header value
+        //header : first "Cookie: nino=" then "Authorization: Bearer "
+        if let Some(cookies) = request.header("cookie") {
+            if Self::check_cookie(cookies, current_user) {
+                return true;
+            }
+        }
+        if let Some(cookies) = request.header("Cookie") {
+            if Self::check_cookie(cookies, current_user) {
+                return true;
             }
         }
         if let Some(authorizations) = request.header("Authorization") {
