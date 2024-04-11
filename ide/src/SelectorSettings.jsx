@@ -6,23 +6,24 @@ const prefix = "setting:";
 
 async function optionsReload(setOptions) {
     try {
-        setOptions(NinoREST.settingsGet());
+        debugger;
+        setOptions(await NinoREST.settingsGet());
     } catch (error) {
-        setOptions([{ key: "error", value: "cannot load settings: " + error.message }]);
+        setOptions({ "error": "cannot load settings: " + error.message });
     }
 }
 
 function OptionsRender({ options }) {
-    const listItems = options.map((e) => <option key={e.key} value={e.key}>{e.key + " = " + e.value}</option>);
+    const listItems = Object.entries(options).map(([key, value]) => <option key={key} value={key}>{key + " = " + value}</option>);
     return (<>{listItems}</>);
 }
 
 export default function SelectorDB({ IDEContext }) {
     const [dialogVisible, setDialogVisible] = React.useState(false);
-    const [options, setOptions] = React.useState([]);
+    const [options, setOptions] = React.useState({});
     const [selection, setSelection] = React.useState("");
     const [newName, setNewName] = React.useState("");
-    const inputReference = React.useRef(null);
+    const inputRef = React.createRef();
 
     async function optionsRefresh() {
         await optionsReload(setOptions);
@@ -37,8 +38,8 @@ export default function SelectorDB({ IDEContext }) {
     }
     // select dialog field
     React.useEffect(() => {
-        if (dialogVisible && inputReference.current) {
-            inputReference.current.focus();
+        if (dialogVisible && inputRef.current) {
+            inputRef.current.focus();
         }
     }, [dialogVisible]);
     function dialogOnOk() {
@@ -50,7 +51,6 @@ export default function SelectorDB({ IDEContext }) {
         setDialogVisible(false);
     }
     function optionsEdit() {
-        debugger;
         if (selection) {
             IDEContext.addTab(prefix + selection);
         } else {
@@ -86,7 +86,7 @@ export default function SelectorDB({ IDEContext }) {
 
             <Dialog visible={dialogVisible} onOk={dialogOnOk} onClose={dialogOnClose} >
                 Setting name:&nbsp;&nbsp;&nbsp;
-                <input type="text" className="selector-field" ref={inputReference} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
+                <input type="text" className="selector-field" ref={inputRef} value={newName} onInput={e => setNewName(e.target.value)} maxLength="1024" />
             </Dialog>
         </div>
     );
