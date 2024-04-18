@@ -1,41 +1,27 @@
-use std::sync::Arc;
 use deadpool_postgres::{Manager, ManagerConfig, Object, Pool, RecyclingMethod};
+use deno_runtime::deno_core::anyhow::Error;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{Config, Row};
 
 /// A Postgres DB connector and listener
 /// plus a connection pool for executing transaction
-#[derive(Clone)]
 pub struct DBManager {
     connection_string: String,
-    pool: std::sync::Arc<Pool>,
+    pool: Pool,
 }
 
 impl DBManager {
     /// Create DB Manager and connection pool
-    pub async fn instance(
-        connection_string: String,
-        pool_size: usize,
-    ) -> Result<DBManager, String> {
+    pub async fn instance(connection_string: String, pool_size: usize) -> Result<DBManager, Error> {
         let config = connection_string.parse::<Config>().unwrap();
-        let db = config.connect(tokio_postgres::NoTls).await;
-        if db.is_err() {
-            let err_str = format!(
-                "ERROR:{}:{}:{}",
-                file!(),
-                line!(),
-                db.err().unwrap().to_string()
-            );
-            eprintln!("{}",err_str);
-            return Err(err_str);
-        }
-        let (_client, _connection) = db.unwrap();
+        let db = config.connect(tokio_postgres::NoTls).await?;
+        let (_client, connection) = db;
         //spawn connector for notifications
-        // tokio::spawn(async move {
-        //     if let Err(error) = connection.await {
-        //         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-        //     }
-        // });
+        tokio::spawn(async move {
+            if let Err(error) = connection.await {
+                eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+            }
+        });
 
         let mgr_config = ManagerConfig {
             recycling_method: RecyclingMethod::Fast,
@@ -46,7 +32,7 @@ impl DBManager {
         // config = connection_string.parse::<Config>().unwrap();
         Ok(DBManager {
             connection_string,
-            pool: Arc::new(pool),
+            pool,
         })
     }
 
@@ -54,50 +40,30 @@ impl DBManager {
         self.connection_string.clone()
     }
 
-    pub async fn get_connection(&self) -> Result<Object, String> {
-        self.pool.clone().get().await.map_err(|e| e.to_string())
+    pub async fn get_connection(&self) -> Result<Object, Error> {
+        self.pool.get().await.map_err(|e| e.into())
     }
 
-    pub async fn execute(
-        &self,
-        query: &str,
-        params: &[&(dyn ToSql + Sync)],
-    ) -> Result<u64, String> {
-        let db = self.get_connection().await.map_err(|e| e.to_string())?;
-        db.execute(query, params).await.map_err(|e| e.to_string())
+    pub async fn execute(&self, query: &str, params: &[&(dyn ToSql + Sync)]) -> Result<u64, Error> {
+        let db = self.get_connection().await?;
+        db.execute(query, params).await.map_err(|e| e.into())
     }
 
     pub async fn query(
         &self,
         query: &str,
         params: &[&(dyn ToSql + Sync)],
-    ) -> Result<Vec<Row>, String> {
-        let db = self.get_connection().await.map_err(|e| e.to_string())?;
-        db.query(query, params).await.map_err(|e| e.to_string())
+    ) -> Result<Vec<Row>, Error> {
+        let db = self.get_connection().await?;
+        db.query(query, params).await.map_err(|e| e.into())
     }
 
-    pub async fn query_one(
+    pub async fn query_opt(
         &self,
         query: &str,
         params: &[&(dyn ToSql + Sync)],
-    ) -> Result<Row, String> {
-        let db = self.get_connection().await.map_err(|e| e.to_string())?;
-        db.query_one(query, params).await.map_err(|e| e.to_string())
-    }
-
-    pub async fn query_callback(
-        &self,
-        query: &str,
-        params: &[&(dyn ToSql + Sync)],
-        callback: &dyn Fn(u32, Row) -> bool,
-    ) -> Result<u32, String> {
-        let db = self.get_connection().await.map_err(|e| e.to_string())?;
-
-        let mut count: u32 = 0;
-        for row in db.query(query, params).await.map_err(|e| e.to_string())? {
-            callback(count, row);
-            count += 1;
-        }
-        Ok(count)
+    ) -> Result<Option<Row>, Error> {
+        let db = self.get_connection().await?;
+        db.query_opt(query, params).await.map_err(|e| e.into())
     }
 }

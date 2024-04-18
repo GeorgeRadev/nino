@@ -1,22 +1,26 @@
 mod db;
 mod db_notification;
 mod db_settings;
+mod db_transactions;
 mod js;
-mod js_test;
-mod js_test_worker;
-mod js_test_debug;
 mod js_functions;
+mod js_test;
+mod js_test_debug;
+mod js_worker;
 mod nino_constants;
 mod nino_functions;
 mod nino_structures;
-mod trasport;
 mod web;
-mod web_dynamics;
-mod web_statics;
+mod web_requests;
+mod web_responses;
 
+use crate::{db_settings::SettingsManager, nino_constants::info};
+use deno_runtime::deno_core::anyhow::{anyhow, Error};
 use nino_structures::InitialSettings;
 use std::sync::Arc;
+use tokio::io::AsyncBufReadExt;
 
+// export NINO=postgresql://george.radev@localhost/postgres?connect_timeout=5
 fn main() {
     setup_panic_hook();
 
@@ -30,7 +34,7 @@ fn main() {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(get_db_settings(&connection_string))
+            .block_on(main_init(connection_string))
     };
 
     // async functionalities goes here
@@ -42,40 +46,111 @@ fn main() {
         .block_on(main_async(initial_settings));
 }
 
-macro_rules! await_and_exit_on_error {
-    ($future:expr) => {
-        if let Err(error) = $future.await {
-            eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-            std::process::exit(1);
-        }
-    };
+async fn main_init(connection_string: String) -> InitialSettings {
+    // wait for DB availability
+    wait_for_db_connection(connection_string.clone()).await;
+    // check if there is a .sql file available and execute it in the DB
+    // used for initial DB setup and migration purposes
+    execute_migration_sql_if_needed(connection_string.clone())
+        .await
+        .unwrap();
+    // get db settings
+    get_db_settings(connection_string).await
 }
 
-async fn get_db_settings(connection_string: &String) -> InitialSettings {
-    let db;
+async fn wait_for_db_connection(connection_string: String) {
     loop {
-        match db::DBManager::instance(connection_string.clone(), 2).await {
-            Ok(inst) => {
-                db = inst;
+        match db::DBManager::instance(connection_string.clone(), 1).await {
+            Ok(_) => {
                 break;
             }
             Err(error) => eprintln!("Waiting for database...({})", error),
         };
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
-    eprintln!("Database ok");
+    info!("Database ok");
+}
 
-    let settings = db_settings::SettingsManager::new(db);
-    let thread_count = settings.get_thread_count().await;
-    let js_thread_count = settings.get_js_thread_count().await;
-    let server_port = settings.get_server_port().await;
-    let debug_port = settings.get_debug_port().await;
-    let db_pool_size = settings.get_db_pool_size().await;
+async fn execute_migration_sql_if_needed(connection_string: String) -> Result<(), Error> {
+    let db = db::DBManager::instance(connection_string.clone(), 1)
+        .await
+        .unwrap();
+
+    let file = match tokio::fs::File::open(format!("{}.sql", nino_constants::PROGRAM_NAME)).await {
+        Ok(file) => file,
+        Err(_) => {
+            // error opening the init sql script
+            // just continue
+            return Ok(());
+        }
+    };
+    let reader = tokio::io::BufReader::new(file);
+    let mut lines = reader.lines();
+
+    let mut sql = String::new();
+    while let Some(line) = lines.next_line().await? {
+        if line.ends_with(";") {
+            // execute
+            sql.push_str(&line);
+            if let Err(error) = db.execute(&sql, &[]).await {
+                return Err(anyhow!("sql:{}\nerror: {}", sql, error.to_string()));
+            }
+            sql.clear();
+        } else {
+            sql.push_str(&line);
+            sql.push('\n');
+        }
+    }
+    Ok(())
+}
+
+async fn get_db_settings(connection_string: String) -> InitialSettings {
+    let db = Arc::new(
+        db::DBManager::instance(connection_string.clone(), 1)
+            .await
+            .unwrap(),
+    );
+    let settings = SettingsManager::new(db, None);
+
+    let system_id = settings
+        .get_setting_str(
+            nino_constants::SETTINGS_NINO_SYSTEM_ID,
+            nino_constants::SETTINGS_NINO_SYSTEM_ID_DEFAULT,
+        )
+        .await;
+    let thread_count = settings
+        .get_setting_usize(
+            nino_constants::SETTINGS_NINO_THREAD_COUNT,
+            nino_constants::SETTINGS_NINO_THREAD_COUNT_DEFAULT,
+        )
+        .await;
+    let js_thread_count = settings
+        .get_setting_usize(
+            nino_constants::SETTINGS_JS_THREAD_COUNT,
+            nino_constants::SETTINGS_JS_THREAD_COUNT_DEFAULT,
+        )
+        .await;
+    let debug_port = settings
+        .get_setting_i32(
+            nino_constants::SETTINGS_NINO_DEBUG_PORT,
+            nino_constants::SETTINGS_NINO_DEBUG_PORT_DEFAULT,
+        )
+        .await as u16;
+    let mut db_pool_size = settings
+        .get_setting_usize(
+            nino_constants::SETTINGS_DB_CONNECTION_POOL_SIZE,
+            nino_constants::SETTINGS_DB_CONNECTION_POOL_SIZE_DEFAULT,
+        )
+        .await;
+    if db_pool_size == 0 {
+        // match db pool to serving threads + js threads
+        db_pool_size = thread_count + js_thread_count;
+    }
 
     InitialSettings {
+        system_id,
         connection_string: connection_string.clone(),
         thread_count,
-        server_port,
         debug_port,
         db_pool_size,
         js_thread_count,
@@ -83,35 +158,67 @@ async fn get_db_settings(connection_string: &String) -> InitialSettings {
 }
 
 async fn main_async(settings: InitialSettings) {
-    let db = db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size)
-        .await
-        .unwrap();
-    let mut db_notifier = db_notification::DBNotificationManager::new(db.clone());
-    {
-        // transport initial db content
-        let transport = trasport::TransportManager::new(db.clone());
-        await_and_exit_on_error!(transport.transport_file("./transports/0_transport.json"));
+    if let Err(error) = nino_init(settings).await {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+        std::process::exit(1);
     }
-    let dynamics = Arc::new(web_dynamics::DynamicsManager::new(
-        db.clone(),
-        db_notifier.get_subscriber(),
-    ));
-    let statics = Arc::new(web_statics::StaticsManager::new(
-        db.clone(),
-        db_notifier.get_subscriber(),
-    ));
-    let _js_engine = js::JavaScriptManager::instance(
-        settings.js_thread_count, settings.debug_port,
-        Some(db.clone()),
-        Some(dynamics.clone()),
+}
+async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
+    let db = Arc::new(
+        db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size).await?,
     );
-    // start js threads
-    js::JavaScriptManager::start().await;
 
-    await_and_exit_on_error!(db_notifier.notify("string message".to_string()));
+    let db_notifier = db_notification::DBNotificationManager::new(db.clone());
 
-    let web = web::WebManager::new(settings.server_port, statics.clone(), dynamics.clone());
-    await_and_exit_on_error!(web.start());
+    let settings_manager = Arc::new(SettingsManager::new(
+        db.clone(),
+        Some(db_notifier.get_subscriber()),
+    ));
+
+    let requests = Arc::new(web_requests::RequestManager::new(
+        db.clone(),
+        db_notifier.get_subscriber(),
+    ));
+
+    let dyn_subscriber = db_notifier.get_subscriber();
+    let notifier = Arc::new(db_notification::Notifier::new(Arc::new(db_notifier)));
+
+    let responses = Arc::new(web_responses::ResponseManager::new(
+        db.clone(),
+        settings.js_thread_count,
+        notifier.clone(),
+        dyn_subscriber,
+    ));
+
+    js::JavaScriptManager::create(
+        settings.js_thread_count,
+        settings.debug_port,
+        db.get_connection_string(),
+        responses.clone(),
+        settings_manager.clone(),
+    );
+
+    // transpile dynamics
+    if let Ok(transpile_code) = responses
+        .get_response_bytes(crate::nino_constants::TRANSPILE_MODULE)
+        .await
+    {
+        let transpile_code = String::from_utf8(transpile_code)?;
+        js::JavaScriptManager::run(&transpile_code).await?;
+    }
+
+    let web = web::WebManager::new(
+        settings_manager.clone(),
+        requests.clone(),
+        responses.clone(),
+    )
+    .await;
+
+    // brodcast initial message
+    tokio::spawn(async move { notifier.notify("to all".to_string()).await });
+
+    web.start().await?;
+    Ok(())
 }
 
 /// prints execution parameter information

@@ -3,3 +3,6 @@
 /target
 Cargo.lock
 logfile
+/pg
+nino.sql
+

@@ -1,0 +1,272 @@
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 42px;
+  display: inline-block;
+  line-height: 1;
+  text-transform: none;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+span.size-20 {
+  font-size: 20px;
+}
+
+span.size-32 {
+  font-size: 32px;
+}
+
+span.size-48 {
+  font-size: 48px;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+#nino-ide,
+#nino-ide-contaner {
+  width: 100%;
+  height: 100%;
+  white-space: nowrap;
+  position: relative;
+  white-space: normal;
+  position: absolute;
+  background-color: #082773;
+}
+
+#nino-ide-actions {
+  position: absolute;
+  width: 48px;
+  height: 100%;
+  color: #FFFFFF;
+  background-color: #082773;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+#nino-ide-actions::-webkit-scrollbar {
+  background: #082773;
+  width: 1px;
+  height: 1px;
+}
+
+#nino-ide-actions ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-top: 8px;
+}
+
+#nino-ide-actions ul li a {
+  color: #FFFFFF;
+}
+
+#nino-ide-actions ul li {
+  opacity: 50%;
+  border-left: 3px solid #082773;
+}
+
+#nino-ide-actions ul li.active {
+  opacity: 100%;
+  border-left: 3px solid #0d98fe;
+}
+
+#nino-ide-selectors {
+  position: absolute;
+  left: 48px;
+  width: 300px;
+  height: 100%;
+  white-space: normal;
+  background-color: #F2F2F2;
+  border-right: 1px solid #082773;
+  overflow-x: hidden;
+  overflow-y: auto;
+  white-space: nowrap;
+}
+
+#nino-ide-selectors::-webkit-scrollbar {
+  background: #F2F2F2;
+  width: 1px;
+  height: 1px;
+}
+
+#nino-ide-selector-title {
+  font-size: 11px;
+  cursor: default;
+  font-weight: bold;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 20px;
+}
+
+
+#nino-ide-editors {
+  position: absolute;
+  left: 349px;
+  height: 100%;
+  width: calc(100% - 349px);
+  white-space: normal;
+  background-color: #FBFBFB;
+}
+
+.nino-ide-editor-tabs-background {
+  width: 100%;
+  height: 34px;
+  position: absolute;
+  background-color: #FBFBFB;
+  border-bottom: 1px solid #082773;
+}
+
+.nino-ide-editor-tabs {
+  transform: rotateX(180deg);
+  width: 100%;
+  height: 35px;
+  position: absolute;
+  background-color: transparent;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.nino-ide-editor-tabs::-webkit-scrollbar {
+  background: transparent;
+  width: 1px;
+  height: 1px;
+}
+
+.nino-ide-editor-tab {
+  transform: rotateX(180deg);
+  height: 26px;
+  border-bottom: 1px solid #FFF;
+  background-color: #FBFBFB;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.tab-text {
+  padding: 1px;
+}
+
+.tab-close {
+  color: #999;
+}
+
+.tab-active {
+  border: 1px solid #082773;
+  border-bottom: 1px solid #FFFFFF;
+  background-color: #FFFFFF;
+}
+
+.tab-link {
+  cursor: pointer;
+  display: inline;
+}
+
+.nino-ide-editor-field {
+  width: 90%;
+  border: 1px solid #888;
+  overflow: auto;
+}
+
+.nino-ide-editor-container {
+  top: 36px;
+  width: 100%;
+  height: calc(100% - 41px);
+  background-color: #FFFFFF;
+  position: absolute;
+  overflow: auto;
+}
+
+.nino-ide-ui-container-100 {
+  width: 90%;
+  display: inline-block;
+}
+
+.nino-ide-ui-container-50 {
+  width: 49%;
+  display: inline-block;
+}
+
+@media (max-width: 1024px) {
+  .nino-ide-ui-container-50 {
+    width: 99%;
+    display: inline-block;
+  }
+
+}
+
+.nino_list_fixed_header {
+  width: 290px;
+  height: 100%;
+  table-layout: fixed;
+  border: 1px solid #888;
+}
+
+.nino_list_fixed_header tbody {
+  display: block;
+  width: 100%;
+  overflow: auto;
+  height: 100%;
+}
+
+.nino_list_fixed_header thead tr {
+  display: block;
+}
+
+.nino_list_fixed_header thead {
+  background: #082773;
+  color: #fff;
+}
+
+.nino_list_fixed_header th,
+.nino_list_fixed_header td {
+  padding: 5px;
+  text-align: left;
+  width: 290px;
+}
+
+.selector-field {
+  width: 282px;
+  border: 1px solid #888;
+  overflow: auto;
+}
+
+.nino-ide-dialog-background {
+  display: none;
+  position: fixed;
+  z-index: 1;
+  padding-top: 100px;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgb(0, 0, 0);
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+/* Modal Content */
+.nino-ide-dialog-content {
+  background-color: #fefefe;
+  margin: auto;
+  padding: 20px;
+  border: 1px solid #888;
+  width: 400px;
+}

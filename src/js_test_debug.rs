@@ -1,32 +1,25 @@
 #[cfg(test)]
 mod tests {
-    use deno_core::anyhow::Error;
-    use deno_core::error::AnyError;
-    use deno_core::futures::FutureExt;
-    use deno_core::*;
+    use crate::js_worker::{MainWorker, WorkerOptions};
     use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
-    use deno_runtime::deno_web::BlobStore;
+    use deno_runtime::deno_core::{
+        self, anyhow::Error, futures::FutureExt, op2, FastString, ModuleLoadResponse, ModuleLoader,
+        ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, OpState, RequestedModuleType,
+        ResolutionKind,
+    };
+    use deno_runtime::deno_fetch::reqwest::Url;
     use deno_runtime::inspector_server::InspectorServer;
-    use deno_runtime::permissions::PermissionsContainer;
-    use deno_runtime::worker::MainWorker;
-    use deno_runtime::worker::WorkerOptions;
-    use deno_runtime::BootstrapOptions;
-    use http_types::Url;
+    use deno_runtime::{errors, BootstrapOptions};
     use std::net::SocketAddr;
     use std::sync::Arc;
-    use std::{cell::RefCell, pin::Pin, rc::Rc};
+    use std::{cell::RefCell, rc::Rc};
 
     struct TestState {
         id: i32,
     }
 
-    fn create_state(state: &mut OpState) -> () {
-        state.put(TestState { id: 0 });
-        ()
-    }
-
-    #[op]
-    fn op_set(state: &mut OpState, v: i32) -> Result<i32, AnyError> {
+    #[op2(fast)]
+    fn test_set(state: &mut OpState, v: i32) -> Result<i32, Error> {
         let test_state = state.borrow_mut::<TestState>();
         test_state.id = v;
         println!("[{}] sync set", v);
@@ -34,8 +27,8 @@ mod tests {
         //Ok(String::from("Test"))
     }
 
-    #[op]
-    fn op_get(state: &mut OpState) -> Result<i32, AnyError> {
+    #[op2(fast)]
+    fn test_get(state: &mut OpState) -> Result<i32, Error> {
         let v;
         {
             let test_state = state.borrow_mut::<TestState>();
@@ -45,8 +38,8 @@ mod tests {
         Ok(v)
     }
 
-    #[op]
-    async fn op_async(state: Rc<RefCell<OpState>>) -> Result<i32, AnyError> {
+    #[op2(async)]
+    async fn test_a_get(state: Rc<RefCell<OpState>>) -> Result<i32, Error> {
         let v;
         {
             let mut op_state = state.borrow_mut();
@@ -59,8 +52,8 @@ mod tests {
         Ok(v)
     }
 
-    #[op]
-    async fn op_a_sleep(state: Rc<RefCell<OpState>>, millis: u64) -> Result<i32, AnyError> {
+    #[op2(async)]
+    async fn test_a_sleep(state: Rc<RefCell<OpState>>, #[smi] millis: u64) -> Result<i32, Error> {
         let v;
         {
             let mut op_state = state.borrow_mut();
@@ -72,42 +65,31 @@ mod tests {
         Ok(v)
     }
 
-    fn get_extensions() -> Vec<Extension> {
-        let ext = Extension::builder("nino_extentions")
-            .ops(vec![
-                op_get::decl(),
-                op_set::decl(),
-                op_async::decl(),
-                op_a_sleep::decl(),
-            ])
-            .state(create_state)
-            .force_op_registration()
-            .build();
-        vec![ext]
-    }
-
-    static TEST_MAIN_MODULE_SOURCE: &'static str = r#"
+    struct ModsLoader;
+    const MODULE_URI: &str = "http://nino.db/";
+    const MODULE_MAIN: &str = "main";
+    const TEST_MAIN_MODULE_SOURCE: &str = r#"
     async function main() {
-        const core = Deno[Deno.internal].core;
+        const core = Deno.core;
+    
         try {
             core.print('-- start\n');
     
-            core.print('-- waiting for debugger \n');
             let ever = false;
             for (; ever;) {
                 // sleep for a second
-                await core.opAsync('op_a_sleep', 1000);
+                await core.ops.test_a_sleep(1000);
                 debugger;
             }
     
-            let id = core.ops.op_get();
-            core.print('-- after ops.op_get ' + id + '\n');
+            let id = core.ops.test_get();
+            core.print('-- after ops.test_get ' + id + '\n');
     
-            id = await core.opAsync('op_async');
-            core.print('-- after opAsync op_async ' + id + '\n');
+            id = await core.ops.test_a_get();
+            core.print('-- after opAsync test_a_get ' + id + '\n');
     
-            id = await core.opAsync('op_a_sleep', 1);
-            core.print('-- after opAsync op_a_sleep\n');
+            id = await core.ops.test_a_sleep(1);
+            core.print('-- after opAsync test_a_sleep\n');
     
             let m = await import('b');
             core.print('module keys: ' + Object.keys(m) + '\n');
@@ -115,11 +97,11 @@ mod tests {
             core.print('module default type: ' + typeof m.default + '\n');
             core.print('module await default(): ' + (await m.default()) + '\n');
     
-            id = await core.opAsync('op_a_sleep', 2);
-            core.print('-- after opAsync op_a_sleep ' + id + '\n');
+            id = await core.ops.test_a_sleep(2);
+            core.print('-- after opAsync test_a_sleep ' + id + '\n');
     
-            id = core.ops.op_get();
-            core.print('-- after ops.op_get ' + id + '\n');
+            id = core.ops.test_get();
+            core.print('-- after ops.test_get ' + id + '\n');
     
             core.print('-- done !! OK\n');
         } catch (e) {
@@ -128,12 +110,8 @@ mod tests {
     }
     (async () => {
         await main();
-    })();
+    })(); 
     "#;
-
-    struct ModsLoader;
-    const MODULE_URI: &str = "http://nino.db/";
-    const MODULE_MAIN: &str = "main";
 
     impl ModuleLoader for ModsLoader {
         fn resolve(
@@ -142,65 +120,60 @@ mod tests {
             _referrer: &str,
             _kind: ResolutionKind,
         ) -> Result<ModuleSpecifier, Error> {
-            let url;
-            if specifier.starts_with(MODULE_URI) {
-                url = Url::parse(&specifier)?;
+            let url = if specifier.starts_with(MODULE_URI) {
+                Url::parse(specifier)?
             } else {
                 let url_str = format!("{}{}", MODULE_URI, specifier);
-                url = Url::parse(&url_str)?;
-            }
+                Url::parse(&url_str)?
+            };
             Ok(url)
         }
 
         fn load(
             &self,
             module_specifier: &ModuleSpecifier,
-            _maybe_referrer: std::option::Option<&deno_core::url::Url>,
+            _maybe_referrer: Option<&ModuleSpecifier>,
             _is_dyn_import: bool,
-        ) -> Pin<Box<ModuleSourceFuture>> {
+            _requested_module_type: RequestedModuleType,
+        ) -> ModuleLoadResponse {
             let module_specifier = module_specifier.clone();
-            async move {
-                // generic_error(format!(
-                //     "Provided module specifier \"{}\" is not a file URL.",
-                //     module_specifier
-                // ))
+            let res = async move {
                 let module_path = &module_specifier.path()[1..];
                 println!("load module: {}", module_path);
-                let code;
-                if MODULE_MAIN == module_path {
-                    code = TEST_MAIN_MODULE_SOURCE;
+                let code = if MODULE_MAIN == module_path {
+                    TEST_MAIN_MODULE_SOURCE
                 } else {
-                    code = "export default async function() { return 'b'; }";
-                }
+                    "export default async function() { return 'b'; }"
+                };
 
                 let module_type = ModuleType::JavaScript;
-                // ModuleType::Json
-                let code = FastString::from(String::from(code)); //code.as_bytes().to_vec().into_boxed_slice();
+                let code = ModuleSourceCode::String(FastString::from(String::from(code)));
                 let module_string = module_specifier.clone();
                 let module = ModuleSource::new(module_type, code, &module_string);
                 Ok(module)
             }
-            .boxed_local()
+            .boxed_local();
+            ModuleLoadResponse::Async(res)
         }
     }
 
-    fn get_error_class_name(e: &AnyError) -> &'static str {
-        deno_runtime::errors::get_error_class_name(e).unwrap_or("Error")
+    fn get_error_class_name(e: &Error) -> &'static str {
+        errors::get_error_class_name(e).unwrap_or("Error")
     }
 
-    async fn test_debugger() -> Result<(), AnyError> {
+    async fn test_debugger() -> Result<(), Error> {
         //    init_platform(2);
-
         let module_loader = Rc::new(ModsLoader {});
 
-        let create_web_worker_cb = Arc::new(|_| {
-            todo!("Web workers are not supported in the example");
-        });
-        let web_worker_event_cb = Arc::new(|_| {
-            todo!("Web workers are not supported in the example");
-        });
+        deno_core::extension!(
+            extension,
+            ops = [test_get, test_set, test_a_get, test_a_sleep],
+            state = |state| {
+                state.put(TestState { id: 0 });
+            },
+        );
 
-        let extensions = get_extensions();
+        let extensions = vec![extension::init_ops()];
 
         let inspector_address = "127.0.0.1:9229".parse::<SocketAddr>().unwrap();
         let inspector_server = Arc::new(InspectorServer::new(inspector_address, "nino"));
@@ -210,48 +183,35 @@ mod tests {
             extensions,
             startup_snapshot: None,
             unsafely_ignore_certificate_errors: None,
-            root_cert_store: None,
             seed: None,
             source_map_getter: None,
             format_js_error_fn: None,
-            web_worker_preload_module_cb: web_worker_event_cb.clone(),
-            web_worker_pre_execute_module_cb: web_worker_event_cb,
-            create_web_worker_cb,
             module_loader,
-            npm_resolver: None,
             get_error_class_fn: Some(&get_error_class_name),
-            cache_storage_dir: None,
-            origin_storage_dir: None,
-            blob_store: BlobStore::default(),
             broadcast_channel: InMemoryBroadcastChannel::default(),
             shared_array_buffer_store: None,
             compiled_wasm_module_store: None,
             maybe_inspector_server: Some(inspector_server.clone()),
             should_break_on_first_statement: false,
             should_wait_for_inspector_session: false,
-            stdio: Default::default(),
+            ..Default::default()
         };
 
         let main_uri = format!("{}{}", MODULE_URI, MODULE_MAIN).to_owned();
         let main_module = Url::parse(main_uri.as_str())?;
-        let permissions = PermissionsContainer::new(deno_runtime::permissions::Permissions::default());
 
-        let mut worker =
-            MainWorker::bootstrap_from_options(main_module.clone(), permissions, options);
-
-        println!("Connect to debugger and change the loop valiable ever to false");
+        let mut worker = MainWorker::from_options(main_module.clone(), options);
         worker.execute_main_module(&main_module).await?;
         worker.run_event_loop(false).await?;
 
-        inspector_server.host;
+        drop(inspector_server);
         Ok(())
     }
 
     #[test]
     fn deno_simple_debugger() {
-        let _r = tokio::runtime::Builder::new_multi_thread()
+        let _r = tokio::runtime::Builder::new_current_thread()
             .enable_all()
-            .worker_threads(2)
             .build()
             .unwrap()
             .block_on(async { test_debugger().await });

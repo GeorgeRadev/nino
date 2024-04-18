@@ -1,36 +1,64 @@
-use crate::nino_structures;
-use crate::web_dynamics::DynamicsManager;
-use crate::{db::DBManager, nino_functions};
+use crate::db_notification::{self, Notifier};
+use crate::db_transactions::{QueryParam, TransactionSession};
+use crate::nino_constants::info;
+use crate::nino_structures::JSTask;
+use crate::web_responses::ResponseManager;
+use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
-use deno_core::{anyhow::Error, op, OpDecl, OpState};
-use http_types::headers::CONTENT_TYPE;
-use http_types::{Response, StatusCode};
+use deno_runtime::deno_core::{self, anyhow::Error, op2, Op, OpDecl, OpState};
+use deno_runtime::deno_fetch::reqwest::header::{HeaderName, HeaderValue};
+use deno_runtime::deno_fetch::reqwest::{Body, Client, Method, Request};
+use http_types::convert::Serialize;
+use http_types::{StatusCode, Url};
+use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::{cell::RefCell, rc::Rc};
 
-pub fn get_javascript_ops() -> Vec<OpDecl> {
+pub fn get_nino_functions() -> Vec<OpDecl> {
     vec![
-        aop_sleep::decl(),
-        op_begin_task::decl(),
-        aop_end_task::decl(),
-        op_get_request::decl(),
-        op_set_response_status::decl(),
-        op_set_response_header::decl(),
-        aop_set_response_send_text::decl(),
-        aop_set_response_send_json::decl(),
-        aop_set_response_send_buf::decl(),
+        nino_begin_task::DECL,
+        nino_a_end_task::DECL,
+        nino_a_sleep::DECL,
+        nino_get_request::DECL,
+        nino_get_request_body::DECL,
+        nino_set_response_status::DECL,
+        nino_set_response_header::DECL,
+        nino_a_set_response_send_text::DECL,
+        nino_a_set_response_send_buf::DECL,
+        nino_get_invalidation_message::DECL,
+        nino_get_thread_id::DECL,
+        nino_broadcast_message::DECL,
+        nino_a_broadcast_message::DECL,
+        nino_get_module_invalidation_prefix::DECL,
+        nino_get_database_invalidation_prefix::DECL,
+        nino_reload_database_aliases::DECL,
+        nino_tx_end::DECL,
+        nino_tx_get_connection_name::DECL,
+        nino_tx_execute_query::DECL,
+        nino_tx_execute_upsert::DECL,
+        nino_get_user_jwt::DECL,
+        nino_password_hash::DECL,
+        nino_password_verify::DECL,
+        nino_a_fetch::DECL,
     ]
 }
 
-pub struct JSTask {
-    pub id: u32,
-    pub db: DBManager,
-    pub web_task_rx: Receiver<Box<nino_structures::WebTask>>,
-    pub web_task: Option<Box<nino_structures::WebTask>>,
-    pub response: Response,
-    pub dynamics: Arc<DynamicsManager>,
-    pub module: String,
-    pub closed: bool,
+pub struct JSContext {
+    pub id: i16,
+    pub dynamics: Arc<ResponseManager>,
+    pub notifier: Arc<Notifier>,
+    pub web_task_rx: Receiver<JSTask>,
+    // close request will have a None Task
+    pub task: Option<JSTask>,
+    // collect broadcast messages to be send after commit
+    pub broadcast_messages: Vec<String>,
+}
+
+impl JSContext {
+    pub fn clear(&mut self) {
+        self.task = None;
+    }
 }
 
 macro_rules! function {
@@ -49,181 +77,576 @@ macro_rules! function {
     }};
 }
 
-#[op]
-fn op_begin_task(op_state: &mut OpState) -> Result<String, Error> {
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    //return Ok(inner_state.module.clone());
-    let result = inner_state.web_task_rx.recv_blocking();
-    let mut module = String::from("");
-    match result {
-        Ok(web_task) => {
-            module = web_task.js_module.clone();
-            inner_state.web_task = Some(web_task);
-            inner_state.response = Response::new(200);
-            inner_state.closed = false;
-            println!("new js task")
-        }
-        Err(error) => {
-            inner_state.closed = true;
-            println!(
-                "{}:{}:{} new js task ERROR: {}",
-                function!(),
-                line!(),
-                inner_state.id,
-                error.to_string()
-            );
-        }
-    }
-    Ok(module)
-}
-
-#[op]
-async fn aop_end_task(state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
-    let mut op_state = state.borrow_mut();
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    if inner_state.closed {
-        //task already closed
-        return Ok(false);
-    }
-
-    let web_task = inner_state.web_task.as_mut().unwrap();
-    if let Err(error) =
-        nino_functions::send_response_to_stream(&mut web_task.stream, &mut inner_state.response)
-            .await
-    {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-    }
-    inner_state.closed = true;
-    Ok(true)
-}
-
-#[derive(deno_core::serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HttpRequest {
-    url: http_types::Url,
-    method: String,
-    original_url: String,
-    host: String,
-    path: String,
-    query: String,
-}
-
-#[op]
-fn op_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
-    let task = state.borrow_mut::<JSTask>();
-    let web_task = task.web_task.as_mut().unwrap();
-    let url = web_task.request.url();
-    let url_str = url.to_string();
-
-    let request = HttpRequest {
-        url: url.clone(),
-        method: web_task.request.method().to_string(),
-        original_url: url_str,
-        host: String::from(url.host_str().unwrap_or("")),
-        path: String::from(url.path()),
-        query: String::from(url.query().unwrap_or("")),
-    };
-    //deno_core::serde_json::to_string(&request).unwrap()
-    Ok(request)
-}
-
-#[op]
-fn op_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
-    let task = state.borrow_mut::<JSTask>();
-    task.response
-        .set_status(StatusCode::try_from(status).unwrap());
-    Ok(())
-}
-
-#[op]
-fn op_set_response_header(state: &mut OpState, key: String, value: String) -> Result<(), Error> {
-    let task = state.borrow_mut::<JSTask>();
-    task.response.remove_header(&*key);
-    task.response.append_header(&*key, &*value);
-    Ok(())
-}
-
-#[op]
-async fn aop_set_response_send_text(state: Rc<RefCell<OpState>>, body: String) -> Result<(), Error> {
-    aop_set_response_send(state, "plain/text;charset=UTF-8", body).await
-}
-
-#[op]
-async fn aop_set_response_send_json(state: Rc<RefCell<OpState>>, body: String) -> Result<(), Error> {
-    aop_set_response_send(state, "application/json", body).await
-}
-
-async fn aop_set_response_send(
-    state: Rc<RefCell<OpState>>,
-    mime: &str,
-    body: String,
-) -> Result<(), Error> {
-    let mut op_state = state.borrow_mut();
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    let response = &mut inner_state.response;
-
-    let has_no_type = response.header(CONTENT_TYPE).is_none();
-    response.set_body(body);
-    if has_no_type {
-        response.insert_header(CONTENT_TYPE, mime);
-    }
-
-    let web_task = inner_state.web_task.as_mut().unwrap().as_mut();
-    if let Err(error) =
-        nino_functions::send_response_to_stream(web_task.stream.as_mut(), &mut inner_state.response)
-            .await
-    {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-    };
-    inner_state.closed = true;
-    Ok(())
-}
-
-#[op]
-async fn aop_set_response_send_buf(
-    state: Rc<RefCell<OpState>>,
-    buffer: Vec<u8>,
-) -> Result<(), Error> {
-    let mut op_state = state.borrow_mut();
-    let inner_state = op_state.borrow_mut::<JSTask>();
-    let response = &mut inner_state.response;
-
-    let has_no_type = response.header(CONTENT_TYPE).is_none();
-    response.set_body(buffer);
-    if has_no_type {
-        response.insert_header(CONTENT_TYPE, "text/html;charset=UTF-8");
-    }
-
-    let web_task = inner_state.web_task.as_mut().unwrap().as_mut();
-    if let Err(error) =
-        nino_functions::send_response_to_stream(web_task.stream.as_mut(), &mut inner_state.response)
-            .await
-    {
-        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
-    };
-    inner_state.closed = true;
-    Ok(())
-}
-
-#[op]
-async fn aop_sleep(state: Rc<RefCell<OpState>>, millis: u64) -> Result<(), Error> {
-    // Future must be Poll::Pending on first call
-    let v;
-    {
-        let op_state = state.borrow();
-        let task = op_state.borrow::<JSTask>();
-        v = task.id;
-    }
-    println!("{} waiting", v);
-    tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
-    Ok(())
-}
-
-// #[op]
-// async fn op_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
+// sync to async
+// #[op2]
+// async fn nino_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
 //     let future = tokio::task::spawn_blocking(move || {
 //         // do some job here
 //     });
 //     future.await?;
 //     Ok(())
 // }
+
+#[op2]
+#[string]
+fn nino_begin_task(state: &mut OpState) -> Result<String, Error> {
+    let mut module = String::new();
+    let context = state.borrow_mut::<JSContext>();
+    let result = context.web_task_rx.recv_blocking();
+    // return execution module or empty string if not a Servlet
+    match result {
+        Ok(task) => {
+            context.task = Some(task);
+            if let Some(task) = &context.task {
+                match task {
+                    JSTask::Message(_) => {
+                        // nothing to do here
+                    }
+                    JSTask::Servlet(request) => {
+                        module = request.js_module.clone();
+                    }
+                }
+            }
+            // info!("new js task");
+        }
+        Err(error) => {
+            context.clear();
+            // should happen only when terminating program
+            info!("OK {}:{}:{} {}", function!(), line!(), context.id, error);
+        }
+    }
+    Ok(module)
+}
+
+#[op2(fast)]
+fn nino_tx_end(state: &mut OpState, commit: bool) {
+    let tx = state.borrow_mut::<TransactionSession>();
+    if let Err(error) = tx.close_all(commit) {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+    }
+}
+
+#[op2(async)]
+async fn nino_a_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
+    let stream;
+    let mut response;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+
+        if context.task.is_none() {
+            //task already closed
+            return Ok(false);
+        }
+
+        match context.task.take().unwrap() {
+            JSTask::Message(_) => {
+                // nothing to do here
+                return Ok(false);
+            }
+            JSTask::Servlet(request) => {
+                stream = request.stream;
+                response = request.response;
+                context.clear();
+            }
+        }
+    }
+
+    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+    }
+    Ok(true)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HttpRequest {
+    url: http_types::Url,
+    original_url: String,
+    method: String,
+    host: String,
+    path: String,
+    query: String,
+    parameters: HashMap<String, Vec<String>>,
+    post_parameters: HashMap<String, Vec<String>>,
+    user: String,
+}
+
+#[op2]
+#[serde]
+fn nino_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
+    let context = state.borrow_mut::<JSContext>();
+
+    if let Some(task) = &context.task {
+        match task {
+            JSTask::Servlet(servlet) => {
+                let url = servlet.request.url();
+                let url_str = url.to_string();
+                let query = String::from(url.query().unwrap_or(""));
+                let mut parameters: HashMap<String, Vec<String>> = HashMap::new();
+                for (key, value) in url.query_pairs() {
+                    let key = key.to_string();
+                    let value = value.to_string();
+                    match parameters.get_mut(&key) {
+                        None => {
+                            let mut vec: Vec<String> = Vec::with_capacity(2);
+                            vec.push(value);
+                            parameters.insert(key, vec);
+                        }
+                        Some(vec) => {
+                            vec.push(value);
+                        }
+                    }
+                }
+
+                let mut post_parameters: HashMap<String, Vec<String>> = HashMap::new();
+                if !servlet.body.contains(' ') {
+                    let post_url_str = format!("{}?{}", nino_constants::MODULE_URI, servlet.body);
+                    if let Ok(url) = Url::parse(&post_url_str) {
+                        for (key, value) in url.query_pairs() {
+                            let key = key.to_string();
+                            let value = value.to_string();
+                            match post_parameters.get_mut(&key) {
+                                None => {
+                                    let mut vec: Vec<String> = Vec::with_capacity(2);
+                                    vec.push(value);
+                                    post_parameters.insert(key, vec);
+                                }
+                                Some(vec) => {
+                                    vec.push(value);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let request = HttpRequest {
+                    url: url.clone(),
+                    method: servlet.request.method().to_string(),
+                    original_url: url_str,
+                    host: String::from(url.host_str().unwrap_or("")),
+                    path: String::from(url.path()),
+                    query,
+                    parameters,
+                    post_parameters,
+                    user: servlet.user.clone(),
+                };
+                //deno_core::serde_json::to_string(&request).unwrap()
+                Ok(request)
+            }
+            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
+}
+
+#[op2(fast)]
+fn nino_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
+    let context = state.borrow_mut::<JSContext>();
+
+    if let Some(task) = &mut context.task {
+        match task {
+            JSTask::Servlet(servlet) => {
+                let status = StatusCode::try_from(status).unwrap();
+                servlet.response.set_status(status);
+                Ok(())
+            }
+            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
+}
+
+#[op2(fast)]
+fn nino_set_response_header(
+    state: &mut OpState,
+    #[string] key: String,
+    #[string] value: String,
+) -> Result<(), Error> {
+    let context = state.borrow_mut::<JSContext>();
+
+    if let Some(task) = &mut context.task {
+        match task {
+            JSTask::Servlet(servlet) => {
+                let response = &mut servlet.response;
+                response.remove_header(&*key);
+                response.append_header(&*key, &*value);
+                Ok(())
+            }
+            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
+}
+
+#[op2(async)]
+async fn nino_a_set_response_send_text(
+    op_state: Rc<RefCell<OpState>>,
+    #[string] body: String,
+) -> Result<(), Error> {
+    nino_a_set_response_send(op_state, body).await
+}
+
+async fn nino_a_set_response_send(
+    op_state: Rc<RefCell<OpState>>,
+    body: String,
+) -> Result<(), Error> {
+    let stream;
+    let mut response;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+
+        if context.task.is_none() {
+            //task already closed
+            return Ok(());
+        }
+
+        match context.task.take().unwrap() {
+            JSTask::Servlet(servlet) => {
+                stream = servlet.stream;
+                response = servlet.response;
+            }
+            JSTask::Message(_) => {
+                return Err(Error::msg("task is not a request"));
+            }
+        }
+    }
+
+    response.set_body(body);
+
+    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+    };
+    Ok(())
+}
+
+#[op2(async)]
+async fn nino_a_set_response_send_buf(
+    op_state: Rc<RefCell<OpState>>,
+    #[serde] bytes: Vec<u8>,
+) -> Result<(), Error> {
+    let stream;
+    let mut response;
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+
+        if context.task.is_none() {
+            //task already closed
+            return Ok(());
+        }
+
+        match context.task.take().unwrap() {
+            JSTask::Servlet(servlet) => {
+                stream = servlet.stream;
+                response = servlet.response;
+            }
+            JSTask::Message(_) => {
+                return Err(Error::msg("task is not a request"));
+            }
+        }
+    }
+
+    response.set_body(bytes);
+
+    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
+        eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
+    };
+    Ok(())
+}
+
+#[op2(async)]
+async fn nino_a_sleep(op_state: Rc<RefCell<OpState>>, #[bigint] millis: u64) -> Result<(), Error> {
+    // Future must be Poll::Pending on first call
+    let v;
+    {
+        let state = op_state.borrow();
+        let context = state.borrow::<JSContext>();
+        v = context.id;
+    }
+    println!("{} waiting", v);
+    tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+    Ok(())
+}
+
+#[op2]
+#[string]
+fn nino_get_invalidation_message(state: &mut OpState) -> String {
+    let context = state.borrow_mut::<JSContext>();
+
+    if context.task.is_some() {
+        match context.task.as_mut().unwrap() {
+            JSTask::Message(message) => message.clone(),
+            JSTask::Servlet(_) => String::new(),
+        }
+    } else {
+        String::new()
+    }
+}
+
+#[op2(fast)]
+fn nino_get_thread_id(state: &mut OpState) -> i16 {
+    let context = state.borrow_mut::<JSContext>();
+    context.id
+}
+
+#[op2(fast)]
+fn nino_broadcast_message(state: &mut OpState, #[string] message: String) {
+    let context = state.borrow_mut::<JSContext>();
+    context.broadcast_messages.push(message);
+}
+
+#[op2(async)]
+async fn nino_a_broadcast_message(op_state: Rc<RefCell<OpState>>, commit: bool) {
+    let notifier;
+    let mut messages: Vec<String> = Vec::with_capacity(8);
+    {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        notifier = context.notifier.clone();
+        if commit {
+            messages.append(&mut context.broadcast_messages);
+        } else {
+            context.broadcast_messages.clear();
+        }
+    };
+    if commit {
+        for message in messages {
+            if let Err(error) = notifier.notify(message).await {
+                eprintln!("ERROR {}:{}:{}", function!(), line!(), error);
+            }
+        }
+    }
+}
+
+#[op2]
+#[string]
+fn nino_get_module_invalidation_prefix() -> String {
+    String::from(db_notification::NOTIFICATION_PREFIX_RESPONSE)
+}
+
+#[op2]
+#[string]
+fn nino_get_database_invalidation_prefix() -> String {
+    String::from(db_notification::NOTIFICATION_PREFIX_DBNAME)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueryResult {
+    pub rows: Vec<Vec<String>>,
+    pub row_names: Vec<String>,
+    pub row_types: Vec<String>,
+}
+
+fn query_types_to_params(
+    query: Vec<String>,
+    query_types: Vec<i16>,
+) -> Result<(String, Vec<QueryParam>), Error> {
+    let qlen = query.len();
+    {
+        if qlen == 0 {
+            return Err(Error::msg("query must contain atleast the query"));
+        }
+        let tlen = query_types.len();
+        if qlen != tlen {
+            return Err(Error::msg("query values and query types must be same size"));
+        }
+    }
+
+    let mut query_params: Vec<QueryParam> = Vec::with_capacity(qlen);
+    // JS types
+    // 0 - NULL
+    // 1 - Boolean
+    // 2 - Number
+    // 3 - String
+    // 4 - Date
+    for (ix, value) in query.iter().enumerate().take(qlen).skip(1) {
+        let t = query_types[ix];
+        if t == 0 {
+            //NULL
+            query_params.push(QueryParam::Null);
+        } else if t == 1 {
+            //boolean
+            let b = value.eq_ignore_ascii_case("true") || value.eq("1");
+            query_params.push(QueryParam::Bool(b));
+        } else if t == 2 {
+            //number
+            match value.parse::<i64>() {
+                Ok(v) => {
+                    query_params.push(QueryParam::Number(v));
+                }
+                Err(_) => match value.parse::<f64>() {
+                    Ok(v) => {
+                        query_params.push(QueryParam::Float(v));
+                    }
+                    Err(e) => {
+                        return Err(Error::msg(format!(
+                            "parameter {} `{}` is not number: {}",
+                            ix, value, e
+                        )));
+                    }
+                },
+            }
+        } else if query_types[ix] == 4 {
+            //date
+            match value.parse::<i64>() {
+                Ok(v) => match chrono::DateTime::<chrono::Utc>::from_timestamp_millis(v) {
+                    Some(dt) => {
+                        let v = dt.to_rfc3339();
+                        query_params.push(QueryParam::Date(v));
+                    }
+                    None => {
+                        query_params.push(QueryParam::Null);
+                    }
+                },
+                Err(error) => {
+                    return Err(Error::msg(format!(
+                        "parameter {} `{}` is not UTC miliseconds: {}",
+                        ix, value, error
+                    )));
+                }
+            };
+        } else {
+            // use string value
+            query_params.push(QueryParam::String(value.clone()));
+        }
+    }
+    Ok((query[0].clone(), query_params))
+}
+
+#[op2(fast)]
+fn nino_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.reload_database_aliases()
+}
+
+#[op2]
+#[string]
+fn nino_tx_get_connection_name(
+    state: &mut OpState,
+    #[string] db_alias: String,
+) -> Result<String, Error> {
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.create_transaction(db_alias)
+}
+
+#[op2]
+#[serde]
+fn nino_tx_execute_query(
+    state: &mut OpState,
+    #[string] db_alias: String,
+    #[serde] query: Vec<String>,
+    #[serde] query_types: Vec<i16>,
+) -> Result<QueryResult, Error> {
+    let (query, params) = query_types_to_params(query, query_types)?;
+    let tx = state.borrow_mut::<TransactionSession>();
+
+    let result = tx.query(db_alias, query, params)?;
+    Ok(QueryResult {
+        rows: result.rows,
+        row_names: result.row_names,
+        row_types: result.row_types,
+    })
+}
+
+#[op2]
+#[bigint]
+fn nino_tx_execute_upsert(
+    state: &mut OpState,
+    #[string] db_alias: String,
+    #[serde] query: Vec<String>,
+    #[serde] query_types: Vec<i16>,
+) -> Result<u64, Error> {
+    let (query, params) = query_types_to_params(query, query_types)?;
+    let tx = state.borrow_mut::<TransactionSession>();
+    tx.upsert(db_alias, query, params)
+}
+
+#[op2]
+#[string]
+fn nino_get_request_body(state: &mut OpState) -> Result<String, Error> {
+    let context = state.borrow_mut::<JSContext>();
+
+    if context.task.is_some() {
+        if let Some(JSTask::Servlet(servlet)) = context.task.as_mut() {
+            Ok(servlet.body.clone())
+        } else {
+            Err(Error::msg("task is not a request"))
+        }
+    } else {
+        Err(Error::msg("no current task"))
+    }
+}
+
+#[op2]
+#[string]
+fn nino_get_user_jwt(_state: &mut OpState, #[string] user: String) -> Result<String, Error> {
+    let mut map: HashMap<String, String> = HashMap::new();
+    map.insert(nino_constants::JWT_USER.to_string(), user);
+    nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map)
+}
+
+#[op2]
+#[string]
+fn nino_password_hash(_state: &mut OpState, #[string] password: String) -> Result<String, Error> {
+    nino_functions::password_hash(&password)
+}
+
+#[op2(fast)]
+fn nino_password_verify(
+    _state: &mut OpState,
+    #[string] password: String,
+    #[string] hash: String,
+) -> Result<bool, Error> {
+    nino_functions::password_verify(&password, &hash)
+}
+
+#[op2(async)]
+#[string]
+async fn nino_a_fetch(
+    _op_state: Rc<RefCell<OpState>>,
+    #[string] url: String,
+    #[bigint] timeout: i64,
+    #[string] method: String,
+    #[serde] headers: HashMap<String, String>,
+    #[string] body: String,
+) -> Result<String, Error> {
+    // Build out the request
+    let url = Url::from_str(&url)?;
+    let method = Method::from_bytes(method.as_bytes())?;
+    let mut request = Request::new(method, url);
+
+    for (key, value) in headers.iter() {
+        request.headers_mut().insert(
+            HeaderName::from_str(key).unwrap(),
+            HeaderValue::from_str(value).unwrap(),
+        );
+    }
+    request.body_mut().replace(Body::from(body));
+
+    let response_future = {
+        // let https = HttpsConnector::new();
+        let client = Client::new();
+        client.execute(request)
+    };
+
+    match tokio::time::timeout(
+        tokio::time::Duration::from_millis(timeout as u64),
+        response_future,
+    )
+    .await
+    {
+        Err(_) => Err(Error::msg("Connection Timeout")),
+        Ok(Err(e)) => Err(e.into()),
+        Ok(Ok(response)) => {
+            let bytes = response.bytes().await?;
+            let body = String::from_utf8(bytes.to_vec())?;
+            Ok(body)
+        }
+    }
+}
