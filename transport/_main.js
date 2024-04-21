@@ -38,8 +38,17 @@ async function main() {
             await core.ops.nino_a_set_response_send_text(response);
         } else if (typeof response === "number") {
             await core.ops.nino_a_set_response_send_text(String.valueOf(response));
-        } else if (response instanceof ArrayBuffer) {
+        } else if (response instanceof Uint8Array) {
             await core.ops.nino_a_set_response_send_buf(response);
+        } else if (typeof response === 'object'
+            && Object.hasOwn(response, 'proxy_fetch_result_as_response')
+            && response.proxy_fetch_result_as_response == true) {
+            var p = response;
+            await core.ops.nino_a_set_response_from_fetch(p.url,
+                p.timeout,
+                p.method,
+                p.headers,
+                p.body);
         } else {
             await core.ops.nino_a_set_response_send_text(JSON.stringify(response));
         }

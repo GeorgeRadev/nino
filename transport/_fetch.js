@@ -1,7 +1,5 @@
-export default async function fetch(url, options) {
-    const core = Deno.core;
-    debugger;
-
+function validate_parameters(url, options) {
+    // url
     if (!url || typeof url !== 'string') {
         throw new Error("first parameter must be a non empty string with url");
     }
@@ -33,11 +31,30 @@ export default async function fetch(url, options) {
     } else {
         body = "";
     }
-    const response = await core.ops.nino_a_fetch(url,
+
+    return {
+        url,
         timeout,
         method,
         headers,
-        body);
+        body
+    }
+}
+
+/**
+ * @param {*} url string
+ * @param {*} options object with parameters
+ * @returns text response and json
+ */
+export default async function fetch(url, options) {
+    const core = Deno.core;
+
+    var p = validate_parameters(url, options);
+    const response = await core.ops.nino_a_fetch(p.url,
+        p.timeout,
+        p.method,
+        p.headers,
+        p.body);
 
     return {
         text: function () { return response },
@@ -45,4 +62,33 @@ export default async function fetch(url, options) {
             return JSON.parse(response);
         }
     }
+}
+
+/**
+ * @param {*} url string
+ * @param {*} options object with parameters
+ * @returns binary content of the response
+ */
+export async function fetch_binary(url, options) {
+    const core = Deno.core;
+
+    var p = validate_parameters(url, options);
+    const response = await core.ops.nino_a_fetch_binary(p.url,
+        p.timeout,
+        p.method,
+        p.headers,
+        p.body);
+
+    return response;
+}
+
+/**
+ * @param {*} url string
+ * @param {*} options object with parameters
+ * @returns object that is recognised and request stream is send on the fly to the result
+ */
+export function fetch_response(url, options) {
+    var p = validate_parameters(url, options);
+    p.proxy_fetch_result_as_response = true;
+    return p;
 }

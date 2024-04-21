@@ -62,24 +62,28 @@ write_response  "portal.css"          "text/css;charset=UTF-8"  false   false   
 write_request   "google"        "http://www.google.com"   true    false
 
 #add demo requests and responses
-write_request    "demo"                   "demo.html"                      false   false
-write_response   "demo.html"              "text/html;charset=UTF-8"        false   false  "transport/demo.html"
-write_request    "demo_static.json"       "demo_static.json"               false   false
-write_response   "demo_static.json"       "application/json;charset=UTF-8" false   false  "transport/demo_static.json"
-write_request    "demo_dynamic.json"      "demo_dynamic.json"              false   false
-write_response   "demo_dynamic.json"      "application/json;charset=UTF-8" true    true   "transport/demo_dynamic_json.js"
-write_request    "demo_test_servlet"      "demo_test_servlet"              false   false
-write_response   "demo_test_servlet"      "text/html;charset=UTF-8"        true    false  "transport/demo_test_servlet.js"
-write_request    "demo_notify_servlet"    "demo_notify_servlet"            false   false
-write_response   "demo_notify_servlet"    "text/html;charset=UTF-8"        true    false  "transport/demo_notify_servlet.js"
-write_request    "demo_jsqlx_servlet"     "demo_jsqlx_servlet"             false   false
-write_response   "demo_jsqlx_servlet"     "text/html;charset=UTF-8"        true    false  "transport/demo_jsqlx_servlet.js"
-write_request    "demo_db_servlet"        "demo_db_servlet"                false   false
-write_response   "demo_db_servlet"        "text/html;charset=UTF-8"        true    true   "transport/demo_db_servlet.js"
-write_request    "demo_db_list"           "demo_db_list"                   false   false
-write_response   "demo_db_list"           "text/html;charset=UTF-8"        true    true   "transport/demo_db_list.js"
-write_request    "demo_fetch_servlet"     "demo_fetch_servlet"             false   false
-write_response   "demo_fetch_servlet"     "application/json;charset=UTF-8" true    true   "transport/demo_fetch_servlet.js"
+write_request    "demo"                   "demo.html"                        false   false
+write_response   "demo.html"              "text/html;charset=UTF-8"          false   false  "transport/demo.html"
+write_request    "demo_static.json"       "demo_static.json"                 false   false
+write_response   "demo_static.json"       "application/json;charset=UTF-8"   false   false  "transport/demo_static.json"
+write_request    "demo_dynamic.json"      "demo_dynamic.json"                false   false
+write_response   "demo_dynamic.json"      "application/json;charset=UTF-8"   true    true   "transport/demo_dynamic_json.js"
+write_request    "demo_test_servlet"      "demo_test_servlet"                false   false
+write_response   "demo_test_servlet"      "text/html;charset=UTF-8"          true    false  "transport/demo_test_servlet.js"
+write_request    "demo_notify_servlet"    "demo_notify_servlet"              false   false
+write_response   "demo_notify_servlet"    "text/html;charset=UTF-8"          true    false  "transport/demo_notify_servlet.js"
+write_request    "demo_jsqlx_servlet"     "demo_jsqlx_servlet"               false   false
+write_response   "demo_jsqlx_servlet"     "text/html;charset=UTF-8"          true    false  "transport/demo_jsqlx_servlet.js"
+write_request    "demo_db_servlet"        "demo_db_servlet"                  false   false
+write_response   "demo_db_servlet"        "text/html;charset=UTF-8"          true    true   "transport/demo_db_servlet.js"
+write_request    "demo_db_list"           "demo_db_list"                     false   false
+write_response   "demo_db_list"           "text/html;charset=UTF-8"          true    true   "transport/demo_db_list.js"
+write_request    "demo_fetch_servlet"     "demo_fetch_servlet"               false   false
+write_response   "demo_fetch_servlet"     "application/json;charset=UTF-8"   true    true   "transport/demo_fetch_servlet.js"
+write_request    "demo_fetch_binary_servlet" "demo_fetch_binary_servlet"     false   false
+write_response   "demo_fetch_binary_servlet" "image/png"                     true    true   "transport/demo_fetch_binary_servlet.js"
+write_request    "demo_fetch_response_servlet" "demo_fetch_response_servlet" false   false
+write_response   "demo_fetch_response_servlet" "image/png"                   true    true   "transport/demo_fetch_response_servlet.js"
 
 #add PORTAL code with login
 write_request    "login"                "login.html"                             false   false
