@@ -1,7 +1,7 @@
 use crate::nino_constants;
-use async_std::net::TcpStream;
+use async_std::{io::WriteExt, net::TcpStream};
 use bcrypt::{hash, verify, DEFAULT_COST};
-use deno_runtime::deno_core::anyhow::Error;
+use deno_runtime::deno_core::{anyhow::Error, futures::StreamExt};
 use hmac::{digest::KeyInit, Hmac};
 use http_types::Response;
 use jwt::{SignWithKey, VerifyWithKey};
@@ -113,6 +113,54 @@ pub async fn send_response_to_stream(
 
     //close socket - always
     if stream.shutdown(std::net::Shutdown::Both).is_err() {
+        // stream already closed
+    }
+    Ok(())
+}
+
+pub async fn send_request_to_stream(
+    response_in: deno_runtime::deno_fetch::reqwest::Response,
+    mut stream_out: Box<TcpStream>,
+) -> Result<(), Error> {
+    //write status
+    let mut header_string = String::with_capacity(1024);
+    header_string.push_str(HTTP);
+    header_string.push(' ');
+    header_string.push_str(&format!("{}", response_in.status()));
+    header_string.push(' ');
+    let canonical_reason = response_in.status().canonical_reason();
+    let canonical_reason = canonical_reason.ok_or(Error::msg(format!(
+        "cannot resolve status to canonical reason:{}",
+        response_in.status()
+    )))?;
+    header_string.push_str(canonical_reason);
+    header_string.push_str(CRLF);
+
+    // write header
+    for (header_key, header_value) in response_in.headers() {
+        header_string.push_str(header_key.as_str());
+        header_string.push_str(SEPARATOR);
+        header_string.push_str(header_value.to_str()?);
+        header_string.push_str(CRLF);
+    }
+
+    //write separtor
+    header_string.push_str(CRLF);
+
+    //copy stream
+    {
+        let mut http_bytes = header_string.as_bytes();
+        async_std::io::copy(&mut http_bytes, &mut stream_out.clone()).await?;
+        let mut stream_in = response_in.bytes_stream();
+        while let Some(chunk) = stream_in.next().await {
+            let bytes = chunk?;
+            stream_out.write(&bytes).await?;
+        }
+    }
+    stream_out.flush().await?;
+
+    //close socket - always
+    if stream_out.shutdown(std::net::Shutdown::Both).is_err() {
         // stream already closed
     }
     Ok(())

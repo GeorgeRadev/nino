@@ -1,11 +1,12 @@
 use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_constants::info;
-use crate::nino_structures::JSTask;
+use crate::nino_structures::{JSTask, ServletTask};
 use crate::web_responses::ResponseManager;
 use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
 use deno_runtime::deno_core::{self, anyhow::Error, op2, Op, OpDecl, OpState};
+use deno_runtime::deno_core::{JsBuffer, ToJsBuffer};
 use deno_runtime::deno_fetch::reqwest::header::{HeaderName, HeaderValue};
 use deno_runtime::deno_fetch::reqwest::{Body, Client, Method, Request};
 use http_types::convert::Serialize;
@@ -41,6 +42,8 @@ pub fn get_nino_functions() -> Vec<OpDecl> {
         nino_password_hash::DECL,
         nino_password_verify::DECL,
         nino_a_fetch::DECL,
+        nino_a_fetch_binary::DECL,
+        nino_a_set_response_from_fetch::DECL,
     ]
 }
 
@@ -282,42 +285,31 @@ fn nino_set_response_header(
     }
 }
 
+fn take_servlet_task(op_state: Rc<RefCell<OpState>>) -> Result<ServletTask, Error> {
+    let mut state = op_state.borrow_mut();
+    let context = state.borrow_mut::<JSContext>();
+
+    if context.task.is_none() {
+        //task already closed
+        return Err(Error::msg("task already closed"));
+    }
+
+    match context.task.take().unwrap() {
+        JSTask::Servlet(servlet) => Ok(servlet),
+        JSTask::Message(_) => Err(Error::msg("task is not a request")),
+    }
+}
+
 #[op2(async)]
 async fn nino_a_set_response_send_text(
     op_state: Rc<RefCell<OpState>>,
     #[string] body: String,
 ) -> Result<(), Error> {
-    nino_a_set_response_send(op_state, body).await
-}
-
-async fn nino_a_set_response_send(
-    op_state: Rc<RefCell<OpState>>,
-    body: String,
-) -> Result<(), Error> {
-    let stream;
-    let mut response;
-    {
-        let mut state = op_state.borrow_mut();
-        let context = state.borrow_mut::<JSContext>();
-
-        if context.task.is_none() {
-            //task already closed
-            return Ok(());
-        }
-
-        match context.task.take().unwrap() {
-            JSTask::Servlet(servlet) => {
-                stream = servlet.stream;
-                response = servlet.response;
-            }
-            JSTask::Message(_) => {
-                return Err(Error::msg("task is not a request"));
-            }
-        }
-    }
+    let servlet_task = take_servlet_task(op_state)?;
+    let mut response = servlet_task.response;
+    let stream = servlet_task.stream;
 
     response.set_body(body);
-
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     };
@@ -327,31 +319,14 @@ async fn nino_a_set_response_send(
 #[op2(async)]
 async fn nino_a_set_response_send_buf(
     op_state: Rc<RefCell<OpState>>,
-    #[serde] bytes: Vec<u8>,
+    #[buffer] bytes: JsBuffer,
 ) -> Result<(), Error> {
-    let stream;
-    let mut response;
-    {
-        let mut state = op_state.borrow_mut();
-        let context = state.borrow_mut::<JSContext>();
+    let servlet_task = take_servlet_task(op_state)?;
+    let mut response = servlet_task.response;
+    let stream = servlet_task.stream;
 
-        if context.task.is_none() {
-            //task already closed
-            return Ok(());
-        }
-
-        match context.task.take().unwrap() {
-            JSTask::Servlet(servlet) => {
-                stream = servlet.stream;
-                response = servlet.response;
-            }
-            JSTask::Message(_) => {
-                return Err(Error::msg("task is not a request"));
-            }
-        }
-    }
-
-    response.set_body(bytes);
+    let data: &[u8] = &bytes;
+    response.set_body(data);
 
     if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
@@ -606,16 +581,13 @@ fn nino_password_verify(
     nino_functions::password_verify(&password, &hash)
 }
 
-#[op2(async)]
-#[string]
-async fn nino_a_fetch(
-    _op_state: Rc<RefCell<OpState>>,
-    #[string] url: String,
-    #[bigint] timeout: i64,
-    #[string] method: String,
-    #[serde] headers: HashMap<String, String>,
-    #[string] body: String,
-) -> Result<String, Error> {
+async fn fetch(
+    url: String,
+    timeout: i64,
+    method: String,
+    headers: HashMap<String, String>,
+    body: String,
+) -> Result<deno_runtime::deno_fetch::reqwest::Response, Error> {
     // Build out the request
     let url = Url::from_str(&url)?;
     let method = Method::from_bytes(method.as_bytes())?;
@@ -643,10 +615,54 @@ async fn nino_a_fetch(
     {
         Err(_) => Err(Error::msg("Connection Timeout")),
         Ok(Err(e)) => Err(e.into()),
-        Ok(Ok(response)) => {
-            let bytes = response.bytes().await?;
-            let body = String::from_utf8(bytes.to_vec())?;
-            Ok(body)
-        }
+        Ok(Ok(response)) => Ok(response),
     }
+}
+
+#[op2(async)]
+#[string]
+async fn nino_a_fetch(
+    _op_state: Rc<RefCell<OpState>>,
+    #[string] url: String,
+    #[bigint] timeout: i64,
+    #[string] method: String,
+    #[serde] headers: HashMap<String, String>,
+    #[string] body: String,
+) -> Result<String, Error> {
+    let response = fetch(url, timeout, method, headers, body).await?;
+    let bytes = response.bytes().await?.to_vec();
+    let body = String::from_utf8(bytes)?;
+    Ok(body)
+}
+
+#[op2(async)]
+#[serde]
+async fn nino_a_fetch_binary(
+    _op_state: Rc<RefCell<OpState>>,
+    #[string] url: String,
+    #[bigint] timeout: i64,
+    #[string] method: String,
+    #[serde] headers: HashMap<String, String>,
+    #[string] body: String,
+) -> Result<ToJsBuffer, Error> {
+    let response = fetch(url, timeout, method, headers, body).await?;
+    let bytes = response.bytes().await?.to_vec();
+    Ok(bytes.into())
+}
+
+#[op2(async)]
+async fn nino_a_set_response_from_fetch(
+    op_state: Rc<RefCell<OpState>>,
+    #[string] url: String,
+    #[bigint] timeout: i64,
+    #[string] method: String,
+    #[serde] headers: HashMap<String, String>,
+    #[string] body: String,
+) -> Result<(), Error> {
+    let response_in = fetch(url, timeout, method, headers, body).await?;
+
+    let servlet_task = take_servlet_task(op_state)?;
+    let stream_out = servlet_task.stream;
+
+    nino_functions::send_request_to_stream(response_in, stream_out).await
 }
