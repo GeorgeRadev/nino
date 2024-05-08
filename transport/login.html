@@ -3,77 +3,59 @@
 
 <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta http-equiv="X-UA-Compatible">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Portal Login</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<meta name="description" content="Nino Portal">
+    <link rel="shortcut icon" href="favicon.ico" />
 
-    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/fontawesome.min.css" rel="stylesheet">
-    <link href="bootstrap.min.css" rel="stylesheet">
+    <title>Log In | Nino Portal</title>
+
     <link href="portal.css" rel="stylesheet">
+    <script type="text/javascript" src="portal.js"></script>
+</head>
 
-<body class="nav-md">
-    <div class="container body">
-        <div class="main_container">
-            <div class="col-md-3 left_col">
-                <div class="left_col scroll-view">
+<body>
+    <main class="d-flex w-100">
+        <div class="container d-flex flex-column">
+            <div class="row vh-100">
+                <div class="col-sm-10 col-md-8 col-lg-6 col-xl-5 mx-auto d-table h-100">
+                    <div class="d-table-cell align-middle">
 
-                </div>
-            </div>
+                        <div class="text-center mt-4">
+                            <h1 class="h2">Welcome!</h1>
+                            <p class="lead">
+                                Log in to your account to continue
+                            </p>
+                        </div>
 
-            <div class="right_col" role="main" style="min-height: 3771px;">
-                <br />
-                <br />
-                <br />
-                <br />
-
-                <div class="row">
-
-                    <div class="col-md-3 col-sm-12 ">
-                    </div>
-                    <div class="col-md-6 col-sm-12 ">
-                        <div class="x_panel">
-                            <div class="x_title">
-                                <h2>Login </h2>
-                                <div class="clearfix"></div>
-                            </div>
-                            <div class="x_content">
-                                <br>
-
-                                <form action="nino_login" method="post" id="login_form" data-parsley-validate=""
-                                    class="form-horizontal form-label-left" novalidate="">
-                                    <div class="item form-group">
-                                        <label class="col-form-label col-md-3 col-sm-3 label-align"
-                                            for="username">username <span class="required">*</span>
-                                        </label>
-                                        <div class="col-md-8 col-sm-8 ">
-                                            <input type="text" id="username" name="username"
-                                                placeholder="Enter Username" required="required" class="form-control ">
+                        <div class="card">
+                            <div class="card-body">
+                                <div class="m-sm-3">
+                                    <form action="nino_login" method="post" id="login_form">
+                                        <div class="mb-3">
+                                            <label class="form-label">Username</label>
+                                            <input class="form-control form-control-lg" type="username" name="username"
+                                                placeholder="Enter your username" />
                                         </div>
-                                    </div>
-                                    <div class="item form-group">
-                                        <label class="col-form-label col-md-3 col-sm-3 label-align" for="last-name">
-                                            password <span class="required">*</span>
-                                        </label>
-                                        <div class="col-md-8 col-sm-8 ">
-                                            <input type="password" id="password" name="password"
-                                                placeholder="Enter Password" required="required" class="form-control">
+                                        <div class="mb-3">
+                                            <label class="form-label">Password</label>
+                                            <input class="form-control form-control-lg" type="password" name="password"
+                                                placeholder="Enter your password" />
                                         </div>
-                                    </div>
-
-                                    <div class="ln_solid"></div>
-                                    <div class="item form-group">
-                                        <div class="col-md-6 col-sm-6 offset-md-3">
-                                            <button class="btn btn-primary" type="submit">Login</button>
+                                        <div>
+                                            &nbsp;
                                         </div>
-                                    </div>
-                                </form>
+                                        <div class="d-grid gap-2 mt-3">
+                                            <a href="index.html" class="btn btn-lg btn-primary">Log in</a>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 </body>
 </html>

@@ -24,7 +24,7 @@ write_db "test" "postgres" "$NINO"
 write_request () {
    echo "add request: $1"
    echo "INSERT INTO nino_request (request_path, response_name, redirect_flag, authorize_flag) " >> "$out_file"
-   echo "VALUES ('$1', '$2', '$3', $4);" >> "$out_file"
+   echo "VALUES ('$1', '$2', $3, $4);" >> "$out_file"
 }
 
 # write_response: "response_name" "response_mime_type" "execute_flag" "transpile_flag" "response_content_file"
@@ -51,10 +51,6 @@ write_response   "_nino"                "application/javascript;charset=UTF-8"  
 #add global unauthorized resources
 write_request   "favicon.ico"         "favicon.ico"             false   false
 write_response  "favicon.ico"         "image/x-icon"            false   false    "transport/favicon.ico"
-write_request   "bootstrap.min.css"   "bootstrap.min.css"       false   false
-write_response  "bootstrap.min.css"   "text/css;charset=UTF-8"  false   false    "transport/bootstrap.min.css"
-write_request   "portal.css"          "portal.css"              false   false
-write_response  "portal.css"          "text/css;charset=UTF-8"  false   false    "transport/portal.css"
 
 
 
@@ -88,25 +84,28 @@ write_response   "demo_fetch_response_servlet" "image/png"                   tru
 #add PORTAL code with login
 write_request    "login"                "login.html"                             false   false
 write_response   "login.html"           "text/html;charset=UTF-8"                false   false  "transport/login.html"
-write_request    "nino_login"           "nino_login"                             false   false
-write_response   "nino_login"           "text/html;charset=UTF-8"                true    true   "transport/nino_login.js"
-write_request    "/"                    "portal"                                 false   true
-write_request    "portal"               "portal"                                 false   true
-write_response   "portal"               "text/html;charset=UTF-8"                false   false  "transport/portal.html"
-write_request    "portal.js"            "portal.js"                              false   true
-write_response   "portal.js"            "application/javascript;charset=UTF-8"   false   true   "transport/portal.js"
+write_request    "portal_login"         "portal_login"                           false   false
+write_response   "portal_login"         "text/html;charset=UTF-8"                true    true   "transport/portal_login.jsx"
+write_request    "/"                    "portal_main"                            false   true
+write_request    "index.html"           "portal_main"                            false   true
+write_request    "portal"               "portal_main"                            false   true
+write_response   "portal_main"          "text/html;charset=UTF-8"                false   false  "transport/portal.html"
+write_request    "portal.js"            "portal.js"                              false   false
+write_response   "portal.js"            "application/javascript;charset=UTF-8"   false   false  "transport/portal.js"
+write_request    "portal.css"           "portal.css"                             false   false
+write_response   "portal.css"           "text/css;charset=UTF-8"                 false   false  "transport/portal.css"
 write_request    "portlet_counter.js"   "portlet_counter.js"                     false   true
 write_response   "portlet_counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portlet_counter.js"
 write_request    "portlet_about.js"     "portlet_about.js"                       false   true
 write_response   "portlet_about.js"     "application/javascript;charset=UTF-8"   false   true   "transport/portlet_about.js"
 
 #add ide in react
-write_request    "ide"               "ide/index.html"                         false   false
-write_response   "ide/index.html"    "text/html;charset=UTF-8"                false   false  "transport/ide/index.html"
-write_request    "ide/ide.js"        "ide/ide.js"                             false   false
-write_response   "ide/ide.js"        "application/javascript;charset=UTF-8"   false   false  "transport/ide/ide.js"
-write_request    "ide/ide.css"       "ide/ide.css"                            false   false
-write_response   "ide/ide.css"       "text/css;charset=UTF-8"                 false   false  "transport/ide/ide.css"
+# write_request    "ide"               "ide/index.html"                         false   false
+# write_response   "ide/index.html"    "text/html;charset=UTF-8"                false   false  "transport/ide/index.html"
+# write_request    "ide/ide.js"        "ide/ide.js"                             false   false
+# write_response   "ide/ide.js"        "application/javascript;charset=UTF-8"   false   false  "transport/ide/ide.js"
+# write_request    "ide/ide.css"       "ide/ide.css"                            false   false
+# write_response   "ide/ide.css"       "text/css;charset=UTF-8"                 false   false  "transport/ide/ide.css"
 
 echo "PORTLETS..."
 # write_portlet: "portlet_name" "user_role" "portlet_index" "portlet_menu"
