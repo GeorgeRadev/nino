@@ -55,12 +55,14 @@ CREATE TABLE IF NOT EXISTS nino_user (
 );
 -- admin user
 INSERT INTO nino_user (user_name, user_password) VALUES ('admin', '$2b$12$dGW/Xguize5gW1LrGBI3kOLy/vkk5jVwWuOqRPfLLaxCzYHHYhyGC');
+INSERT INTO nino_user (user_name, user_password) VALUES ('user', '$2b$12$vetw61.n46JLD2Wc1njwreA/0UTyDxnHa6W73fliPJN9MJOZ1OHwO');
 
 DROP TABLE IF EXISTS nino_role;
 CREATE TABLE IF NOT EXISTS nino_role (
     user_role VARCHAR(256) PRIMARY KEY
 );
 INSERT INTO nino_role (user_role) VALUES ('admin');
+INSERT INTO nino_role (user_role) VALUES ('user');
 
 DROP TABLE IF EXISTS nino_user_role;
 CREATE TABLE IF NOT EXISTS nino_user_role (
@@ -71,6 +73,8 @@ DROP INDEX IF EXISTS nino_user_role_ix;
 CREATE INDEX IF NOT EXISTS nino_user_role_ix ON nino_user_role(user_name);
 
 INSERT INTO nino_user_role(user_name, user_role) VALUES ('admin', 'admin');
+INSERT INTO nino_user_role(user_name, user_role) VALUES ('admin', 'user');
+INSERT INTO nino_user_role(user_name, user_role) VALUES ('user', 'user');
 
 -- create portlet assigned to role and menu in the portal
 -- sub menu is text separated by /
@@ -80,6 +84,7 @@ CREATE TABLE IF NOT EXISTS nino_portlet (
     user_role VARCHAR(256) NOT NULL,
     portlet_menu VARCHAR(1024) NOT NULL,
     portlet_index INT DEFAULT 0,
+    portlet_icon VARCHAR(512) NOT NULL,
     portlet_name VARCHAR(1024) NOT NULL
 );
 DROP INDEX IF EXISTS nino_portlet_ix;

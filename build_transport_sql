@@ -36,6 +36,13 @@ write_response () {
    echo "'::bytea);" >> "$out_file"
 }
 
+# write_portlet: "user_role", "portlet_menu", "portlet_index", "portlet_icon", "portlet_name"
+write_portlet () {
+   echo "add portlet: $2"
+   echo "INSERT INTO nino_portlet (user_role, portlet_menu, portlet_index, portlet_icon, portlet_name) " >> "$out_file"
+   echo "VALUES ('$1', '$2', $3, '$4', '$5');" >> "$out_file"
+}
+
 #add main nino execution loop code and default transpile code
 write_response   "_main"                "application/javascript;charset=UTF-8"   true    false  "transport/_main.js"
 write_response   "_transpile_dynamics"  "application/javascript;charset=UTF-8"   true    false  "transport/_transpile_dynamics.js"
@@ -85,11 +92,11 @@ write_response   "demo_fetch_response_servlet" "image/png"                   tru
 write_request    "login"                "login.html"                             false   false
 write_response   "login.html"           "text/html;charset=UTF-8"                false   false  "transport/login.html"
 write_request    "portal_login"         "portal_login"                           false   false
-write_response   "portal_login"         "text/html;charset=UTF-8"                true    true   "transport/portal_login.jsx"
+write_response   "portal_login"         "text/html;charset=UTF-8"                true    true   "transport/portal_login.js"
 write_request    "/"                    "portal_main"                            false   true
 write_request    "index.html"           "portal_main"                            false   true
 write_request    "portal"               "portal_main"                            false   true
-write_response   "portal_main"          "text/html;charset=UTF-8"                false   false  "transport/portal.html"
+write_response   "portal_main"          "text/html;charset=UTF-8"                true    true  "transport/portal_main.js"
 write_request    "portal.js"            "portal.js"                              false   false
 write_response   "portal.js"            "application/javascript;charset=UTF-8"   false   false  "transport/portal.js"
 write_request    "portal.css"           "portal.css"                             false   false
@@ -98,6 +105,8 @@ write_request    "portlet_counter.js"   "portlet_counter.js"                    
 write_response   "portlet_counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portlet_counter.js"
 write_request    "portlet_about.js"     "portlet_about.js"                       false   true
 write_response   "portlet_about.js"     "application/javascript;charset=UTF-8"   false   true   "transport/portlet_about.js"
+write_request    "portlet_menu.js"     "portlet_menu.js"                         false   true
+write_response   "portlet_menu.js"     "application/javascript;charset=UTF-8"    false   true   "transport/portlet_menu.js"
 
 #add ide in react
 # write_request    "ide"               "ide/index.html"                         false   false
@@ -107,17 +116,19 @@ write_response   "portlet_about.js"     "application/javascript;charset=UTF-8"  
 # write_request    "ide/ide.css"       "ide/ide.css"                            false   false
 # write_response   "ide/ide.css"       "text/css;charset=UTF-8"                 false   false  "transport/ide/ide.css"
 
-echo "PORTLETS..."
-# write_portlet: "portlet_name" "user_role" "portlet_index" "portlet_menu"
-write_portlet () {
-   echo "add portlet: $1"
-   echo "INSERT INTO nino_portlet (portlet_name, user_role, portlet_index, portlet_menu) " >> "$out_file"
-   echo "VALUES ('$1', '$2', $3, '$4');" >> "$out_file"
-}
-
-write_portlet "portlet_counter.js"    "admin" 80 "demo/counter"
-write_portlet "portlet_about.js"      "admin" 99 "about"
-
 # update lengths
 echo "UPDATE nino_response SET response_content_length = length(response_content);" >> "$out_file"
-echo "DONE"
+
+write_portlet "user"    "Home"                  0 "home"      "portlet_about.js"
+write_portlet "user"    "Demo/Counter"         10 "file-plus" "portlet_counter.js"
+write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portlet_about.js"
+write_portlet "admin"   "Admin/Responses"     910 "log-out"   "portlet_about.js"
+write_portlet "admin"   "Admin/Users"         920 "user"      "portlet_about.js"
+write_portlet "admin"   "Admin/Roles"         930 "users"     "portlet_about.js"
+write_portlet "admin"   "Admin/Portal"        940 "layout"    "portlet_about.js"
+write_portlet "admin"   "Admin/Settings"      950 "settings"  "portlet_about.js"
+write_portlet "admin"   "Admin/Databases"     960 "database"  "portlet_about.js"
+write_portlet "admin"   "Admin/Schedules"     970 "clock"     "portlet_about.js"
+write_portlet "admin"   "Admin/Transports"    980 "truck"     "portlet_about.js"
+
+echo "...DONE"

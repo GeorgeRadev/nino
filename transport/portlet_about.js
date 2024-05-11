@@ -2,13 +2,16 @@ import React from 'react';
 
 export default function portlet_about() {
   return (
-    <div class="x_panel">
-      <div class="x_title">
-        <h2>About</h2>
-        <div class="clearfix"></div>
-      </div>
-      <div class="x_content">
-        This is an about react/preact portlet<br />
+    <div class="row">
+      <div class="col-12 col-lg-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title">About Portlet</h5>
+          </div>
+          <div class="card-body">
+            The hwole portal is dynamicly renderable with user, roles and portlets assigned.
+          </div>
+        </div>
       </div>
     </div>
   );
