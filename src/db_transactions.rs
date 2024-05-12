@@ -1,5 +1,6 @@
 use crate::nino_constants::{self, info};
 use async_channel::{Receiver, Sender};
+use base64::Engine;
 use core::fmt;
 use deno_runtime::deno_core::anyhow::Error;
 use std::collections::HashMap;
@@ -718,11 +719,13 @@ impl TransactionPostgres {
                                         }
                                         let mut line: Vec<String> = Vec::new();
                                         for ix in 0..row.len() {
+                                            // try as String
                                             let value: Result<String, tokio_postgres::Error> =
                                                 row.try_get(ix);
                                             match value {
                                                 Ok(value) => line.push(value),
                                                 Err(_) => {
+                                                    // try as Boolean
                                                     let value: Result<bool, tokio_postgres::Error> =
                                                         row.try_get(ix);
                                                     match value {
@@ -735,11 +738,33 @@ impl TransactionPostgres {
                                                             line.push(str.into());
                                                         }
                                                         Err(_) => {
-                                                            let value: &[u8] = row.get(ix);
-                                                            line.push(
-                                                                String::from_utf8(value.into())
-                                                                    .unwrap(),
-                                                            );
+                                                            // try as Bytes
+                                                            let value: Result<
+                                                                &[u8],
+                                                                tokio_postgres::Error,
+                                                            > = row.try_get(ix);
+                                                            match value {
+                                                                Ok(value) => {
+                                                                    line.push(
+                                                                        match String::from_utf8(
+                                                                            value.into(),
+                                                                        ) {
+                                                                            Ok(v) => v,
+                                                                            Err(_) => {
+                                                                                //use base64 value
+                                                                                base64::engine::general_purpose::STANDARD.encode(value)
+                                                                            }
+                                                                        },
+                                                                    );
+                                                                }
+                                                                Err(_) => {
+                                                                    // set as NULL
+                                                                    line.push("".into());
+                                                                    // and report as error to investigate
+                                                                    eprintln!("ERROR {}:{}:{}", file!(), line!(), 
+                                                                "!!!!!!!!! PLEASE CHECH WHAT TYPE IS NOT YET HANDLED !!!!!!!!");
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }

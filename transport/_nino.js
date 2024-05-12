@@ -87,8 +87,7 @@ export default class nino_core {
         return result;
     }
 
-    static async ninoRequestsGet(limit) {
-        limit = limit | 0;
+    static async ninoRequestsGet() {
         const conn = await db();
         const sql = SELECT request_path, response_name, redirect_flag, authorize_flag 
                     FROM nino_request 
@@ -102,6 +101,47 @@ export default class nino_core {
                 authorize_flag: authorize_flag
             });
             return true;
+        });
+        return result;
+    }
+
+    static async ninoResponsesGet() {
+        const conn = await db();
+        const sql = SELECT response_name, response_mime_type, execute_flag, transpile_flag
+                    FROM nino_response 
+                    ORDER BY response_name;
+
+        var result = [];
+        await conn.query(sql, function (response_name, response_mime_type, execute_flag, transpile_flag) {
+            result.push({
+                response_name: response_name,
+                response_mime_type: response_mime_type,
+                execute_flag: execute_flag,
+                transpile_flag: transpile_flag
+            });
+            return true;
+        });
+        return result;
+    }
+
+    static async ninoResponsesDetail(name) {
+        const conn = await db();
+        const sql = SELECT response_name, response_mime_type, execute_flag, transpile_flag, response_content, javascript
+                    FROM nino_response 
+                    WHERE response_name = : name
+                    ORDER BY response_name;
+
+        var result;
+        await conn.query(sql, function (response_name, response_mime_type, execute_flag, transpile_flag, response_content, javascript) {
+            result = {
+                response_name: response_name,
+                response_mime_type: response_mime_type,
+                execute_flag: execute_flag,
+                transpile_flag: transpile_flag,
+                response_content, response_content,
+                javascript: javascript
+            };
+            return false;
         });
         return result;
     }
