@@ -723,10 +723,25 @@ impl TransactionPostgres {
                                             match value {
                                                 Ok(value) => line.push(value),
                                                 Err(_) => {
-                                                    let value: &[u8] = row.get(ix);
-                                                    line.push(
-                                                        String::from_utf8(value.into()).unwrap(),
-                                                    );
+                                                    let value: Result<bool, tokio_postgres::Error> =
+                                                        row.try_get(ix);
+                                                    match value {
+                                                        Ok(value) => {
+                                                            let str = if value {
+                                                                "true"
+                                                            } else {
+                                                                "false"
+                                                            };
+                                                            line.push(str.into());
+                                                        }
+                                                        Err(_) => {
+                                                            let value: &[u8] = row.get(ix);
+                                                            line.push(
+                                                                String::from_utf8(value.into())
+                                                                    .unwrap(),
+                                                            );
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }

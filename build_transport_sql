@@ -97,16 +97,21 @@ write_request    "/"                    "portal_main"                           
 write_request    "index.html"           "portal_main"                            false   true
 write_request    "portal"               "portal_main"                            false   true
 write_response   "portal_main"          "text/html;charset=UTF-8"                true    true  "transport/portal_main.js"
+write_request    "portal_rest"          "portal_rest"                            false   true
+write_response   "portal_rest"          "application/json;charset=UTF-8"         true    true  "transport/portal_rest.js"
 write_request    "portal.js"            "portal.js"                              false   false
 write_response   "portal.js"            "application/javascript;charset=UTF-8"   false   false  "transport/portal.js"
 write_request    "portal.css"           "portal.css"                             false   false
 write_response   "portal.css"           "text/css;charset=UTF-8"                 false   false  "transport/portal.css"
-write_request    "portlet_counter.js"   "portlet_counter.js"                     false   true
-write_response   "portlet_counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portlet_counter.js"
+write_request    "portlet_menu.js"      "portlet_menu.js"                        false   true
+write_response   "portlet_menu.js"      "application/javascript;charset=UTF-8"   false   true   "transport/portlet_menu.js"
 write_request    "portlet_about.js"     "portlet_about.js"                       false   true
 write_response   "portlet_about.js"     "application/javascript;charset=UTF-8"   false   true   "transport/portlet_about.js"
-write_request    "portlet_menu.js"     "portlet_menu.js"                         false   true
-write_response   "portlet_menu.js"     "application/javascript;charset=UTF-8"    false   true   "transport/portlet_menu.js"
+write_request    "portlet_counter.js"   "portlet_counter.js"                     false   true
+write_response   "portlet_counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portlet_counter.js"
+
+write_request    "portlet_admin_requests.js"   "portlet_admin_requests.js"            false   true
+write_response   "portlet_admin_requests.js"   "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_requests.js"
 
 #add ide in react
 # write_request    "ide"               "ide/index.html"                         false   false
@@ -119,9 +124,9 @@ write_response   "portlet_menu.js"     "application/javascript;charset=UTF-8"   
 # update lengths
 echo "UPDATE nino_response SET response_content_length = length(response_content);" >> "$out_file"
 
-write_portlet "user"    "Home"                  0 "home"      "portlet_about.js"
-write_portlet "user"    "Demo/Counter"         10 "file-plus" "portlet_counter.js"
-write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portlet_about.js"
+write_portlet "portal"  "Home"                  0 "home"      "portlet_about.js"
+write_portlet "demo"    "Demo/Counter"         10 "file-plus" "portlet_counter.js"
+write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portlet_admin_requests.js"
 write_portlet "admin"   "Admin/Responses"     910 "log-out"   "portlet_about.js"
 write_portlet "admin"   "Admin/Users"         920 "user"      "portlet_about.js"
 write_portlet "admin"   "Admin/Roles"         930 "users"     "portlet_about.js"

@@ -9,7 +9,7 @@ export default function portlet_about() {
             <h5 class="card-title">About Portlet</h5>
           </div>
           <div class="card-body">
-            The hwole portal is dynamicly renderable with user, roles and portlets assigned.
+            The whole portal is dynamicly renderable with user, roles and portlets assigned.
           </div>
         </div>
       </div>

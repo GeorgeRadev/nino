@@ -35,7 +35,6 @@ export default class nino_core {
         if (!request || !request.user || !role) {
             throw new Error("no authenticated user");
         }
-        const core = Deno.core;
         const conn = await db();
         const sql = SELECT user_role 
                     FROM nino_user_role 
@@ -55,7 +54,6 @@ export default class nino_core {
         if (!request || !request.user) {
             return [];
         }
-        const core = Deno.core;
         const conn = await db();
         const sql = SELECT portlet_menu, portlet_icon, portlet_name
                     FROM nino_portlet p, nino_user_role ur
@@ -89,4 +87,22 @@ export default class nino_core {
         return result;
     }
 
+    static async ninoRequestsGet(limit) {
+        limit = limit | 0;
+        const conn = await db();
+        const sql = SELECT request_path, response_name, redirect_flag, authorize_flag 
+                    FROM nino_request 
+                    ORDER BY request_path;
+        var result = [];
+        await conn.query(sql, function (request_path, response_name, redirect_flag, authorize_flag) {
+            result.push({
+                request_path: request_path,
+                response_name: response_name,
+                redirect_flag: redirect_flag,
+                authorize_flag: authorize_flag
+            });
+            return true;
+        });
+        return result;
+    }
 }

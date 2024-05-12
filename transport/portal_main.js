@@ -3,16 +3,19 @@ import nino from "_nino";
 
 export default async function portal(request) {
   debugger;
-  await nino.assertRole(request, 'user');
+  await nino.assertRole(request, 'portal');
 
   const portlet_menu = await nino.getPortletMenu(request);
   // get portlet name
-  var currentPortletName = request.url.split('=')[1] || "";
+  var currentPortletName = (request.url || "").split('=')[1] || "";
   if (currentPortletName.length > 0 && currentPortletName.charAt(0) === '/') {
     currentPortletName = currentPortletName.substring(1);
   }
   // get first portlet as home when not found
-  var currentPortlet = portlet_menu[currentPortletName];
+  var currentPortlet;
+  if (currentPortletName) {
+    currentPortlet = portlet_menu[currentPortletName];
+  }
   if (!currentPortlet) {
     for (var path in portlet_menu) {
       currentPortlet = portlet_menu[path];

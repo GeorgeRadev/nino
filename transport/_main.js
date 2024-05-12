@@ -89,8 +89,9 @@ async function main() {
                 if (handler_arguments_count <= 1) {
                     // rest handler with request param
                     // core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
+                    debugger;
                     let response = await handler(request);
-                    // core.print('after handler response' + response + '\n');
+                    // core.print('result = ' + response + '\n');
                     await send_response(response);
 
                 } else if (handler_arguments_count == 2) {
@@ -103,6 +104,7 @@ async function main() {
                         },
                     };
 
+                    debugger;
                     await handler(request, response);
                     // core.print('result = ' + (result) + '\n');
 
@@ -117,11 +119,14 @@ async function main() {
                     //request for cache invalidation
                     if (invalidation_message.startsWith(module_invalidation_prefix)) {
                         // modules has been changed
+                        // restart js engine to reset the compiled modules
                         break;
                     } else if (invalidation_message.startsWith(database_invalidation_prefix)) {
+                        // reload databse aliases
                         core.ops.nino_reload_database_aliases();
                     } else {
-                        // future  js message listeners could be implemented here
+                        // future js message listeners could be implemented here
+                        // TODO: add dynamic dispatch to "exit_message_*"
                     }
                 } else {
                     throw new Error("Should never get this");

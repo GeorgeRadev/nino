@@ -73,8 +73,10 @@ DROP INDEX IF EXISTS nino_user_role_ix;
 CREATE INDEX IF NOT EXISTS nino_user_role_ix ON nino_user_role(user_name);
 
 INSERT INTO nino_user_role(user_name, user_role) VALUES ('admin', 'admin');
-INSERT INTO nino_user_role(user_name, user_role) VALUES ('admin', 'user');
-INSERT INTO nino_user_role(user_name, user_role) VALUES ('user', 'user');
+INSERT INTO nino_user_role(user_name, user_role) VALUES ('admin', 'portal');
+INSERT INTO nino_user_role(user_name, user_role) VALUES ('admin', 'demo');
+INSERT INTO nino_user_role(user_name, user_role) VALUES ('user', 'portal');
+INSERT INTO nino_user_role(user_name, user_role) VALUES ('user', 'demo');
 
 -- create portlet assigned to role and menu in the portal
 -- sub menu is text separated by /
