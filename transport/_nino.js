@@ -145,4 +145,22 @@ export default class nino_core {
         });
         return result;
     }
+
+    static async ninoUsersGet() {
+        const conn = await db();
+        const sql = SELECT user_name, user_password
+                    FROM nino_user 
+                    ORDER BY user_name;
+
+        var result = [];
+        await conn.query(sql, function (user_name, user_password) {
+            result.push({
+                user_name: user_name,
+                user_password: user_password
+            });
+            return true;
+        });
+        return result;
+    }
+
 }

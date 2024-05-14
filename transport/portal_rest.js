@@ -22,6 +22,8 @@ export default async function portal_rest(request) {
         return null;
       }
       return await nino.ninoResponsesDetail(name[0]);
+    case '/users/get':
+      return await nino.ninoUsersGet();
 
   }
   return null;

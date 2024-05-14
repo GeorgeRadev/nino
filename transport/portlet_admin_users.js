@@ -1,0 +1,60 @@
+import React from 'react';
+
+async function usersLoad() {
+  const response = await fetch("/portal_rest?op=/users/get");
+  const requests = await response.json();
+  return requests;
+}
+
+export default function portlet_admin_users() {
+  const [users, setUsers] = React.useState([]);
+  const [selectIx, setSelectIx] = React.useState(-1);
+
+  async function requestRefresh() {
+    setUsers(await usersLoad());
+    setSelectIx(-1);
+    setTimeout(feather.replace, 20);
+  }
+
+  React.useEffect(() => {
+    requestRefresh();
+  }, []);
+
+  function onRowClick(e) {
+    setSelectIx(e.target.parentElement.dataset.index);
+  }
+
+  const userRows = [];
+  for (var i = 0; i < users.length; i++) {
+    var user = users[i];
+    userRows.push(<tr class={(i == selectIx) ? "table-primary" : ""} data-index={i} onClick={onRowClick}>
+      <td>{user.user_name}</td>
+      <td>{user.user_password}</td>
+    </tr>);
+  }
+
+  return (
+    <div class="row">
+      <div class="col-12 col-lg-12">
+        <div class="card">
+          <div class="card-header">
+            <button type="button" class="btn btn-primary" title="refresh" onClick={requestRefresh}><i class="align-middle" data-feather="refresh-ccw"></i></button>
+          </div>
+          <div class="card-body">
+            <table class="table table-hover my-0">
+              <thead>
+                <tr>
+                  <th>user name</th>
+                  <th>password</th>
+                </tr>
+              </thead>
+              <tbody>
+                {userRows}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

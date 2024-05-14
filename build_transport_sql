@@ -114,6 +114,8 @@ write_request    "portlet_admin_requests.js"   "portlet_admin_requests.js"      
 write_response   "portlet_admin_requests.js"   "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_requests.js"
 write_request    "portlet_admin_responses.js"  "portlet_admin_responses.js"           false   true
 write_response   "portlet_admin_responses.js"  "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_responses.js"
+write_request    "portlet_admin_users.js"      "portlet_admin_users.js"               false   true
+write_response   "portlet_admin_users.js"      "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_users.js"
 
 #add ide in react
 # write_request    "ide"               "ide/index.html"                         false   false
@@ -130,7 +132,7 @@ write_portlet "portal"  "Home"                  0 "home"      "portlet_about.js"
 write_portlet "demo"    "Demo/Counter"         10 "file-plus" "portlet_counter.js"
 write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portlet_admin_requests.js"
 write_portlet "admin"   "Admin/Responses"     910 "log-out"   "portlet_admin_responses.js"
-write_portlet "admin"   "Admin/Users"         920 "user"      "portlet_about.js"
+write_portlet "admin"   "Admin/Users"         920 "user"      "portlet_admin_users.js"
 write_portlet "admin"   "Admin/Roles"         930 "users"     "portlet_about.js"
 write_portlet "admin"   "Admin/Portal"        940 "layout"    "portlet_about.js"
 write_portlet "admin"   "Admin/Settings"      950 "settings"  "portlet_about.js"
