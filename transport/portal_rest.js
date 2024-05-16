@@ -20,11 +20,17 @@ export default async function portal_rest(request) {
       var name = request.parameters['name'];
       if (!name || !name[0]) {
         return null;
+      } else {
+        return await nino.ninoResponsesDetail(name[0]);
       }
-      return await nino.ninoResponsesDetail(name[0]);
     case '/users/get':
-      return await nino.ninoUsersGet();
-
+      return await nino.ninoUsersRolesGet();
+    case '/portlets/get':
+      return await nino.ninoPortletsGet();
+    case '/settings/get':
+      return await nino.ninoSettingsGet();
+      case '/databases/get':
+        return await nino.ninoDatabasesGet();
   }
   return null;
 }

@@ -146,21 +146,92 @@ export default class nino_core {
         return result;
     }
 
-    static async ninoUsersGet() {
+    static async ninoUsersRolesGet() {
         const conn = await db();
-        const sql = SELECT user_name, user_password
-                    FROM nino_user 
-                    ORDER BY user_name;
+        const sql = SELECT user_name, user_role
+                    FROM nino_user_role 
+                    ORDER BY user_name, user_role;
 
         var result = [];
-        await conn.query(sql, function (user_name, user_password) {
+        await conn.query(sql, function (user_name, user_role) {
             result.push({
                 user_name: user_name,
-                user_password: user_password
+                user_role: user_role
             });
             return true;
         });
         return result;
     }
 
+    static async ninoPortletsGet() {
+        const conn = await db();
+        const sql = SELECT user_name, user_role
+                    FROM nino_user_role 
+                    ORDER BY user_name, user_role;
+
+        var result = [];
+        await conn.query(sql, function (user_name, user_role) {
+            result.push({
+                user_name: user_name,
+                user_role: user_role
+            });
+            return true;
+        });
+        return result;
+    }
+
+    static async ninoPortletsGet() {
+        const conn = await db();
+        const sql = SELECT user_role, portlet_menu, portlet_index, portlet_icon, portlet_name
+                    FROM nino_portlet 
+                    ORDER BY user_role, portlet_menu;
+
+        var result = [];
+        await conn.query(sql, function (user_role, portlet_menu, portlet_index, portlet_icon, portlet_name) {
+            result.push({
+                user_role: user_role,
+                portlet_menu: portlet_menu,
+                portlet_index: portlet_index,
+                portlet_icon: portlet_icon,
+                portlet_name: portlet_name
+            });
+            return true;
+        });
+        return result;
+    }
+
+    static async ninoSettingsGet() {
+        const conn = await db();
+        const sql = SELECT setting_key, setting_value
+                    FROM nino_setting 
+                    ORDER BY setting_key;
+
+        var result = [];
+        await conn.query(sql, function (setting_key, setting_value) {
+            result.push({
+                setting_key: setting_key,
+                setting_value: setting_value
+            });
+            return true;
+        });
+        return result;
+    }
+
+    static async ninoDatabasesGet() {
+        const conn = await db();
+        const sql = SELECT db_alias, db_type, db_connection_string
+                    FROM nino_database 
+                    ORDER BY db_alias;
+
+        var result = [];
+        await conn.query(sql, function (db_alias, db_type, db_connection_string) {
+            result.push({
+                db_alias: db_alias,
+                db_type: db_type,
+                db_connection_string: db_connection_string
+            });
+            return true;
+        });
+        return result;
+    }
 }

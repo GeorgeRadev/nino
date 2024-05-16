@@ -24,14 +24,18 @@ export default function portlet_admin_responses() {
 
   async function fetchResponseDetails() {
     if (selectIx >= 0 && selectIx < responses.length) {
-      const response = await fetch("/portal_rest?op=/responses/detail&name=" + responses[selectIx].response_name);
-      const details = await response.json();
-      setResponseDetails(details);
-      document.getElementById('requests_jsqlx_code').textContent = details.response_content;
-      document.getElementById('requests_transpiled_code').textContent = details.javascript;
-      document.getElementById('requests_jsqlx_code').style.display = "block";
-      document.getElementById('requests_transpiled_code').style.display = "none";
-      setDialogVisible(true);
+      try {
+        const response = await fetch("/portal_rest?op=/responses/detail&name=" + responses[selectIx].response_name);
+        const details = await response.json();
+        setResponseDetails(details);
+        document.getElementById('requests_jsqlx_code').textContent = details.response_content;
+        document.getElementById('requests_transpiled_code').textContent = details.javascript;
+        document.getElementById('requests_jsqlx_code').style.display = "block";
+        document.getElementById('requests_transpiled_code').style.display = "none";
+        setDialogVisible(true);
+      } catch (e) {
+        alert(e);
+      }
     }
   }
 

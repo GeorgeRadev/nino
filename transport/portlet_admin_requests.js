@@ -28,14 +28,18 @@ export default function portlet_admin_requests() {
 
   async function fetchResponseDetails() {
     if (selectIx >= 0 && selectIx < requests.length) {
-      const response = await fetch("/portal_rest?op=/responses/detail&name=" + requests[selectIx].response_name);
-      const details = await response.json();
-      setResponseDetails(details);
-      document.getElementById('requests_jsqlx_code').textContent = details.response_content;
-      document.getElementById('requests_transpiled_code').textContent = details.javascript;
-      document.getElementById('requests_jsqlx_code').style.display = "block";
-      document.getElementById('requests_transpiled_code').style.display = "none";
-      setDialogVisible(true);
+      try {
+        const response = await fetch("/portal_rest?op=/responses/detail&name=" + requests[selectIx].response_name);
+        const details = await response.json();
+        setResponseDetails(details);
+        document.getElementById('requests_jsqlx_code').textContent = details.response_content;
+        document.getElementById('requests_transpiled_code').textContent = details.javascript;
+        document.getElementById('requests_jsqlx_code').style.display = "block";
+        document.getElementById('requests_transpiled_code').style.display = "none";
+        setDialogVisible(true);
+      } catch (e) {
+        alert(e);
+      }
     }
   }
 
@@ -127,7 +131,9 @@ export default function portlet_admin_requests() {
                       document.getElementById('requests_transpiled_code').style.display = "none";
                     }}>jsqlx</button>
                     &nbsp;
-                    <button class="btn btn-primary" onClick={() => {
+                    <button class="btn btn-primary" 
+                    {...((responseDetails['transpile_flag'] == 'false') ? {hidden: 'hidden'} : {})}
+                    onClick={() => {
                       document.getElementById('requests_jsqlx_code').style.display = "none";
                       document.getElementById('requests_transpiled_code').style.display = "block";
                     }}>transpiled js</button>

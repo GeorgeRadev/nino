@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function portlet_test() {
+export default function portlet_counter() {
     // State to store count value
     const [count, setCount] = React.useState(0);
 

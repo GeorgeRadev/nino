@@ -706,67 +706,56 @@ impl TransactionPostgres {
                                     ))
                                 }
                                 Ok(rows) => {
-                                    let mut row_types: Vec<String> = Vec::new();
+                                    let mut row_type_names: Vec<String> = Vec::new();
+                                    let mut row_types: Vec<Type> = Vec::new();
                                     let mut row_names: Vec<String> = Vec::new();
                                     let mut result: Vec<Vec<String>> = Vec::new();
                                     for row in rows {
-                                        if row_types.is_empty() {
+                                        if row_type_names.is_empty() {
                                             for column in row.columns() {
                                                 row_names.push(column.name().to_string());
                                                 let t = column.type_();
-                                                row_types.push(t.to_string());
+                                                row_types.push(t.clone());
+                                                row_type_names.push(t.to_string());
                                             }
                                         }
                                         let mut line: Vec<String> = Vec::new();
                                         for ix in 0..row.len() {
-                                            // try as String
-                                            let value: Result<String, tokio_postgres::Error> =
-                                                row.try_get(ix);
-                                            match value {
-                                                Ok(value) => line.push(value),
-                                                Err(_) => {
-                                                    // try as Boolean
-                                                    let value: Result<bool, tokio_postgres::Error> =
-                                                        row.try_get(ix);
-                                                    match value {
-                                                        Ok(value) => {
-                                                            let str = if value {
-                                                                "true"
-                                                            } else {
-                                                                "false"
-                                                            };
-                                                            line.push(str.into());
-                                                        }
-                                                        Err(_) => {
-                                                            // try as Bytes
-                                                            let value: Result<
-                                                                &[u8],
-                                                                tokio_postgres::Error,
-                                                            > = row.try_get(ix);
-                                                            match value {
-                                                                Ok(value) => {
-                                                                    line.push(
-                                                                        match String::from_utf8(
-                                                                            value.into(),
-                                                                        ) {
-                                                                            Ok(v) => v,
-                                                                            Err(_) => {
-                                                                                //use base64 value
-                                                                                base64::engine::general_purpose::STANDARD.encode(value)
-                                                                            }
-                                                                        },
-                                                                    );
-                                                                }
-                                                                Err(_) => {
-                                                                    // set as NULL
-                                                                    line.push("".into());
-                                                                    // and report as error to investigate
-                                                                    eprintln!("ERROR {}:{}:{}", file!(), line!(), 
-                                                                "!!!!!!!!! PLEASE CHECH WHAT TYPE IS NOT YET HANDLED !!!!!!!!");
-                                                                }
+                                            let column_type = row_types.get(ix).unwrap();
+                                            match *column_type {
+                                                Type::VARCHAR => {
+                                                    let value: String = row.get(ix);
+                                                    line.push(value);
+                                                }
+                                                Type::INT4 => {
+                                                    let value: i32 = row.get(ix);
+                                                    line.push(value.to_string());
+                                                }
+                                                Type::BOOL => {
+                                                    let v: bool = row.get(ix);
+                                                    line.push(
+                                                        (if v { "true" } else { "false" }).into(),
+                                                    );
+                                                }
+                                                Type::BYTEA => {
+                                                    let value: &[u8] = row.get(ix);
+                                                    line.push(
+                                                        match String::from_utf8(
+                                                            value.into(),
+                                                        ) {
+                                                            Ok(v) => v,
+                                                            Err(_) => {
+                                                                //use base64 value
+                                                                base64::engine::general_purpose::STANDARD.encode(value)
                                                             }
-                                                        }
-                                                    }
+                                                        },
+                                                    );
+                                                }
+                                                _ => {
+                                                    // set as NULL
+                                                    line.push("".into());
+                                                    // and report as error to investigate
+                                                    eprintln!("ERROR {}:{}: !!!!!!!!! PLEASE IMPLEMENT MAPPING FOR TYPE: {} !!!!", file!(), line!(), column_type);
                                                 }
                                             }
                                         }
@@ -774,7 +763,7 @@ impl TransactionPostgres {
                                     }
                                     let query_result = QueryResult {
                                         rows: result,
-                                        row_types,
+                                        row_types: row_type_names,
                                         row_names,
                                     };
                                     TransactionResponse::QueryResult(query_result)
