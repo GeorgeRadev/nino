@@ -29,7 +29,9 @@ export default function portlet_admin_requests() {
   async function fetchResponseDetails() {
     if (selectIx >= 0 && selectIx < requests.length) {
       try {
-        const response = await fetch("/portal_rest?op=/responses/detail&name=" + requests[selectIx].response_name);
+        const response = await fetch("/portal_rest?op=/responses/detail&name=" + new URLSearchParams({
+          name: requests[selectIx].response_name,
+        }));
         const details = await response.json();
         setResponseDetails(details);
         document.getElementById('requests_jsqlx_code').textContent = details.response_content;
@@ -131,12 +133,12 @@ export default function portlet_admin_requests() {
                       document.getElementById('requests_transpiled_code').style.display = "none";
                     }}>jsqlx</button>
                     &nbsp;
-                    <button class="btn btn-primary" 
-                    {...((responseDetails['transpile_flag'] == 'false') ? {hidden: 'hidden'} : {})}
-                    onClick={() => {
-                      document.getElementById('requests_jsqlx_code').style.display = "none";
-                      document.getElementById('requests_transpiled_code').style.display = "block";
-                    }}>transpiled js</button>
+                    <button class="btn btn-primary"
+                      {...((responseDetails['transpile_flag'] == 'false') ? { hidden: 'hidden' } : {})}
+                      onClick={() => {
+                        document.getElementById('requests_jsqlx_code').style.display = "none";
+                        document.getElementById('requests_transpiled_code').style.display = "block";
+                      }}>transpiled js</button>
                   </td>
                 </tr>
               </table>

@@ -1,6 +1,6 @@
 import React from 'react';
 
-async function usersLoad() {
+async function databasesLoad() {
   const response = await fetch("/portal_rest?op=/databases/get");
   const requests = await response.json();
   return requests;
@@ -10,14 +10,14 @@ export default function portlet_admin_databases() {
   const [dbs, setDBs] = React.useState([]);
   const [selectIx, setSelectIx] = React.useState(-1);
 
-  async function settingsRefresh() {
-    setDBs(await usersLoad());
+  async function databasesRefresh() {
+    setDBs(await databasesLoad());
     setSelectIx(-1);
     setTimeout(feather.replace, 20);
   }
 
   React.useEffect(() => {
-    settingsRefresh();
+    databasesRefresh();
   }, []);
 
   function onRowClick(e) {
@@ -39,7 +39,7 @@ export default function portlet_admin_databases() {
       <div class="col-12 col-lg-12">
         <div class="card">
           <div class="card-header">
-            <button type="button" class="btn btn-primary" title="refresh" onClick={settingsRefresh}><i class="align-middle" data-feather="refresh-ccw"></i></button>
+            <button type="button" class="btn btn-primary" title="refresh" onClick={databasesRefresh}><i class="align-middle" data-feather="refresh-ccw"></i></button>
           </div>
           <div class="card-body">
             <table class="table table-hover my-0">

@@ -8,6 +8,8 @@ use std::thread;
 use tokio_postgres::types::{to_sql_checked, IsNull, ToSql, Type};
 use tokio_postgres::Config;
 
+const NULL: &str = "NULL";
+
 // organize db connections per js instance in a map by alias to connections
 // free all open aliases exept the first for keep it as pool
 // all channels and threads are because of Transaction<'_>
@@ -723,37 +725,50 @@ impl TransactionPostgres {
                                         for ix in 0..row.len() {
                                             let column_type = row_types.get(ix).unwrap();
                                             match *column_type {
-                                                Type::VARCHAR => {
-                                                    let value: String = row.get(ix);
-                                                    line.push(value);
+                                                Type::VARCHAR | Type::NAME => {
+                                                    let value: Option<String> = row.get(ix);
+                                                    match value {
+                                                        Some(value) => line.push(value),
+                                                        None => line.push(NULL.into()),
+                                                    };
                                                 }
                                                 Type::INT4 => {
-                                                    let value: i32 = row.get(ix);
-                                                    line.push(value.to_string());
+                                                    let value: Option<i32> = row.get(ix);
+                                                    match value {
+                                                        Some(value) => line.push(value.to_string()),
+                                                        None => line.push(NULL.into()),
+                                                    };
                                                 }
                                                 Type::BOOL => {
-                                                    let v: bool = row.get(ix);
-                                                    line.push(
-                                                        (if v { "true" } else { "false" }).into(),
-                                                    );
+                                                    let value: Option<bool> = row.get(ix);
+                                                    match value {
+                                                        Some(value) => line.push(
+                                                            (if value { "true" } else { "false" })
+                                                                .into(),
+                                                        ),
+                                                        None => line.push(NULL.into()),
+                                                    };
                                                 }
                                                 Type::BYTEA => {
-                                                    let value: &[u8] = row.get(ix);
-                                                    line.push(
-                                                        match String::from_utf8(
-                                                            value.into(),
-                                                        ) {
-                                                            Ok(v) => v,
-                                                            Err(_) => {
-                                                                //use base64 value
-                                                                base64::engine::general_purpose::STANDARD.encode(value)
-                                                            }
-                                                        },
-                                                    );
+                                                    let value: Option<&[u8]> = row.get(ix);
+                                                    match value {
+                                                        Some(value) =>  line.push(
+                                                            match String::from_utf8(
+                                                                value.into(),
+                                                            ) {
+                                                                Ok(v) => v,
+                                                                Err(_) => {
+                                                                    //use base64 value
+                                                                    base64::engine::general_purpose::STANDARD.encode(value)
+                                                                }
+                                                            },
+                                                        ),
+                                                        None => line.push(NULL.into()),
+                                                    };
                                                 }
                                                 _ => {
                                                     // set as NULL
-                                                    line.push("".into());
+                                                    line.push(NULL.into());
                                                     // and report as error to investigate
                                                     eprintln!("ERROR {}:{}: !!!!!!!!! PLEASE IMPLEMENT MAPPING FOR TYPE: {} !!!!", file!(), line!(), column_type);
                                                 }

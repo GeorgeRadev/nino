@@ -234,4 +234,36 @@ export default class nino_core {
         });
         return result;
     }
+
+    static async ninoDatabaseQuery(alias, query) {
+        try {
+            debugger;
+            const conn = await db(alias);
+            var cols = [];
+            var rows = [];
+
+            await conn.query([query], function () {
+                const len = arguments.length;
+                if (len < 3) {
+                    throw new Error("not enough result to display in table");
+                }
+                if (cols.length <= 0) {
+                    for (var i = 0; i < arguments[len - 1].length; i++) {
+                        cols.push({ name: arguments[len - 2][i], type: arguments[len - 1][i] });
+                    }
+                }
+                var row = [];
+                for (var i = 0; i < len - 2; i++) {
+                    row.push(arguments[i]);
+                }
+                rows.push(row);
+                return true;
+            });
+            return { cols: cols, rows: rows, error: "" };
+
+        } catch (e) {
+            let errorMessage = '' + e;
+            return { error: errorMessage };
+        }
+    }
 }

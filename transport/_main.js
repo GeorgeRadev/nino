@@ -89,7 +89,6 @@ async function main() {
                 if (handler_arguments_count <= 1) {
                     // rest handler with request param
                     // core.print('handler 1 request: ' + JSON.stringify(request) + '\n');
-                    debugger;
                     let response = await handler(request);
                     // core.print('result = ' + response + '\n');
                     await send_response(response);
@@ -104,7 +103,6 @@ async function main() {
                         },
                     };
 
-                    debugger;
                     await handler(request, response);
                     // core.print('result = ' + (result) + '\n');
 
@@ -145,7 +143,7 @@ async function main() {
                 core.ops.nino_set_response_header('Content-Type', 'text/plain;charset=UTF-8');
                 await core.ops.nino_a_set_response_send_text(errorMessage);
             } catch (ex) {
-                let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
+                let errorMessage = 'JS_ERROR_ERR: ' + ex + '\n' + ex.stack;
                 core.print(errorMessage + '\n');
             }
             try {
@@ -154,7 +152,7 @@ async function main() {
                 await core.ops.nino_a_broadcast_message(commit);
                 await core.ops.nino_a_end_task();
             } catch (ex) {
-                let errorMessage = 'JS_ERROR_ERR: ' + e + '\n' + e.stack;
+                let errorMessage = 'JS_ERROR_ERR: ' + ex + '\n' + ex.stack;
                 core.print(errorMessage + '\n');
             }
         }

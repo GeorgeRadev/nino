@@ -41,7 +41,7 @@ export default async function getDB() {
     async function _query(queryArray, callback) {
         var { params, paramTypes } = normalizeParams(queryArray);
 
-        if (params[0].startsWith("SELECT")) {
+        if (params[0].toUpperCase().startsWith("SELECT")) {
             const queryResult = core.ops.nino_tx_execute_query(name, params, paramTypes);
             if (callback) {
                 for (var row of queryResult.rows) {
@@ -65,7 +65,6 @@ export default async function getDB() {
         // db.query(sql)
         // db.query(sql, callback(row, rowNames, rowTypes){})
         query: async function () {
-            debugger;
             switch (arguments.length) {
                 case 1: {
                     // [query array]
@@ -81,7 +80,7 @@ export default async function getDB() {
                 }
 
                 default:
-                    throw Error("query does not recognise those arguments");
+                    throw new Error("query does not recognise those arguments");
             }
         }
     }

@@ -1,6 +1,6 @@
 import React from 'react';
 
-async function usersLoad() {
+async function portletsLoad() {
   const response = await fetch("/portal_rest?op=/portlets/get");
   const requests = await response.json();
   return requests;
@@ -11,7 +11,7 @@ export default function portlet_admin_portlets() {
   const [selectIx, setSelectIx] = React.useState(-1);
 
   async function portletsRefresh() {
-    setPortlets(await usersLoad());
+    setPortlets(await portletsLoad());
     setSelectIx(-1);
     setTimeout(feather.replace, 20);
   }

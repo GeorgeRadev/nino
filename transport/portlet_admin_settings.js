@@ -1,6 +1,6 @@
 import React from 'react';
 
-async function usersLoad() {
+async function settingsLoad() {
   const response = await fetch("/portal_rest?op=/settings/get");
   const requests = await response.json();
   return requests;
@@ -11,7 +11,7 @@ export default function portlet_admin_settings() {
   const [selectIx, setSelectIx] = React.useState(-1);
 
   async function settingsRefresh() {
-    setSettings(await usersLoad());
+    setSettings(await settingsLoad());
     setSelectIx(-1);
     setTimeout(feather.replace, 20);
   }
