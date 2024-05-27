@@ -157,12 +157,12 @@ impl WebManager {
     ) -> Result<(), Error> {
         let method = request.method();
         let url = request.url().clone();
-        let path = nino_functions::normalize_path(url.path().to_string());
+        let request_path = nino_functions::normalize_path(url.path().to_string());
         let mut current_user = String::new();
 
         println!("REQUEST: {} {} {}", method, from_address, url);
 
-        match requests.get_request(&path).await? {
+        match requests.get_request(&request_path).await? {
             None => {
                 Self::response_404(stream, &url).await;
                 Ok(())
@@ -207,8 +207,11 @@ impl WebManager {
                                     .body_string()
                                     .await
                                     .map_err(|e| Error::msg(e.to_string()))?;
+                                let method = method.to_string();
                                 responses
                                     .serve_dynamic(
+                                        method,
+                                        request_path,
                                         request,
                                         &request_info,
                                         &response_info,

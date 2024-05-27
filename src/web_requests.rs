@@ -21,9 +21,6 @@ pub struct RequestInfo {
     pub name: String,
     pub redirect: bool,
     pub authorize: bool,
-    // pub mime: Mime,
-    // pub dynamic: bool,
-    // pub execute: bool,
 }
 
 static REQUEST_CACHE: OnceLock<RwLock<HashMap<String, RequestInfo>>> = OnceLock::new();

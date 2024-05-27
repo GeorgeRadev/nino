@@ -266,4 +266,25 @@ export default class nino_core {
             return { error: errorMessage };
         }
     }
+
+    static async ninoLogsGet(limit) {
+        const conn = await db();
+        const sql = SELECT to_char(time_stamp, 'YYYY-MM-DD HH24:MI:SS'), method, request, response, log_message
+                    FROM nino_log 
+                    ORDER BY time_stamp DESC
+                    LIMIT :limit;
+
+        var result = [];
+        await conn.query(sql, function (time_stamp, method, request, response, message) {
+            result.push({
+                time_stamp: time_stamp,
+                method: method,
+                request: request,
+                response: response,
+                message: message
+            });
+            return true;
+        });
+        return result;
+    }
 }

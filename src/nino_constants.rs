@@ -31,6 +31,8 @@ pub const REQUESTS_TABLE: &str = concat!(PKG_NAME!(), "_request");
 pub const RESPONSE_TABLE: &str = concat!(PKG_NAME!(), "_response");
 /// DATABASE table name with connection strings
 pub const DATABASE_TABLE: &str = concat!(PKG_NAME!(), "_database");
+/// LOG table
+pub const LOG_TABLE: &str = concat!(PKG_NAME!(), "_log");
 
 /// JS settings
 ///

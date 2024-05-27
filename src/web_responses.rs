@@ -199,6 +199,8 @@ impl ResponseManager {
 
     pub async fn serve_dynamic(
         &self,
+        method: String,
+        request_path: String,
         request: Request,
         request_info: &RequestInfo,
         response_info: &ResponseInfo,
@@ -212,6 +214,8 @@ impl ResponseManager {
         response.set_content_type(response_info.mime.clone());
         //send new task to the javascript threads
         let js_task_request = ServletTask {
+            method,
+            request_path,
             js_module,
             request,
             user,

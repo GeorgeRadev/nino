@@ -44,6 +44,17 @@ export default async function portal_rest(request) {
         }
         return await nino.ninoDatabaseQuery(alias[0], query[0]);
       }
+    case '/logs/get':
+      {
+        const limit = request.parameters['limit'];
+        if (limit && limit[0]) {
+          limit = +limit;
+        }
+        if (limit != limit) {
+          limit = 50;
+        }
+        return await nino.ninoLogsGet(limit);
+      }
   }
-  return null;
+  throw new Error("unrecognized portal operation: " + op[0]);
 }

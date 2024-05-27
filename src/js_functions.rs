@@ -1,7 +1,8 @@
+use crate::db_log::DBLogger;
 use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_constants::info;
-use crate::nino_structures::{JSTask, ServletTask};
+use crate::nino_structures::{JSTask, LogInfo, ServletTask};
 use crate::web_responses::ResponseManager;
 use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
@@ -21,6 +22,7 @@ pub fn get_nino_functions() -> Vec<OpDecl> {
         nino_begin_task::DECL,
         nino_a_end_task::DECL,
         nino_a_sleep::DECL,
+        nino_a_log::DECL,
         nino_get_request::DECL,
         nino_get_request_body::DECL,
         nino_set_response_status::DECL,
@@ -665,4 +667,39 @@ async fn nino_a_set_response_from_fetch(
     let stream_out = servlet_task.stream;
 
     nino_functions::send_request_to_stream(response_in, stream_out).await
+}
+
+#[op2(async)]
+async fn nino_a_log(
+    op_state: Rc<RefCell<OpState>>,
+    #[string] log_text: String,
+) -> Result<(), Error> {
+    let log = {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<JSContext>();
+        if context.task.is_none() {
+            //task already closed
+            return Err(Error::msg("task already closed"));
+        }
+
+        let task = context.task.as_ref().unwrap();
+
+        match task {
+            JSTask::Servlet(task) => LogInfo {
+                method: task.method.clone(),
+                request: task.request_path.clone(),
+                response: task.js_module.clone(),
+                message: log_text,
+            },
+            JSTask::Message(msg) => LogInfo {
+                method: "MESSAGE".into(),
+                request: msg.clone(),
+                response: "".into(),
+                message: log_text,
+            },
+        }
+    };
+
+    DBLogger::log(log).await;
+    Ok(())
 }

@@ -2,17 +2,16 @@ export default async function log() {
     const core = Deno.core;
 
     if (arguments.length > 0) {
+        let log_message = "";
         for (var arg of arguments) {
-            if (!arg) {
-                core.print(new String(arg));
-            }
             if (typeof arg === 'string') {
-                core.print(arg);
-            } else if (response instanceof ArrayBuffer) {
-                core.print(arg);
+                log_message += arg;
             } else {
-                core.print(JSON.stringify(arg));
+                log_message += JSON.stringify(arg);
             }
         }
+
+        core.print(log_message);
+        await core.ops.nino_a_log(log_message);
     }
 }

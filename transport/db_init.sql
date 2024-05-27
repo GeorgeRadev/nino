@@ -25,6 +25,18 @@ CREATE TABLE IF NOT EXISTS nino_database (
 INSERT INTO nino_database (db_alias, db_type, db_connection_string)
 VALUES ('_main', 'postgres', 'reserved name for the defailt db alias of the main application');
 
+-- nino_log
+DROP TABLE IF EXISTS nino_log;
+CREATE TABLE IF NOT EXISTS nino_log (
+    time_stamp TIMESTAMP DEFAULT NOW(),
+    method VARCHAR(256) NOT NULL,
+    request VARCHAR(1024),
+    response VARCHAR(4096),
+    log_message BYTEA
+);
+DROP INDEX IF EXISTS nino_log_ix;
+CREATE INDEX IF NOT EXISTS nino_log_ix ON nino_log(time_stamp);
+
 -- request table for defining the requests
 DROP TABLE IF EXISTS nino_request;
 CREATE TABLE IF NOT EXISTS nino_request (
@@ -38,7 +50,7 @@ CREATE TABLE IF NOT EXISTS nino_request (
 DROP TABLE IF EXISTS nino_response;
 CREATE TABLE IF NOT EXISTS nino_response (
     response_name VARCHAR(1024) PRIMARY KEY,
-    response_mime_type VARCHAR(64) NOT NULL,
+    response_mime_type VARCHAR(256) NOT NULL,
     execute_flag BOOLEAN DEFAULT FALSE,
     transpile_flag BOOLEAN DEFAULT FALSE,
     response_content_length INT DEFAULT 0,
@@ -86,7 +98,7 @@ CREATE TABLE IF NOT EXISTS nino_portlet (
     user_role VARCHAR(256) NOT NULL,
     portlet_menu VARCHAR(1024) NOT NULL,
     portlet_index INT DEFAULT 0,
-    portlet_icon VARCHAR(512) NOT NULL,
+    portlet_icon VARCHAR(256) NOT NULL,
     portlet_name VARCHAR(1024) NOT NULL
 );
 DROP INDEX IF EXISTS nino_portlet_ix;

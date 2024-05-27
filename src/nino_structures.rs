@@ -20,6 +20,8 @@ pub enum JSTask {
 
 #[derive(Clone)]
 pub struct ServletTask {
+    pub method: String,
+    pub request_path: String,
     pub js_module: String,
     pub request: Request,
     pub user: String,
@@ -31,4 +33,12 @@ pub struct ServletTask {
 #[derive(Clone)]
 pub struct NotificationMessage {
     pub text: String,
+}
+
+#[derive(Clone)]
+pub struct LogInfo {
+    pub method:String,
+    pub request: String,
+    pub response: String,
+    pub message: String,
 }

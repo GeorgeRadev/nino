@@ -725,7 +725,7 @@ impl TransactionPostgres {
                                         for ix in 0..row.len() {
                                             let column_type = row_types.get(ix).unwrap();
                                             match *column_type {
-                                                Type::VARCHAR | Type::NAME => {
+                                                Type::VARCHAR | Type::NAME | Type::TEXT => {
                                                     let value: Option<String> = row.get(ix);
                                                     match value {
                                                         Some(value) => line.push(value),

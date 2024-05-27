@@ -1,4 +1,5 @@
 mod db;
+mod db_log;
 mod db_notification;
 mod db_settings;
 mod db_transactions;
@@ -15,6 +16,7 @@ mod web_requests;
 mod web_responses;
 
 use crate::{db_settings::SettingsManager, nino_constants::info};
+use db_log::DBLogger;
 use deno_runtime::deno_core::anyhow::{anyhow, Error};
 use nino_structures::InitialSettings;
 use std::sync::Arc;
@@ -167,6 +169,8 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     let db = Arc::new(
         db::DBManager::instance(settings.connection_string.clone(), settings.db_pool_size).await?,
     );
+
+    let _db_log = DBLogger::new(db.clone());
 
     let db_notifier = db_notification::DBNotificationManager::new(db.clone());
 

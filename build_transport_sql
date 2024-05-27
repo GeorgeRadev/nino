@@ -124,6 +124,8 @@ write_request    "portlet_admin_databases.js"  "portlet_admin_databases.js"     
 write_response   "portlet_admin_databases.js"  "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_databases.js"
 write_request    "portlet_admin_queries.js"    "portlet_admin_queries.js"             false   true
 write_response   "portlet_admin_queries.js"    "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_queries.js"
+write_request    "portlet_admin_logs.js"       "portlet_admin_logs.js"                false   true
+write_response   "portlet_admin_logs.js"       "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_logs.js"
 
 #add ide in react
 # write_request    "ide"               "ide/index.html"                         false   false
@@ -146,6 +148,7 @@ write_portlet "admin"   "Admin/Settings"      950 "settings"  "portlet_admin_set
 write_portlet "admin"   "Admin/Databases"     960 "database"  "portlet_admin_databases.js"
 write_portlet "admin"   "Admin/Queries"       970 "box"       "portlet_admin_queries.js"
 write_portlet "admin"   "Admin/Schedules"     980 "clock"     "portlet_about.js"
-write_portlet "admin"   "Admin/Transports"    990 "truck"     "portlet_admin_transports.js"
+write_portlet "admin"   "Admin/Logs"          991 "monitor"   "portlet_admin_logs.js"
+write_portlet "admin"   "Admin/Transports"    999 "truck"     "portlet_admin_transports.js"
 
 echo "...DONE"
