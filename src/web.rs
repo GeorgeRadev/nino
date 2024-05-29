@@ -231,8 +231,15 @@ impl WebManager {
                                         "static requests handles only GET requests",
                                     ));
                                 }
+                                let web_client_caching =
+                                    !request_info.authorize && !response_info.execute;
                                 responses
-                                    .serve_static(request_info, response_info, stream.clone())
+                                    .serve_static(
+                                        request_info,
+                                        response_info,
+                                        stream.clone(),
+                                        web_client_caching,
+                                    )
                                     .await
                                 //ok - stream should be served and closed
                             }

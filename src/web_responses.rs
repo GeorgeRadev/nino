@@ -220,12 +220,18 @@ impl ResponseManager {
         request_info: RequestInfo,
         response_info: ResponseInfo,
         stream: Box<TcpStream>,
+        web_client_caching: bool,
     ) -> Result<(), Error> {
         // serve content
         let content = self.get_response_javascript(&request_info.name).await?;
         let mut response = Response::new(StatusCode::Ok);
         response.set_content_type(response_info.mime);
         response.set_body(http_types::Body::from(content));
+        if web_client_caching {
+            // set expiration/cache time to 24 hours
+            response.append_header("Cache-Control", "max-age=86400");
+        }
+
         nino_functions::send_response_to_stream(stream, &mut response).await?;
         Ok(())
     }
