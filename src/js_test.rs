@@ -1,10 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::js::{init_platform, run_deno_main_thread};
-    use deno_runtime::deno_core::{self, Op, OpDecl};
-    use deno_runtime::deno_core::{anyhow::Error, futures::FutureExt, op2, OpState};
-    use std::pin::Pin;
-    use std::{future::Future, sync::Mutex};
+    use deno_core::{self, OpDecl, anyhow::Error, op2, futures::FutureExt, OpState};
+    use std::{future::Future, pin::Pin, sync::Mutex};
 
     fn module_loader(
         module_name: String,
@@ -29,7 +27,7 @@ mod tests {
 
     #[op2]
     #[string]
-    fn test_sync(_state: &mut OpState) -> String {
+    fn test_sync() -> String {
         String::from("OK")
     }
 
@@ -55,14 +53,15 @@ mod tests {
     }
 
     fn ops() -> Vec<OpDecl> {
-        vec![test_sync::DECL, test_id::DECL, test_set_result::DECL]
+        let r = vec![test_sync(), test_id(), test_set_result()];
+        r
     }
 
-    fn state_fn_0(state: &mut OpState) -> () {
+    fn state_fn_0(state: &mut OpState) {
         state.put(TestTask { id: 0 });
     }
 
-    fn state_fn_1(state: &mut OpState) -> () {
+    fn state_fn_1(state: &mut OpState) {
         state.put(TestTask { id: 1 });
     }
 

@@ -5,7 +5,7 @@ use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
 use deno_runtime::deno_core::{
     error::AnyError, error::JsError, v8, CompiledWasmModuleStore, Extension, FeatureChecker,
     FsModuleLoader, GetErrorClassFn, JsRuntime, ModuleCodeString, ModuleId, ModuleLoader,
-    ModuleSpecifier, RuntimeOptions, SharedArrayBufferStore, Snapshot, SourceMapGetter,
+    ModuleSpecifier, RuntimeOptions, SharedArrayBufferStore, SourceMapGetter,
 };
 use deno_runtime::{
     deno_io::Stdio, deno_tls::RootCertStoreProvider, deno_web::BlobStore,
@@ -80,7 +80,7 @@ pub struct WorkerOptions {
     pub extensions: Vec<Extension>,
 
     /// V8 snapshot that should be loaded on startup.
-    pub startup_snapshot: Option<Snapshot>,
+  pub startup_snapshot: Option<&'static [u8]>,
 
     /// Should op registration be skipped?
     pub skip_op_registration: bool,
@@ -102,7 +102,7 @@ pub struct WorkerOptions {
     pub format_js_error_fn: Option<Arc<FormatJsErrorFn>>,
 
     /// Source map reference for errors.
-    pub source_map_getter: Option<Box<dyn SourceMapGetter>>,
+    pub source_map_getter: Option<Rc<dyn SourceMapGetter>>,
     pub maybe_inspector_server: Option<Arc<InspectorServer>>,
     // If true, the worker will wait for inspector session and break on first
     // statement of user code. Takes higher precedence than
@@ -238,7 +238,7 @@ impl MainWorker {
         module_specifier: &ModuleSpecifier,
     ) -> Result<ModuleId, AnyError> {
         self.js_runtime
-            .load_main_module(module_specifier, None)
+        .load_main_es_module(module_specifier)
             .await
     }
 

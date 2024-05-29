@@ -2,7 +2,7 @@
 mod tests {
     use crate::js_worker::{MainWorker, WorkerOptions};
     use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
-    use deno_runtime::deno_core::{
+    use deno_core::{
         self, anyhow::Error, futures::FutureExt, op2, FastString, ModuleLoadResponse, ModuleLoader,
         ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, OpState, RequestedModuleType,
         ResolutionKind,
@@ -149,7 +149,7 @@ mod tests {
                 let module_type = ModuleType::JavaScript;
                 let code = ModuleSourceCode::String(FastString::from(String::from(code)));
                 let module_string = module_specifier.clone();
-                let module = ModuleSource::new(module_type, code, &module_string);
+                let module = ModuleSource::new(module_type, code, &module_string, None);
                 Ok(module)
             }
             .boxed_local();
@@ -176,7 +176,7 @@ mod tests {
         let extensions = vec![extension::init_ops()];
 
         let inspector_address = "127.0.0.1:9229".parse::<SocketAddr>().unwrap();
-        let inspector_server = Arc::new(InspectorServer::new(inspector_address, "nino"));
+        let inspector_server = Arc::new(InspectorServer::new(inspector_address, "nino")?);
 
         let options = WorkerOptions {
             bootstrap: BootstrapOptions::default(),

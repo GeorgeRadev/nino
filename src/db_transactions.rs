@@ -445,7 +445,7 @@ impl TransactionsThread {
                                 .retain(|k, _| k == nino_constants::MAIN_DB);
                             // reload all except main
                             for row in result.rows {
-                                let db_alias: String = row.get(0).unwrap().clone();
+                                let db_alias: String = row.first().unwrap().clone();
                                 if db_alias == nino_constants::MAIN_DB {
                                     continue;
                                 }

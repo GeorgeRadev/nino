@@ -3,6 +3,7 @@ use crate::nino_constants::{
     self, info, SETTINGS_NINO_LOGIN_PATH, SETTINGS_NINO_LOGIN_PATH_DEFAULT,
 };
 use crate::nino_functions;
+use crate::nino_structures::ServletTask;
 use crate::web_requests::RequestManager;
 use crate::web_responses::ResponseManager;
 use async_std::net::{TcpListener, TcpStream};
@@ -158,7 +159,7 @@ impl WebManager {
         let method = request.method();
         let url = request.url().clone();
         let request_path = nino_functions::normalize_path(url.path().to_string());
-        let mut current_user = String::new();
+        let mut user = String::new();
 
         println!("REQUEST: {} {} {}", method, from_address, url);
 
@@ -171,8 +172,7 @@ impl WebManager {
                 if request_info.redirect {
                     Self::response_307_redirect(stream, &request_info.name).await;
                     Ok(())
-                } else if request_info.authorize
-                    && !Self::check_authorization(&request, &mut current_user)
+                } else if request_info.authorize && !Self::check_authorization(&request, &mut user)
                 {
                     // redirect to login
                     // TODO: add this as parameter
@@ -208,17 +208,18 @@ impl WebManager {
                                     .await
                                     .map_err(|e| Error::msg(e.to_string()))?;
                                 let method = method.to_string();
+                                let servlet_task = ServletTask {
+                                    method,
+                                    request_path,
+                                    request,
+                                    stream: stream.clone(),
+                                    user,
+                                    body,
+                                    js_module: None,
+                                    response: None,
+                                };
                                 responses
-                                    .serve_dynamic(
-                                        method,
-                                        request_path,
-                                        request,
-                                        &request_info,
-                                        &response_info,
-                                        stream.clone(),
-                                        current_user,
-                                        body,
-                                    )
+                                    .serve_dynamic(servlet_task, &request_info, &response_info)
                                     .await
                                 //ok - stream should be served and closed
                             } else {
@@ -246,11 +247,11 @@ impl WebManager {
         // TODO: add config for this
         let cookie_prefix = "nino=";
         for cookie in cookies.iter() {
-            let cookie_tokens = cookie.as_str().split(";");
+            let cookie_tokens = cookie.as_str().split(';');
             for cookie_token in cookie_tokens {
                 let token = cookie_token.trim();
-                if token.starts_with(cookie_prefix) {
-                    let jwt = &token[cookie_prefix.len()..];
+
+                if let Some(jwt) = token.strip_prefix(cookie_prefix) {
                     if Self::jwt_to_user(jwt, current_user) {
                         return true;
                     }

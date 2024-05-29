@@ -73,7 +73,7 @@ impl JavaScriptManager {
 
         for i in 0..thread_count {
             let builder = thread::Builder::new().name(format!("JS Thread {}", i).to_string());
-            match builder.spawn(move || {
+            let thread = builder.spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
@@ -94,7 +94,8 @@ impl JavaScriptManager {
                 )) {
                     eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
                 }
-            }) {
+            });
+            match thread {
                 Ok(_jh) => {
                     //self.join_handlers.push(jh);
                 }
@@ -178,7 +179,10 @@ type ModuleLoadingFunction =
 fn module_loader(name: String) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
     async move {
         let instance = JS_INSTANCE.get().unwrap();
-        let content = instance.dynamics.get_response_javascript(name.clone().as_str()).await?;
+        let content = instance
+            .dynamics
+            .get_response_javascript(name.clone().as_str())
+            .await?;
         let content_str = String::from_utf8(content)?;
         Ok(content_str)
     }
@@ -210,7 +214,7 @@ impl FNModuleLoader {
         let code = ModuleSourceCode::String(FastString::from(code));
         let module_string =
             Url::parse(format!("{}{}", nino_constants::MODULE_URI, module_name).as_str())?;
-        let module = ModuleSource::new(module_type, code, &module_string);
+        let module = ModuleSource::new(module_type, code, &module_string, None);
         Ok(module)
     }
 }
@@ -281,7 +285,7 @@ pub async fn run_deno_main_thread(
             Some(Arc::new(InspectorServer::new(
                 inspector_address,
                 nino_constants::PROGRAM_NAME,
-            )))
+            )?))
         } else {
             None
         }

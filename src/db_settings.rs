@@ -28,9 +28,9 @@ impl SettingsManager {
         >,
     ) -> SettingsManager {
         SETTING_CACHE.get_or_init(|| RwLock::new(HashMap::new()));
-        if db_subscribe.is_some() {
+        if let Some(subscribe) = db_subscribe {
             tokio::spawn(async move {
-                Self::invalidator(db_subscribe.unwrap()).await;
+                Self::invalidator(subscribe).await;
             });
         }
         Self { db }

@@ -6,46 +6,44 @@ use crate::nino_structures::{JSTask, LogInfo, ServletTask};
 use crate::web_responses::ResponseManager;
 use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
-use deno_runtime::deno_core::{self, anyhow::Error, op2, Op, OpDecl, OpState};
-use deno_runtime::deno_core::{JsBuffer, ToJsBuffer};
-use deno_runtime::deno_fetch::reqwest::header::{HeaderName, HeaderValue};
-use deno_runtime::deno_fetch::reqwest::{Body, Client, Method, Request};
-use http_types::convert::Serialize;
-use http_types::{StatusCode, Url};
+use deno_core::{self, anyhow::Error, op2, JsBuffer, OpDecl, OpState, ToJsBuffer};
+use deno_runtime::deno_fetch::reqwest::{
+    header::{HeaderName, HeaderValue},
+    Body, Client, Method, Request,
+};
+use http_types::{convert::Serialize, StatusCode, Url};
 use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::Arc;
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 pub fn get_nino_functions() -> Vec<OpDecl> {
     vec![
-        nino_begin_task::DECL,
-        nino_a_end_task::DECL,
-        nino_a_sleep::DECL,
-        nino_a_log::DECL,
-        nino_get_request::DECL,
-        nino_get_request_body::DECL,
-        nino_set_response_status::DECL,
-        nino_set_response_header::DECL,
-        nino_a_set_response_send_text::DECL,
-        nino_a_set_response_send_buf::DECL,
-        nino_get_invalidation_message::DECL,
-        nino_get_thread_id::DECL,
-        nino_broadcast_message::DECL,
-        nino_a_broadcast_message::DECL,
-        nino_get_module_invalidation_prefix::DECL,
-        nino_get_database_invalidation_prefix::DECL,
-        nino_reload_database_aliases::DECL,
-        nino_tx_end::DECL,
-        nino_tx_get_connection_name::DECL,
-        nino_tx_execute_query::DECL,
-        nino_tx_execute_upsert::DECL,
-        nino_get_user_jwt::DECL,
-        nino_password_hash::DECL,
-        nino_password_verify::DECL,
-        nino_a_fetch::DECL,
-        nino_a_fetch_binary::DECL,
-        nino_a_set_response_from_fetch::DECL,
+        nino_begin_task(),
+        nino_a_end_task(),
+        nino_a_sleep(),
+        nino_a_log(),
+        nino_get_request(),
+        nino_get_request_body(),
+        nino_set_response_status(),
+        nino_set_response_header(),
+        nino_a_set_response_send_text(),
+        nino_a_set_response_send_buf(),
+        nino_get_invalidation_message(),
+        nino_get_thread_id(),
+        nino_broadcast_message(),
+        nino_a_broadcast_message(),
+        nino_get_module_invalidation_prefix(),
+        nino_get_database_invalidation_prefix(),
+        nino_reload_database_aliases(),
+        nino_tx_end(),
+        nino_tx_get_connection_name(),
+        nino_tx_execute_query(),
+        nino_tx_execute_upsert(),
+        nino_get_user_jwt(),
+        nino_password_hash(),
+        nino_password_verify(),
+        nino_a_fetch(),
+        nino_a_fetch_binary(),
+        nino_a_set_response_from_fetch(),
     ]
 }
 
@@ -108,7 +106,7 @@ fn nino_begin_task(state: &mut OpState) -> Result<String, Error> {
                         // nothing to do here
                     }
                     JSTask::Servlet(request) => {
-                        module = request.js_module.clone();
+                        module.clone_from(&request.js_module.clone().unwrap());
                     }
                 }
             }
@@ -134,7 +132,7 @@ fn nino_tx_end(state: &mut OpState, commit: bool) {
 #[op2(async)]
 async fn nino_a_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
     let stream;
-    let mut response;
+    let response;
     {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
@@ -157,7 +155,9 @@ async fn nino_a_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> 
         }
     }
 
-    if let Err(error) = nino_functions::send_response_to_stream(stream, &mut response).await {
+    if let Err(error) =
+        nino_functions::send_response_to_stream(stream, &mut response.unwrap()).await
+    {
         eprintln!("ERROR {}:{}:{}", file!(), line!(), error);
     }
     Ok(true)
@@ -254,7 +254,8 @@ fn nino_set_response_status(state: &mut OpState, status: u16) -> Result<(), Erro
         match task {
             JSTask::Servlet(servlet) => {
                 let status = StatusCode::try_from(status).unwrap();
-                servlet.response.set_status(status);
+                let response = servlet.response.as_mut().unwrap();
+                response.set_status(status);
                 Ok(())
             }
             JSTask::Message(_) => Err(Error::msg("task is not a request")),
@@ -275,7 +276,7 @@ fn nino_set_response_header(
     if let Some(task) = &mut context.task {
         match task {
             JSTask::Servlet(servlet) => {
-                let response = &mut servlet.response;
+                let response = servlet.response.as_mut().unwrap();
                 response.remove_header(&*key);
                 response.append_header(&*key, &*value);
                 Ok(())
@@ -307,8 +308,8 @@ async fn nino_a_set_response_send_text(
     op_state: Rc<RefCell<OpState>>,
     #[string] body: String,
 ) -> Result<(), Error> {
-    let servlet_task = take_servlet_task(op_state)?;
-    let mut response = servlet_task.response;
+    let mut servlet_task = take_servlet_task(op_state)?;
+    let mut response = servlet_task.response.take().unwrap();
     let stream = servlet_task.stream;
 
     response.set_body(body);
@@ -323,8 +324,8 @@ async fn nino_a_set_response_send_buf(
     op_state: Rc<RefCell<OpState>>,
     #[buffer] bytes: JsBuffer,
 ) -> Result<(), Error> {
-    let servlet_task = take_servlet_task(op_state)?;
-    let mut response = servlet_task.response;
+    let mut servlet_task = take_servlet_task(op_state)?;
+    let mut response = servlet_task.response.take().unwrap();
     let stream = servlet_task.stream;
 
     let data: &[u8] = &bytes;
@@ -688,7 +689,7 @@ async fn nino_a_log(
             JSTask::Servlet(task) => LogInfo {
                 method: task.method.clone(),
                 request: task.request_path.clone(),
-                response: task.js_module.clone(),
+                response: task.js_module.clone().unwrap(),
                 message: log_text,
             },
             JSTask::Message(msg) => LogInfo {

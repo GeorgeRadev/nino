@@ -91,7 +91,7 @@ async fn execute_migration_sql_if_needed(connection_string: String) -> Result<()
 
     let mut sql = String::new();
     while let Some(line) = lines.next_line().await? {
-        if line.ends_with(";") {
+        if line.ends_with(';') {
             // execute
             sql.push_str(&line);
             if let Err(error) = db.execute(&sql, &[]).await {

@@ -11,7 +11,7 @@ use crate::{
 use async_channel::{Receiver, Sender};
 use async_std::net::TcpStream;
 use deno_runtime::deno_core::anyhow::Error;
-use http_types::{Mime, Request, Response, StatusCode};
+use http_types::{Mime, Response, StatusCode};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, OnceLock, RwLock};
@@ -199,31 +199,18 @@ impl ResponseManager {
 
     pub async fn serve_dynamic(
         &self,
-        method: String,
-        request_path: String,
-        request: Request,
+        mut servlet_task: ServletTask,
         request_info: &RequestInfo,
         response_info: &ResponseInfo,
-        stream: Box<TcpStream>,
-        user: String,
-        body: String,
     ) -> Result<(), Error> {
         // default response
         let mut response = Response::new(200);
         let js_module = request_info.name.clone();
         response.set_content_type(response_info.mime.clone());
         //send new task to the javascript threads
-        let js_task_request = ServletTask {
-            method,
-            request_path,
-            js_module,
-            request,
-            user,
-            body,
-            stream,
-            response,
-        };
-        let web_task = nino_structures::JSTask::Servlet(js_task_request);
+        servlet_task.js_module = Some(js_module);
+        servlet_task.response = Some(response);
+        let web_task = nino_structures::JSTask::Servlet(servlet_task);
         self.web_task_sx.send(web_task).await?;
         Ok(())
     }

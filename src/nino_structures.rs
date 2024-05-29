@@ -22,11 +22,11 @@ pub enum JSTask {
 pub struct ServletTask {
     pub method: String,
     pub request_path: String,
-    pub js_module: String,
+    pub js_module: Option<String>,
     pub request: Request,
     pub user: String,
     pub body: String,
-    pub response: Response,
+    pub response: Option<Response>,
     pub stream: Box<TcpStream>,
 }
 
