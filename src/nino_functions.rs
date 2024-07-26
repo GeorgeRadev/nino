@@ -1,7 +1,7 @@
 use crate::nino_constants;
 use async_std::{io::WriteExt, net::TcpStream};
 use bcrypt::{hash, verify, DEFAULT_COST};
-use deno_runtime::deno_core::{anyhow::Error, futures::StreamExt};
+use deno_runtime::deno_core::anyhow::Error;
 use hmac::{digest::KeyInit, Hmac};
 use http_types::Response;
 use jwt::{SignWithKey, VerifyWithKey};
@@ -119,7 +119,7 @@ pub async fn send_response_to_stream(
 }
 
 pub async fn send_request_to_stream(
-    response_in: deno_runtime::deno_fetch::reqwest::Response,
+    response_in: reqwest::Response,
     mut stream_out: Box<TcpStream>,
 ) -> Result<(), Error> {
     //write status
@@ -151,13 +151,10 @@ pub async fn send_request_to_stream(
     {
         let mut http_bytes = header_string.as_bytes();
         async_std::io::copy(&mut http_bytes, &mut stream_out.clone()).await?;
-        let mut stream_in = response_in.bytes_stream();
-        while let Some(chunk) = stream_in.next().await {
-            let bytes = chunk?;
-            stream_out.write(&bytes).await?;
-        }
+        let bytes = response_in.bytes().await?;
+        stream_out.write(&bytes).await?;
+        stream_out.flush().await?;
     }
-    stream_out.flush().await?;
 
     //close socket - always
     if stream_out.shutdown(std::net::Shutdown::Both).is_err() {

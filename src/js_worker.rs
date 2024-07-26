@@ -1,22 +1,16 @@
 /*
 This worker is the same as the Deno Worker but using only the InspectorServer and jsRuntime, i.e. no other extentions.
 */
-use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
 use deno_runtime::deno_core::{
-    error::AnyError, error::JsError, v8, CompiledWasmModuleStore, Extension, FeatureChecker,
-    FsModuleLoader, GetErrorClassFn, JsRuntime, ModuleCodeString, ModuleId, ModuleLoader,
-    ModuleSpecifier, RuntimeOptions, SharedArrayBufferStore, SourceMapGetter,
+    error::AnyError, v8, CompiledWasmModuleStore, Extension, FeatureChecker, FsModuleLoader,
+    GetErrorClassFn, JsRuntime, ModuleCodeString, ModuleId, ModuleLoader, ModuleSpecifier,
+    RuntimeOptions, SharedArrayBufferStore, SourceMapGetter,
 };
-use deno_runtime::{
-    deno_io::Stdio, deno_tls::RootCertStoreProvider, deno_web::BlobStore,
-    inspector_server::InspectorServer, BootstrapOptions,
-};
+use deno_runtime::inspector_server::InspectorServer;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-
-pub type FormatJsErrorFn = dyn Fn(&JsError) -> String + Sync + Send;
 
 pub fn import_meta_resolve_callback(
     loader: &dyn deno_runtime::deno_core::ModuleLoader,
@@ -70,8 +64,6 @@ pub struct MainWorker {
 }
 
 pub struct WorkerOptions {
-    pub bootstrap: BootstrapOptions,
-
     /// JsRuntime extensions, not to be confused with ES modules.
     ///
     /// Extensions register "ops" and JavaScript sources provided in `js` or `esm`
@@ -80,7 +72,7 @@ pub struct WorkerOptions {
     pub extensions: Vec<Extension>,
 
     /// V8 snapshot that should be loaded on startup.
-  pub startup_snapshot: Option<&'static [u8]>,
+    pub startup_snapshot: Option<&'static [u8]>,
 
     /// Should op registration be skipped?
     pub skip_op_registration: bool,
@@ -88,19 +80,12 @@ pub struct WorkerOptions {
     /// Optional isolate creation parameters, such as heap limits.
     pub create_params: Option<v8::CreateParams>,
 
-    pub unsafely_ignore_certificate_errors: Option<Vec<String>>,
-    pub root_cert_store_provider: Option<Arc<dyn RootCertStoreProvider>>,
-    pub seed: Option<u64>,
-
     /// Implementation of `ModuleLoader` which will be
     /// called when V8 requests to load ES modules.
     ///
     /// If not provided runtime will error if code being
     /// executed tries to load modules.
     pub module_loader: Rc<dyn ModuleLoader>,
-    // Callbacks invoked when creating new instance of WebWorker
-    pub format_js_error_fn: Option<Arc<FormatJsErrorFn>>,
-
     /// Source map reference for errors.
     pub source_map_getter: Option<Rc<dyn SourceMapGetter>>,
     pub maybe_inspector_server: Option<Arc<InspectorServer>>,
@@ -111,14 +96,10 @@ pub struct WorkerOptions {
     // If true, the worker will wait for inspector session before executing
     // user code.
     pub should_wait_for_inspector_session: bool,
-    /// If Some, print a low-level trace output for ops matching the given patterns.
-    pub strace_ops: Option<Vec<String>>,
 
     /// Allows to map error type to a string "class" used to represent
     /// error in JavaScript.
     pub get_error_class_fn: Option<GetErrorClassFn>,
-    pub blob_store: Arc<BlobStore>,
-    pub broadcast_channel: InMemoryBroadcastChannel,
 
     /// The store to use for transferring SharedArrayBuffers between isolates.
     /// If multiple isolates should have the possibility of sharing
@@ -134,7 +115,6 @@ pub struct WorkerOptions {
     /// [CompiledWasmModuleStore]. If no [CompiledWasmModuleStore] is specified,
     /// `WebAssembly.Module` objects cannot be serialized.
     pub compiled_wasm_module_store: Option<CompiledWasmModuleStore>,
-    pub stdio: Stdio,
     pub feature_checker: Arc<FeatureChecker>,
 }
 
@@ -143,25 +123,16 @@ impl Default for WorkerOptions {
         Self {
             module_loader: Rc::new(FsModuleLoader),
             skip_op_registration: false,
-            seed: None,
-            unsafely_ignore_certificate_errors: Default::default(),
             should_break_on_first_statement: Default::default(),
             should_wait_for_inspector_session: Default::default(),
-            strace_ops: Default::default(),
             compiled_wasm_module_store: Default::default(),
             shared_array_buffer_store: Default::default(),
             maybe_inspector_server: Default::default(),
-            format_js_error_fn: Default::default(),
             get_error_class_fn: Default::default(),
-            broadcast_channel: Default::default(),
             source_map_getter: Default::default(),
-            root_cert_store_provider: Default::default(),
-            blob_store: Default::default(),
             extensions: Default::default(),
             startup_snapshot: Default::default(),
             create_params: Default::default(),
-            bootstrap: Default::default(),
-            stdio: Default::default(),
             feature_checker: Default::default(),
         }
     }
@@ -237,9 +208,7 @@ impl MainWorker {
         &mut self,
         module_specifier: &ModuleSpecifier,
     ) -> Result<ModuleId, AnyError> {
-        self.js_runtime
-        .load_main_es_module(module_specifier)
-            .await
+        self.js_runtime.load_main_es_module(module_specifier).await
     }
 
     /// Executes specified JavaScript module.

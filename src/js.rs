@@ -10,10 +10,7 @@ use deno_runtime::deno_core::{
     ModuleLoadResponse, ModuleLoader, ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType,
     OpDecl, OpState, RequestedModuleType, ResolutionKind, RuntimeOptions,
 };
-use deno_runtime::{
-    deno_broadcast_channel::InMemoryBroadcastChannel, inspector_server::InspectorServer,
-    BootstrapOptions,
-};
+use deno_runtime::inspector_server::InspectorServer;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
@@ -119,7 +116,7 @@ impl JavaScriptManager {
         state.put(js_functions::JSContext {
             id,
             web_task_rx: js.dynamics.get_web_task_rx(),
-            dynamics: js.dynamics.clone(),
+            //dynamics: js.dynamics.clone(),
             notifier: js.notifier.clone(),
             broadcast_messages: Vec::with_capacity(8),
             task: None,
@@ -295,19 +292,14 @@ pub async fn run_deno_main_thread(
         let extensions = create_extensions(ops.clone(), state_fn);
 
         let options = WorkerOptions {
-            bootstrap: BootstrapOptions::default(),
             extensions,
             module_loader: Rc::new(FNModuleLoader::new(module_loader)),
             get_error_class_fn: Some(&get_error_class_name),
-            broadcast_channel: InMemoryBroadcastChannel::default(),
             maybe_inspector_server: maybe_inspector_server.clone(),
-            seed: None,
             startup_snapshot: None,
             source_map_getter: None,
-            format_js_error_fn: None,
             shared_array_buffer_store: None,
             compiled_wasm_module_store: None,
-            unsafely_ignore_certificate_errors: None,
             should_break_on_first_statement: false,
             should_wait_for_inspector_session: false,
             ..Default::default()

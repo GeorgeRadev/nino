@@ -3,11 +3,10 @@ use crate::db_notification::{self, Notifier};
 use crate::db_transactions::{QueryParam, TransactionSession};
 use crate::nino_constants::info;
 use crate::nino_structures::{JSTask, LogInfo, ServletTask};
-use crate::web_responses::ResponseManager;
 use crate::{nino_constants, nino_functions};
 use async_channel::Receiver;
 use deno_core::{self, anyhow::Error, op2, JsBuffer, OpDecl, OpState, ToJsBuffer};
-use deno_runtime::deno_fetch::reqwest::{
+use reqwest::{
     header::{HeaderName, HeaderValue},
     Body, Client, Method, Request,
 };
@@ -49,7 +48,6 @@ pub fn get_nino_functions() -> Vec<OpDecl> {
 
 pub struct JSContext {
     pub id: i16,
-    pub dynamics: Arc<ResponseManager>,
     pub notifier: Arc<Notifier>,
     pub web_task_rx: Receiver<JSTask>,
     // close request will have a None Task
@@ -590,7 +588,7 @@ async fn fetch(
     method: String,
     headers: HashMap<String, String>,
     body: String,
-) -> Result<deno_runtime::deno_fetch::reqwest::Response, Error> {
+) -> Result<reqwest::Response, Error> {
     // Build out the request
     let url = Url::from_str(&url)?;
     let method = Method::from_bytes(method.as_bytes())?;

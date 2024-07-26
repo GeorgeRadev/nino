@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod tests {
     use crate::js_worker::{MainWorker, WorkerOptions};
-    use deno_runtime::deno_broadcast_channel::InMemoryBroadcastChannel;
+    
     use deno_core::{
         self, anyhow::Error, futures::FutureExt, op2, FastString, ModuleLoadResponse, ModuleLoader,
         ModuleSource, ModuleSourceCode, ModuleSpecifier, ModuleType, OpState, RequestedModuleType,
         ResolutionKind,
     };
-    use deno_runtime::deno_fetch::reqwest::Url;
+    use reqwest::Url;
     use deno_runtime::inspector_server::InspectorServer;
-    use deno_runtime::{errors, BootstrapOptions};
+    use deno_runtime::errors;
     use std::net::SocketAddr;
     use std::sync::Arc;
     use std::{cell::RefCell, rc::Rc};
@@ -179,16 +179,11 @@ mod tests {
         let inspector_server = Arc::new(InspectorServer::new(inspector_address, "nino")?);
 
         let options = WorkerOptions {
-            bootstrap: BootstrapOptions::default(),
             extensions,
             startup_snapshot: None,
-            unsafely_ignore_certificate_errors: None,
-            seed: None,
             source_map_getter: None,
-            format_js_error_fn: None,
             module_loader,
             get_error_class_fn: Some(&get_error_class_name),
-            broadcast_channel: InMemoryBroadcastChannel::default(),
             shared_array_buffer_store: None,
             compiled_wasm_module_store: None,
             maybe_inspector_server: Some(inspector_server.clone()),
