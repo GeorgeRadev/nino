@@ -61,7 +61,6 @@ impl WebManager {
             self.responses.clone(),
         )
         .await;
-        Ok(())
     }
 
     async fn listening(

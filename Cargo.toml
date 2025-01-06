@@ -4,7 +4,7 @@ description = "Scalable JS Platform"
 authors = ["ScaleFocus"]
 version = "1.0.0"
 edition = "2021"
-license = "MIT"
+license = "BSD"
 
 [dependencies]
 tokio = { version = "1.39.1", features = ["full"] }

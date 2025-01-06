@@ -39,6 +39,9 @@ fn main() {
             .block_on(main_init(connection_string))
     };
 
+    // print initial parameters
+    initial_settings.print();
+
     // async functionalities goes here
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(initial_settings.thread_count)
@@ -74,10 +77,6 @@ async fn wait_for_db_connection(connection_string: String) {
 }
 
 async fn execute_migration_sql_if_needed(connection_string: String) -> Result<(), Error> {
-    let db = db::DBManager::instance(connection_string.clone(), 1)
-        .await
-        .unwrap();
-
     let file = match tokio::fs::File::open(format!("{}.sql", nino_constants::PROGRAM_NAME)).await {
         Ok(file) => file,
         Err(_) => {
@@ -86,6 +85,11 @@ async fn execute_migration_sql_if_needed(connection_string: String) -> Result<()
             return Ok(());
         }
     };
+
+    let db = db::DBManager::instance(connection_string.clone(), 1)
+    .await
+    .unwrap();
+
     let reader = tokio::io::BufReader::new(file);
     let mut lines = reader.lines();
 
