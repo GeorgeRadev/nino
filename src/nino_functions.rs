@@ -1,7 +1,7 @@
 use crate::nino_constants;
 use async_std::{io::WriteExt, net::TcpStream};
 use bcrypt::{hash, verify, DEFAULT_COST};
-use deno_runtime::deno_core::anyhow::Error;
+use deno_core::anyhow::Error;
 use hmac::{digest::KeyInit, Hmac};
 use http_types::Response;
 use jwt::{SignWithKey, VerifyWithKey};

@@ -1,53 +1,123 @@
 use crate::db_log::DBLogger;
 use crate::db_notification::{self, Notifier};
-use crate::db_transactions::{QueryParam, TransactionSession};
+use crate::db_settings::SettingsManager;
+use crate::db_transactions::{QueryParam, TransactionManager, TransactionSession};
 use crate::nino_constants::info;
 use crate::nino_structures::{JSTask, LogInfo, ServletTask};
-use crate::{nino_constants, nino_functions};
+use crate::web_responses::ResponseManager;
+use crate::{js_core, nino_constants, nino_functions};
+use anyhow::Error;
 use async_channel::Receiver;
-use deno_core::{self, anyhow::Error, op2, JsBuffer, OpDecl, OpState, ToJsBuffer};
+use deno_core::futures::FutureExt;
+use deno_core::*;
+use deno_error::*;
+use http_types::{convert::Serialize, StatusCode, Url};
 use reqwest::{
     header::{HeaderName, HeaderValue},
     Body, Client, Method, Request,
 };
-use http_types::{convert::Serialize, StatusCode, Url};
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::OnceLock;
+use std::thread;
 use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
-pub fn get_nino_functions() -> Vec<OpDecl> {
-    vec![
-        nino_begin_task(),
-        nino_a_end_task(),
-        nino_a_sleep(),
-        nino_a_log(),
-        nino_get_request(),
-        nino_get_request_body(),
-        nino_set_response_status(),
-        nino_set_response_header(),
-        nino_a_set_response_send_text(),
-        nino_a_set_response_send_buf(),
-        nino_get_invalidation_message(),
-        nino_get_thread_id(),
-        nino_broadcast_message(),
-        nino_a_broadcast_message(),
-        nino_get_module_invalidation_prefix(),
-        nino_get_database_invalidation_prefix(),
-        nino_reload_database_aliases(),
-        nino_tx_end(),
-        nino_tx_get_connection_name(),
-        nino_tx_execute_query(),
-        nino_tx_execute_upsert(),
-        nino_get_user_jwt(),
-        nino_password_hash(),
-        nino_password_verify(),
-        nino_a_fetch(),
-        nino_a_fetch_binary(),
-        nino_a_set_response_from_fetch(),
-    ]
+deno_core::extension!(
+    nino_extention,
+    ops = [
+        nino_begin_task,
+        nino_a_end_task,
+        nino_a_sleep,
+        nino_a_log,
+        nino_get_request,
+        nino_get_request_body,
+        nino_set_response_status,
+        nino_set_response_header,
+        nino_a_set_response_send_text,
+        nino_a_set_response_send_buf,
+        nino_get_invalidation_message,
+        nino_get_thread_id,
+        nino_broadcast_message,
+        nino_a_broadcast_message,
+        nino_get_module_invalidation_prefix,
+        nino_get_database_invalidation_prefix,
+        nino_get_system_id,
+        nino_reload_database_aliases,
+        nino_tx_end,
+        nino_tx_get_connection_name,
+        nino_tx_execute_query,
+        nino_tx_execute_upsert,
+        nino_get_user_jwt,
+        nino_password_hash,
+        nino_password_verify,
+        nino_a_fetch,
+        nino_a_fetch_binary,
+        nino_a_set_response_from_fetch,
+    ],
+    state = create_js_context_state,
+);
+
+pub fn nino_extentions() -> Vec<Extension> {
+    vec![nino_extention::init_ops()]
+}
+
+#[derive(Clone)]
+pub struct NinoContext {
+    connection_string: String,
+    dynamics: Arc<ResponseManager>,
+    settings: Arc<SettingsManager>,
+}
+
+static NINO_CONTEXT: OnceLock<NinoContext> = OnceLock::new();
+
+pub fn init_js_context(
+    connection_string: String,
+    dynamics: Arc<ResponseManager>,
+    settings: Arc<SettingsManager>,
+) {
+    NINO_CONTEXT.get_or_init(|| NinoContext {
+        connection_string,
+        dynamics,
+        settings,
+    });
+}
+
+/**
+ * Creates the js thread context with sequential id, and attach all managers inside.
+ * Allocating resources to the thread and releasing them must be handled in the main javascript try finaly block.
+ */
+fn create_js_context_state(state: &mut OpState) {
+    let nino = NINO_CONTEXT.get().unwrap();
+
+    state.put(JSContext {
+        web_task_rx: nino.dynamics.get_web_task_rx(),
+        notifier: nino.dynamics.get_notifier().clone(),
+        broadcast_messages: Vec::with_capacity(8),
+        task: None,
+    });
+    let session = TransactionManager::get_transaction_session(nino.connection_string.clone());
+    state.put::<TransactionSession>(session);
+    state.put::<SettingsManager>(nino.settings.as_ref().clone())
+}
+
+pub fn load_module(
+    module_name: String,
+) -> Pin<Box<dyn Future<Output = Result<String, Error>> + 'static>> {
+    load_module_async(module_name).boxed_local()
+}
+
+async fn load_module_async(module_name: String) -> Result<String, Error> {
+    let instance = NINO_CONTEXT.get().unwrap();
+    let content = instance
+        .dynamics
+        .get_response_javascript(module_name.clone().as_str())
+        .await?;
+    let content_str = String::from_utf8(content)?;
+    Ok(content_str)
 }
 
 pub struct JSContext {
-    pub id: i16,
     pub notifier: Arc<Notifier>,
     pub web_task_rx: Receiver<JSTask>,
     // close request will have a None Task
@@ -60,6 +130,10 @@ impl JSContext {
     pub fn clear(&mut self) {
         self.task = None;
     }
+}
+
+fn any_error(error: Error) -> JsErrorBox {
+    JsErrorBox::generic(error.to_string())
 }
 
 macro_rules! function {
@@ -78,19 +152,9 @@ macro_rules! function {
     }};
 }
 
-// sync to async
-// #[op2]
-// async fn nino_async_task(state: Rc<RefCell<OpState>>) -> Result<(), Error> {
-//     let future = tokio::task::spawn_blocking(move || {
-//         // do some job here
-//     });
-//     future.await?;
-//     Ok(())
-// }
-
 #[op2]
 #[string]
-fn nino_begin_task(state: &mut OpState) -> Result<String, Error> {
+fn nino_begin_task(state: &mut OpState) -> Result<String, JsErrorBox> {
     let mut module = String::new();
     let context = state.borrow_mut::<JSContext>();
     let result = context.web_task_rx.recv_blocking();
@@ -113,7 +177,7 @@ fn nino_begin_task(state: &mut OpState) -> Result<String, Error> {
         Err(error) => {
             context.clear();
             // should happen only when terminating program
-            info!("OK {}:{}:{} {}", function!(), line!(), context.id, error);
+            info!("OK {}:{}: {}", function!(), line!(), error);
         }
     }
     Ok(module)
@@ -128,7 +192,7 @@ fn nino_tx_end(state: &mut OpState, commit: bool) {
 }
 
 #[op2(async)]
-async fn nino_a_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, Error> {
+async fn nino_a_end_task(op_state: Rc<RefCell<OpState>>) -> Result<bool, JsErrorBox> {
     let stream;
     let response;
     {
@@ -177,7 +241,7 @@ pub struct HttpRequest {
 
 #[op2]
 #[serde]
-fn nino_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
+fn nino_get_request(state: &mut OpState) -> Result<HttpRequest, JsErrorBox> {
     let context = state.borrow_mut::<JSContext>();
 
     if let Some(task) = &context.task {
@@ -204,7 +268,7 @@ fn nino_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
 
                 let mut post_parameters: HashMap<String, Vec<String>> = HashMap::new();
                 if !servlet.body.contains(' ') {
-                    let post_url_str = format!("{}?{}", nino_constants::MODULE_URI, servlet.body);
+                    let post_url_str = format!("{}?{}", js_core::MODULE_URI, servlet.body);
                     if let Ok(url) = Url::parse(&post_url_str) {
                         for (key, value) in url.query_pairs() {
                             let key = key.to_string();
@@ -237,15 +301,15 @@ fn nino_get_request(state: &mut OpState) -> Result<HttpRequest, Error> {
                 //deno_core::serde_json::to_string(&request).unwrap()
                 Ok(request)
             }
-            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+            JSTask::Message(_) => Err(JsErrorBox::generic("task is not a request")),
         }
     } else {
-        Err(Error::msg("no current task"))
+        Err(JsErrorBox::generic("no current task"))
     }
 }
 
 #[op2(fast)]
-fn nino_set_response_status(state: &mut OpState, status: u16) -> Result<(), Error> {
+fn nino_set_response_status(state: &mut OpState, status: u16) -> Result<(), JsErrorBox> {
     let context = state.borrow_mut::<JSContext>();
 
     if let Some(task) = &mut context.task {
@@ -256,10 +320,10 @@ fn nino_set_response_status(state: &mut OpState, status: u16) -> Result<(), Erro
                 response.set_status(status);
                 Ok(())
             }
-            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+            JSTask::Message(_) => Err(JsErrorBox::generic("task is not a request")),
         }
     } else {
-        Err(Error::msg("no current task"))
+        Err(JsErrorBox::generic("no current task"))
     }
 }
 
@@ -268,7 +332,7 @@ fn nino_set_response_header(
     state: &mut OpState,
     #[string] key: String,
     #[string] value: String,
-) -> Result<(), Error> {
+) -> Result<(), JsErrorBox> {
     let context = state.borrow_mut::<JSContext>();
 
     if let Some(task) = &mut context.task {
@@ -279,25 +343,25 @@ fn nino_set_response_header(
                 response.append_header(&*key, &*value);
                 Ok(())
             }
-            JSTask::Message(_) => Err(Error::msg("task is not a request")),
+            JSTask::Message(_) => Err(JsErrorBox::generic("task is not a request")),
         }
     } else {
-        Err(Error::msg("no current task"))
+        Err(JsErrorBox::generic("no current task"))
     }
 }
 
-fn take_servlet_task(op_state: Rc<RefCell<OpState>>) -> Result<ServletTask, Error> {
+fn take_servlet_task(op_state: Rc<RefCell<OpState>>) -> Result<ServletTask, JsErrorBox> {
     let mut state = op_state.borrow_mut();
     let context = state.borrow_mut::<JSContext>();
 
     if context.task.is_none() {
         //task already closed
-        return Err(Error::msg("task already closed"));
+        return Err(JsErrorBox::generic("task already closed"));
     }
 
     match context.task.take().unwrap() {
         JSTask::Servlet(servlet) => Ok(servlet),
-        JSTask::Message(_) => Err(Error::msg("task is not a request")),
+        JSTask::Message(_) => Err(JsErrorBox::generic("task is not a request")),
     }
 }
 
@@ -305,7 +369,7 @@ fn take_servlet_task(op_state: Rc<RefCell<OpState>>) -> Result<ServletTask, Erro
 async fn nino_a_set_response_send_text(
     op_state: Rc<RefCell<OpState>>,
     #[string] body: String,
-) -> Result<(), Error> {
+) -> Result<(), JsErrorBox> {
     let mut servlet_task = take_servlet_task(op_state)?;
     let mut response = servlet_task.response.take().unwrap();
     let stream = servlet_task.stream;
@@ -321,7 +385,7 @@ async fn nino_a_set_response_send_text(
 async fn nino_a_set_response_send_buf(
     op_state: Rc<RefCell<OpState>>,
     #[buffer] bytes: JsBuffer,
-) -> Result<(), Error> {
+) -> Result<(), JsErrorBox> {
     let mut servlet_task = take_servlet_task(op_state)?;
     let mut response = servlet_task.response.take().unwrap();
     let stream = servlet_task.stream;
@@ -336,17 +400,9 @@ async fn nino_a_set_response_send_buf(
 }
 
 #[op2(async)]
-async fn nino_a_sleep(op_state: Rc<RefCell<OpState>>, #[bigint] millis: u64) -> Result<(), Error> {
+async fn nino_a_sleep(#[bigint] millis: u64) {
     // Future must be Poll::Pending on first call
-    let v;
-    {
-        let state = op_state.borrow();
-        let context = state.borrow::<JSContext>();
-        v = context.id;
-    }
-    println!("{} waiting", v);
     tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
-    Ok(())
 }
 
 #[op2]
@@ -364,10 +420,10 @@ fn nino_get_invalidation_message(state: &mut OpState) -> String {
     }
 }
 
-#[op2(fast)]
-fn nino_get_thread_id(state: &mut OpState) -> i16 {
-    let context = state.borrow_mut::<JSContext>();
-    context.id
+#[op2]
+#[string]
+fn nino_get_thread_id() -> String {
+    thread::current().name().unwrap_or("").to_string()
 }
 
 #[op2(fast)]
@@ -411,6 +467,19 @@ fn nino_get_database_invalidation_prefix() -> String {
     String::from(db_notification::NOTIFICATION_PREFIX_DBNAME)
 }
 
+#[op2(async)]
+#[string]
+async fn nino_get_system_id(op_state: Rc<RefCell<OpState>>) -> String {
+    let context = {
+        let mut state = op_state.borrow_mut();
+        let context = state.borrow_mut::<SettingsManager>();
+        context.clone()
+    };
+    context
+        .get_setting_str(nino_constants::SETTINGS_NINO_SYSTEM_ID, "")
+        .await
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
@@ -420,6 +489,13 @@ pub struct QueryResult {
 }
 
 fn query_types_to_params(
+    query: Vec<String>,
+    query_types: Vec<i16>,
+) -> Result<(String, Vec<QueryParam>), JsErrorBox> {
+    _query_types_to_params(query, query_types).map_err(any_error)
+}
+
+fn _query_types_to_params(
     query: Vec<String>,
     query_types: Vec<i16>,
 ) -> Result<(String, Vec<QueryParam>), Error> {
@@ -481,10 +557,13 @@ fn query_types_to_params(
                     }
                 },
                 Err(error) => {
-                    return Err(Error::msg(format!(
-                        "parameter {} `{}` is not UTC miliseconds: {}",
-                        ix, value, error
-                    )));
+                    return Err(Error::msg(
+                        format!(
+                            "parameter {} `{}` is not UTC miliseconds: {}",
+                            ix, value, error
+                        )
+                        .to_string(),
+                    ));
                 }
             };
         } else {
@@ -496,9 +575,9 @@ fn query_types_to_params(
 }
 
 #[op2(fast)]
-fn nino_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
+fn nino_reload_database_aliases(state: &mut OpState) -> Result<(), JsErrorBox> {
     let tx = state.borrow_mut::<TransactionSession>();
-    tx.reload_database_aliases()
+    tx.reload_database_aliases().map_err(any_error)
 }
 
 #[op2]
@@ -506,9 +585,9 @@ fn nino_reload_database_aliases(state: &mut OpState) -> Result<(), Error> {
 fn nino_tx_get_connection_name(
     state: &mut OpState,
     #[string] db_alias: String,
-) -> Result<String, Error> {
+) -> Result<String, JsErrorBox> {
     let tx = state.borrow_mut::<TransactionSession>();
-    tx.create_transaction(db_alias)
+    tx.create_transaction(db_alias).map_err(any_error)
 }
 
 #[op2]
@@ -518,11 +597,11 @@ fn nino_tx_execute_query(
     #[string] db_alias: String,
     #[serde] query: Vec<String>,
     #[serde] query_types: Vec<i16>,
-) -> Result<QueryResult, Error> {
+) -> Result<QueryResult, JsErrorBox> {
     let (query, params) = query_types_to_params(query, query_types)?;
     let tx = state.borrow_mut::<TransactionSession>();
 
-    let result = tx.query(db_alias, query, params)?;
+    let result = tx.query(db_alias, query, params).map_err(any_error)?;
     Ok(QueryResult {
         rows: result.rows,
         row_names: result.row_names,
@@ -537,40 +616,43 @@ fn nino_tx_execute_upsert(
     #[string] db_alias: String,
     #[serde] query: Vec<String>,
     #[serde] query_types: Vec<i16>,
-) -> Result<u64, Error> {
+) -> Result<u64, JsErrorBox> {
     let (query, params) = query_types_to_params(query, query_types)?;
     let tx = state.borrow_mut::<TransactionSession>();
-    tx.upsert(db_alias, query, params)
+    tx.upsert(db_alias, query, params).map_err(any_error)
 }
 
 #[op2]
 #[string]
-fn nino_get_request_body(state: &mut OpState) -> Result<String, Error> {
+fn nino_get_request_body(state: &mut OpState) -> Result<String, JsErrorBox> {
     let context = state.borrow_mut::<JSContext>();
 
     if context.task.is_some() {
         if let Some(JSTask::Servlet(servlet)) = context.task.as_mut() {
             Ok(servlet.body.clone())
         } else {
-            Err(Error::msg("task is not a request"))
+            Err(JsErrorBox::generic("task is not a request"))
         }
     } else {
-        Err(Error::msg("no current task"))
+        Err(JsErrorBox::generic("no current task"))
     }
 }
 
 #[op2]
 #[string]
-fn nino_get_user_jwt(_state: &mut OpState, #[string] user: String) -> Result<String, Error> {
+fn nino_get_user_jwt(_state: &mut OpState, #[string] user: String) -> Result<String, JsErrorBox> {
     let mut map: HashMap<String, String> = HashMap::new();
     map.insert(nino_constants::JWT_USER.to_string(), user);
-    nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map)
+    nino_functions::jwt_from_map(nino_constants::PROGRAM_NAME, map).map_err(any_error)
 }
 
 #[op2]
 #[string]
-fn nino_password_hash(_state: &mut OpState, #[string] password: String) -> Result<String, Error> {
-    nino_functions::password_hash(&password)
+fn nino_password_hash(
+    _state: &mut OpState,
+    #[string] password: String,
+) -> Result<String, JsErrorBox> {
+    nino_functions::password_hash(&password).map_err(any_error)
 }
 
 #[op2(fast)]
@@ -578,11 +660,23 @@ fn nino_password_verify(
     _state: &mut OpState,
     #[string] password: String,
     #[string] hash: String,
-) -> Result<bool, Error> {
-    nino_functions::password_verify(&password, &hash)
+) -> Result<bool, JsErrorBox> {
+    nino_functions::password_verify(&password, &hash).map_err(any_error)
 }
 
 async fn fetch(
+    url: String,
+    timeout: i64,
+    method: String,
+    headers: HashMap<String, String>,
+    body: String,
+) -> Result<reqwest::Response, JsErrorBox> {
+    _fetch(url, timeout, method, headers, body)
+        .await
+        .map_err(any_error)
+}
+
+async fn _fetch(
     url: String,
     timeout: i64,
     method: String,
@@ -629,6 +723,19 @@ async fn nino_a_fetch(
     #[string] method: String,
     #[serde] headers: HashMap<String, String>,
     #[string] body: String,
+) -> Result<String, JsErrorBox> {
+    _nino_a_fetch(_op_state, url, timeout, method, headers, body)
+        .await
+        .map_err(any_error)
+}
+
+async fn _nino_a_fetch(
+    _op_state: Rc<RefCell<OpState>>,
+    url: String,
+    timeout: i64,
+    method: String,
+    headers: HashMap<String, String>,
+    body: String,
 ) -> Result<String, Error> {
     let response = fetch(url, timeout, method, headers, body).await?;
     let bytes = response.bytes().await?.to_vec();
@@ -645,6 +752,19 @@ async fn nino_a_fetch_binary(
     #[string] method: String,
     #[serde] headers: HashMap<String, String>,
     #[string] body: String,
+) -> Result<ToJsBuffer, JsErrorBox> {
+    _nino_a_fetch_binary(_op_state, url, timeout, method, headers, body)
+        .await
+        .map_err(any_error)
+}
+
+async fn _nino_a_fetch_binary(
+    _op_state: Rc<RefCell<OpState>>,
+    url: String,
+    timeout: i64,
+    method: String,
+    headers: HashMap<String, String>,
+    body: String,
 ) -> Result<ToJsBuffer, Error> {
     let response = fetch(url, timeout, method, headers, body).await?;
     let bytes = response.bytes().await?.to_vec();
@@ -659,26 +779,28 @@ async fn nino_a_set_response_from_fetch(
     #[string] method: String,
     #[serde] headers: HashMap<String, String>,
     #[string] body: String,
-) -> Result<(), Error> {
+) -> Result<(), JsErrorBox> {
     let response_in = fetch(url, timeout, method, headers, body).await?;
 
     let servlet_task = take_servlet_task(op_state)?;
     let stream_out = servlet_task.stream;
 
-    nino_functions::send_request_to_stream(response_in, stream_out).await
+    nino_functions::send_request_to_stream(response_in, stream_out)
+        .await
+        .map_err(any_error)
 }
 
 #[op2(async)]
 async fn nino_a_log(
     op_state: Rc<RefCell<OpState>>,
     #[string] log_text: String,
-) -> Result<(), Error> {
+) -> Result<(), JsErrorBox> {
     let log = {
         let mut state = op_state.borrow_mut();
         let context = state.borrow_mut::<JSContext>();
         if context.task.is_none() {
             //task already closed
-            return Err(Error::msg("task already closed"));
+            return Err(JsErrorBox::generic("task already closed"));
         }
 
         let task = context.task.as_ref().unwrap();
@@ -701,4 +823,29 @@ async fn nino_a_log(
 
     DBLogger::log(log).await;
     Ok(())
+}
+
+// sync to async
+// #[op2]
+// async fn nino_async_task(state: Rc<RefCell<OpState>>) -> Result<(), JsErrorBox> {
+//     let future = tokio::task::spawn_blocking(move || {
+//         // do some job here
+//     });
+//     future.await?;
+//     Ok(())
+// }
+
+#[op2]
+fn op_sum(#[serde] nums: Vec<f64>) -> Result<f64, JsErrorBox> {
+    // Sum inputs
+    let sum = nums.iter().fold(0.0, |a, v| a + v);
+    // return as a Result<f64, OpError>
+    Ok(sum)
+}
+
+#[op2(async)]
+async fn test_a_sleep(#[smi] millis: u64) -> Result<i32, JsErrorBox> {
+    println!("waiting {} ms", millis);
+    tokio::time::sleep(std::time::Duration::from_millis(millis)).await;
+    Ok(42)
 }

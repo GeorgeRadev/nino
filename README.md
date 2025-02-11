@@ -60,7 +60,7 @@ The transpiler source is in **/jsqlx** folder and it is based on the **babel** s
 
 ## Setting up the test environment
 
-you need Linux or MacOS environment for this:
+In Linux or MacOS environment execute following steps:
 
 - Build the application: **cargo build**  
 - Start the postgres db:  **./db start**  
@@ -70,7 +70,7 @@ you need Linux or MacOS environment for this:
 - Open **http://localhost:8080/** to play with the environment
 
 to stop the application just terminate it (ctrl-c usually do the trick).  
-to stop the db : **./db stop**  
+to stop the postgres db : **./db stop**  
 
 
 ## Dependencies
@@ -83,7 +83,7 @@ the test environment depend on the **zonky** postgres binary builds.
 - check database for existance and connect to DB
 - create mem cache for settings. 
 - create DB message listener/broadcaster.
-- create local(./cache/...) cache for static resources (*not implemented yet*)
+- (*not implemented yet*) create local(./cache/...) cache for static resources 
 - create local dynamic javascript threads based on the settings
 - create local web server, and dispach requests to the static/dynamic content.
 
@@ -108,8 +108,9 @@ WebManager - listnens on port and upon requests decides what dynqmic or static r
                - keeps track on JWT token in the header for authentication
                - JWT tokens are verified if Dynamic resource is marked as secured otherwize just passed
 
-requirements:
-to have a dynamic module "_main" for executing the dynamic executions.
+requirements:  
+dynamic module "_main" for executing the js module loading, serving responces, process messages.  
+dynamic module "_transpile_dynamics" for transpiling jsqlx scripts into js.  
 
 
 ## database schema

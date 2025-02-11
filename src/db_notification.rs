@@ -1,4 +1,4 @@
-use deno_runtime::deno_core::anyhow::Error;
+use deno_core::anyhow::Error;
 
 use crate::{db::DBManager, nino_constants::info, nino_structures};
 use std::sync::Arc;

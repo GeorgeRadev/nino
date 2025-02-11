@@ -10,7 +10,7 @@ use crate::{
 };
 use async_channel::{Receiver, Sender};
 use async_std::net::TcpStream;
-use deno_runtime::deno_core::anyhow::Error;
+use deno_core::anyhow::Error;
 use http_types::{Mime, Response, StatusCode};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -29,7 +29,6 @@ pub struct ResponseManager {
 pub struct ResponseInfo {
     pub mime: Mime,
     pub execute: bool,
-    pub transpile: bool,
 }
 
 static RESPONSE_CACHE: OnceLock<RwLock<HashMap<String, ResponseInfo>>> = OnceLock::new();
@@ -118,15 +117,7 @@ impl ResponseManager {
                     let mime_str: String = row.get(1);
                     let mime = Mime::from_str(&mime_str).unwrap();
                     let execute: bool = row.get(2);
-                    let transpile: bool = row.get(3);
-                    map.insert(
-                        name,
-                        ResponseInfo {
-                            mime,
-                            execute,
-                            transpile,
-                        },
-                    );
+                    map.insert(name, ResponseInfo { mime, execute });
                 }
             }
         }
@@ -148,12 +139,7 @@ impl ResponseManager {
                     let mime_str: String = row.get(0);
                     let mime = Mime::from_str(&mime_str).unwrap();
                     let execute: bool = row.get(1);
-                    let transpile: bool = row.get(2);
-                    Ok(Some(ResponseInfo {
-                        mime,
-                        execute,
-                        transpile,
-                    }))
+                    Ok(Some(ResponseInfo { mime, execute }))
                 }
             }
         }
