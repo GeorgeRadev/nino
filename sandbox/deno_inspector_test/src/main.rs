@@ -20,11 +20,11 @@ fn load_module(
 }
 
 pub fn load_extentions0() -> Vec<Extension> {
-    vec![nino_extention0::init_ops()]
+    vec![nino_extention0::init()]
 }
 
 pub fn load_extentions1() -> Vec<Extension> {
-    vec![nino_extention1::init_ops()]
+    vec![nino_extention1::init()]
 }
 
 fn main() -> Result<(), Error> {
@@ -52,9 +52,7 @@ fn main() -> Result<(), Error> {
     let thread3 = js_core::start_js_thread(load_extentions1, ExecuteMode::JsCode(code), false, 0)?;
 
     let _ = thread1.join();
-    println!("...DONE");
     let _ = thread2.join();
-    println!("...DONE");
     let _ = thread3.join();
     println!("...DONE");
 

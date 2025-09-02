@@ -4,16 +4,8 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
 // Alias for the future `!` type.
-use core::convert::Infallible as Never;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::pin::pin;
-use std::process;
-use std::rc::Rc;
-use std::thread;
-
 use anyhow::Error;
+use core::convert::Infallible as Never;
 use deno_core::futures::channel::mpsc;
 use deno_core::futures::channel::mpsc::UnboundedReceiver;
 use deno_core::futures::channel::mpsc::UnboundedSender;
@@ -22,7 +14,6 @@ use deno_core::futures::future;
 use deno_core::futures::prelude::*;
 use deno_core::futures::select;
 use deno_core::futures::stream::StreamExt;
-use deno_core::futures::task::Poll;
 use deno_core::serde_json;
 use deno_core::serde_json::json;
 use deno_core::serde_json::Value;
@@ -38,6 +29,14 @@ use fastwebsockets::OpCode;
 use fastwebsockets::WebSocket;
 use hyper::body::Bytes;
 use hyper_util::rt::TokioIo;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::pin::pin;
+use std::process;
+use std::rc::Rc;
+use std::task::Poll;
+use std::thread;
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 use uuid::Uuid;
@@ -56,7 +55,6 @@ impl InspectorServer {
         let host = format!("127.0.0.1:{}", inspector_port)
             .parse::<SocketAddr>()
             .unwrap();
-
         let (register_inspector_tx, register_inspector_rx) = mpsc::unbounded::<InspectorInfo>();
 
         let (shutdown_server_tx, shutdown_server_rx) = broadcast::channel(1);
@@ -67,7 +65,7 @@ impl InspectorServer {
         let thread_name = format!("js-inspector-{}", inspector_port).to_string();
 
         let thread_handle = std::thread::Builder::new()
-            .name(thread_name)
+            .name(thread_name.clone())
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_io()
@@ -78,7 +76,12 @@ impl InspectorServer {
                 let local = tokio::task::LocalSet::new();
                 local.block_on(
                     &rt,
-                    server(tcp_listener, register_inspector_rx, shutdown_server_rx),
+                    server(
+                        tcp_listener,
+                        register_inspector_rx,
+                        shutdown_server_rx,
+                        &thread_name,
+                    ),
                 )
             })?;
 
@@ -250,6 +253,7 @@ async fn server(
     listener: std::net::TcpListener,
     register_inspector_rx: UnboundedReceiver<InspectorInfo>,
     shutdown_server_rx: broadcast::Receiver<()>,
+    name: &str,
 ) {
     let inspector_map_ = Rc::new(RefCell::new(HashMap::<Uuid, InspectorInfo>::new()));
 
@@ -280,7 +284,7 @@ async fn server(
     .fuse());
 
     let json_version_response = json!({
-      "Browser": "nino",
+      "Browser": name,
       "Protocol-Version": "1.3",
       "V8-Version": deno_core::v8::VERSION_STRING,
     });
@@ -305,7 +309,7 @@ async fn server(
                 match accept_result {
                   Ok((s, _)) => s,
                   Err(err) => {
-                    println!("Failed to accept inspector connection: {:?}", err);
+                          println!("Failed to accept inspector connection: {:?}", err);
                     continue;
                   }
                 }
@@ -366,7 +370,7 @@ async fn server(
                 tokio::select! {
                   result = conn.as_mut() => {
                     if let Err(err) = result {
-                      println!("Failed to serve connection: {:?}", err);
+                              println!("Failed to serve connection: {:?}", err);
                     }
                   },
                   _ = &mut shutdown_rx => {
@@ -419,7 +423,7 @@ async fn pump_websocket_messages(
                     OpCode::Close => {
                         // Users don't care if there was an error coming from debugger,
                         // just about the fact that debugger did disconnect.
-                        println!("Debugger session ended");
+                            println!("Debugger session ended");
                         break 'pump;
                     }
                     _ => {

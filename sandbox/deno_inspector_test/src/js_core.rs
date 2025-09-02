@@ -11,7 +11,8 @@ use std::pin::Pin;
 use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
-pub const MAIN_DB: &str = "_main";
+use crate::js_inspector;
+
 pub const MODULE_URI: &str = "http://nino.db/";
 
 #[derive(Clone)]
@@ -56,9 +57,15 @@ impl FNModuleLoader {
                     let module = ModuleSource::new(module_type, code, &module_string, None);
                     Ok(module)
                 }
-                Err(_) => Err(ModuleLoaderError::NotFound),
+                Err(_) => Err(JsErrorBox::generic(format!(
+                    "module: {} not found",
+                    module_name
+                ))),
             },
-            None => Err(ModuleLoaderError::NotFound),
+            None => Err(JsErrorBox::generic(format!(
+                "module: {} not found",
+                module_name
+            ))),
         }
     }
 }
@@ -109,7 +116,8 @@ pub fn start_js_thread(
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_io()
                 .enable_time()
-                .max_blocking_threads(32)
+                .max_blocking_threads(1)
+                .worker_threads(1)
                 .build()
                 .unwrap();
             let local = tokio::task::LocalSet::new();

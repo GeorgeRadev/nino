@@ -37,7 +37,7 @@ async function main() {
     core.ops.test_set_result(result);
 
 
-    var ever = 5;
+    var ever = 7;
     for (;ever;) {
         debugger;
         await Deno.core.ops.test_a_sleep(2000);
