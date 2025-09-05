@@ -2,7 +2,6 @@ import db from '_db';
 import jsqlx from '_jsqlx';
 
 export default async function db_list(request, response) {
-    debugger;
     var result = "";
     const conn = await db();
     const sql = SELECT javascript 

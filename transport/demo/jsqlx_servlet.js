@@ -1,8 +1,6 @@
 import jsqlx from '_jsqlx';
 
 export default async function jsqlx_servlet(request, response) {
-    debugger;
-    
     var code = `
     var line = 0;
     const sql = SELECT * 

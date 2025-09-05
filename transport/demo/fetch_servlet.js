@@ -1,7 +1,6 @@
 import fetch from '_fetch';
 
 export default async function servlet() {
-    debugger;
     const response = await fetch(
         "https://worldtimeapi.org/api/timezone/Etc/UTC",
         {

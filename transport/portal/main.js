@@ -2,7 +2,6 @@ import log from "_log";
 import nino from "_nino";
 
 export default async function portal(request) {
-  debugger;
   await nino.assertRole(request, 'portal');
 
   const portlet_menu = await nino.getPortletMenu(request);

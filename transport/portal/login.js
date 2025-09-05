@@ -2,10 +2,6 @@ import log from "_log";
 import nino from "_nino";
 
 export default async function servlet(request, response) {
-    debugger;
-    log('post body: ' + request.getBody() + '\n');
-    log('post parameters: ' + JSON.stringify(request.postParameters) + '\n');
-
     response.status(302);
 
     if (request.postParameters && request.postParameters.username && request.postParameters.password) {

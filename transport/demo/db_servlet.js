@@ -1,8 +1,6 @@
 import db from '_db';
 
 export default async function db_servlet(request) {
-    debugger;
-
     var result = "<hr/>";
     {
         result += "<pre>";

@@ -45,7 +45,6 @@ export default function SelectorDB({ IDEContext }) {
         setDialogVisible(false);
     }
     function optionsEdit() {
-        debugger;
         if (selection) {
             IDEContext.addTab(prefix + selection);
         } else {

@@ -1,8 +1,6 @@
 import notify from '_notify';
 
 export default async function servlet(request, response) {
-    debugger;
-
     const message1 = "dynamic:" + new Date();
     await notify(message1);
 

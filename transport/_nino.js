@@ -237,7 +237,6 @@ export default class nino_core {
 
     static async ninoDatabaseQuery(alias, query) {
         try {
-            debugger;
             const conn = await db(alias);
             var cols = [];
             var rows = [];

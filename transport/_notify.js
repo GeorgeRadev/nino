@@ -1,6 +1,5 @@
 export default async function notify(message) {
     const core = Deno.core;
-    debugger;
 
     if (typeof message === 'string' || message instanceof ArrayBuffer) {
         //ok

@@ -6,7 +6,6 @@ const prefix = "setting:";
 
 async function optionsReload(setOptions) {
     try {
-        debugger;
         setOptions(await NinoREST.settingsGet());
     } catch (error) {
         setOptions({ "error": "cannot load settings: " + error.message });
