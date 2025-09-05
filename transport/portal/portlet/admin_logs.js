@@ -1,7 +1,7 @@
 import React from 'react';
 
 async function logsLoad() {
-  const response = await fetch("/portal_rest?op=/logs/get");
+  const response = await fetch("/portal/rest?op=/logs/get");
   const requests = await response.json();
   return requests;
 }

@@ -7,7 +7,7 @@ use crate::nino_structures::ServletTask;
 use crate::web_requests::RequestManager;
 use crate::web_responses::ResponseManager;
 use async_std::net::{TcpListener, TcpStream};
-use deno_runtime::deno_core::anyhow::{self, Error};
+use deno_core::anyhow::{self, Error};
 use http_types::headers::HeaderValues;
 use http_types::{Method, Request, Response, StatusCode, Url};
 use std::net::SocketAddr;

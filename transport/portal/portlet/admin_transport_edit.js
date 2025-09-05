@@ -1,7 +1,7 @@
 import React from 'react';
 
 async function requestsLoad() {
-  const response = await fetch("/portal_rest?op=/requests/get");
+  const response = await fetch("/portal/rest?op=/requests/get");
   const requests = await response.json();
   return requests;
 }

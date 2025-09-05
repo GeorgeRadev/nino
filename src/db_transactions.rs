@@ -2,7 +2,7 @@ use crate::nino_constants::{self, info};
 use async_channel::{Receiver, Sender};
 use base64::Engine;
 use core::fmt;
-use deno_runtime::deno_core::anyhow::Error;
+use deno_core::anyhow::Error;
 use std::collections::HashMap;
 use std::thread;
 use tokio_postgres::types::{to_sql_checked, IsNull, ToSql, Type};

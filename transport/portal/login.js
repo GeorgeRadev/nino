@@ -14,7 +14,7 @@ export default async function servlet(request, response) {
         var is_user_and_pass_ok = await nino.isValidUserAndPassword(username[0], password[0]);
         if (is_user_and_pass_ok) {
             response.set("Set-Cookie", "nino=" + request.getJWT("admin"));
-            response.set("Location", "/");
+            response.set("Location", "/portal");
             return "";
         }
     }

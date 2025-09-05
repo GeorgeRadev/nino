@@ -27,7 +27,7 @@ export default function portlet_menu() {
             var path_last_token = path.split("/").pop();
 
             menuItems.push(<li class={(currentPortlet.path === path) ? "sidebar-item active" : "sidebar-item"}>
-                <a class="sidebar-link" href={"/?portlet=/" + path}>
+                <a class="sidebar-link" href={"/portal?portlet=/" + path}>
                     <i class="align-middle" data-feather={value.icon}></i>
                     <span class="align-middle">{path_last_token}</span>
                 </a>

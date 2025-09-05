@@ -5,13 +5,13 @@ export default function portlet_admin_databases() {
   const [queryResult, setQueryResult] = React.useState([]);
 
   async function aliasesRefresh() {
-    const response = await fetch("/portal_rest?op=/databases/get");
+    const response = await fetch("/portal/rest?op=/databases/get");
     const aliases = await response.json();
     setAliases(aliases);
   }
 
   async function executeQuery() {
-    const response = await fetch("/portal_rest?op=/databases/query&" + new URLSearchParams({
+    const response = await fetch("/portal/rest?op=/databases/query&" + new URLSearchParams({
       alias: document.getElementById("nino_database_alias").value,
       query: document.getElementById("nino_database_query").value,
     }));

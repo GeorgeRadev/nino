@@ -1,5 +1,5 @@
 use deadpool_postgres::{Manager, ManagerConfig, Object, Pool, RecyclingMethod};
-use deno_runtime::deno_core::anyhow::Error;
+use deno_core::anyhow::Error;
 use tokio_postgres::types::ToSql;
 use tokio_postgres::{Config, Row};
 

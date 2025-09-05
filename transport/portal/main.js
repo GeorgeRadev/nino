@@ -38,8 +38,8 @@ export default async function portal(request) {
 
   <title>Nino portal</title>
 
-  <link href="portal.css" rel="stylesheet">
-  <script type="text/javascript" src="portal.js"></script>
+  <link href="/portal/portal.css" rel="stylesheet">
+  <script type="text/javascript" src="/portal/portal.js"></script>
   <script type="importmap">
   {
       "imports": {
@@ -82,9 +82,8 @@ export default async function portal(request) {
 
   <script type="module">
     import ReactDOM from 'react-dom';
-    import portlet_menu from './portlet_menu.js';
-    import portlet from './${currentPortlet['portlet']}';
-    import counter from './portlet_counter.js';
+    import portlet_menu from '/portal/menu.js';
+    import portlet      from '/${currentPortlet['portlet']}';
 
     window.portlet_menu = ${menujson};
     // render menu

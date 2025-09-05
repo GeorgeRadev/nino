@@ -4,10 +4,9 @@ mod db_notification;
 mod db_settings;
 mod db_transactions;
 mod js;
+mod js_core;
 mod js_functions;
-mod js_test;
-mod js_test_debug;
-mod js_worker;
+mod js_inspector;
 mod nino_constants;
 mod nino_functions;
 mod nino_structures;
@@ -17,12 +16,11 @@ mod web_responses;
 
 use crate::{db_settings::SettingsManager, nino_constants::info};
 use db_log::DBLogger;
-use deno_runtime::deno_core::anyhow::{anyhow, Error};
+use deno_core::anyhow::{anyhow, Error};
 use nino_structures::InitialSettings;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
-// export NINO=postgresql://george.radev@localhost/postgres?connect_timeout=5
 fn main() {
     setup_panic_hook();
 
@@ -87,8 +85,8 @@ async fn execute_migration_sql_if_needed(connection_string: String) -> Result<()
     };
 
     let db = db::DBManager::instance(connection_string.clone(), 1)
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     let reader = tokio::io::BufReader::new(file);
     let mut lines = reader.lines();
@@ -204,7 +202,7 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         db.get_connection_string(),
         responses.clone(),
         settings_manager.clone(),
-    );
+    )?;
 
     // transpile dynamics
     if let Ok(transpile_code) = responses
@@ -212,7 +210,7 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
         .await
     {
         let transpile_code = String::from_utf8(transpile_code)?;
-        js::JavaScriptManager::run(&transpile_code).await?;
+        js::JavaScriptManager::run(transpile_code)?;
     }
 
     let web = web::WebManager::new(

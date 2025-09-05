@@ -1,7 +1,7 @@
 import React from 'react';
 
 async function requestsLoad() {
-  const response = await fetch("/portal_rest?op=/requests/get");
+  const response = await fetch("/portal/rest?op=/requests/get");
   const requests = await response.json();
   return requests;
 }
@@ -29,7 +29,7 @@ export default function portlet_admin_requests() {
   async function fetchResponseDetails() {
     if (selectIx >= 0 && selectIx < requests.length) {
       try {
-        const response = await fetch("/portal_rest?op=/responses/detail&name=" + new URLSearchParams({
+        const response = await fetch("/portal/rest?op=/responses/detail&name=" + new URLSearchParams({
           name: requests[selectIx].response_name,
         }));
         const details = await response.json();
