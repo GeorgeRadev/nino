@@ -72,6 +72,24 @@ In Linux or MacOS environment execute following steps:
 to stop the application just terminate it (ctrl-c usually do the trick).  
 to stop the postgres db : **./db stop**  
 
+## Debug with VSCode
+
+Add lunch configuration :  
+
+```json
+    {
+      "name": "Nino with JS Debugger",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "cargo",
+      "runtimeArgs": [
+        "run"
+      ],
+      "attachSimplePort": 9229
+    }
+```
+
 
 ## Dependencies
 Requires postgreSQL for storing all data, code, configuration and message broadcasting.  
@@ -159,6 +177,5 @@ table: **nino_setting**
 |---------|-------|--------------|
 | db_alias   | VARCHAR(256) PRIMARY KEY | the setting name  |
 | setting_value | VARCHAR(4096)            | the setting value |
-
 
 
