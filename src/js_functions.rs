@@ -59,7 +59,7 @@ deno_core::extension!(
 );
 
 pub fn nino_extentions() -> Vec<Extension> {
-    vec![nino_extention::init_ops()]
+    vec![nino_extention::init()]
 }
 
 #[derive(Clone)]

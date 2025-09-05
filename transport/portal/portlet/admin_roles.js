@@ -1,7 +1,7 @@
 import React from 'react';
 
 async function usersLoad() {
-  const response = await fetch("/portal_rest?op=/users/get");
+  const response = await fetch("/portal/rest?op=/users/get");
   const requests = await response.json();
   return requests;
 }

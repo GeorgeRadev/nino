@@ -1,7 +1,7 @@
 import React from 'react';
 
 async function databasesLoad() {
-  const response = await fetch("/portal_rest?op=/databases/get");
+  const response = await fetch("/portal/rest?op=/databases/get");
   const requests = await response.json();
   return requests;
 }

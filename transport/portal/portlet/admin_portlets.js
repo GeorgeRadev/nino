@@ -1,7 +1,7 @@
 import React from 'react';
 
 async function portletsLoad() {
-  const response = await fetch("/portal_rest?op=/portlets/get");
+  const response = await fetch("/portal/rest?op=/portlets/get");
   const requests = await response.json();
   return requests;
 }

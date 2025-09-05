@@ -21,7 +21,6 @@ use nino_structures::InitialSettings;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
-// export NINO=postgresql://george.radev@localhost/postgres?connect_timeout=5
 fn main() {
     setup_panic_hook();
 

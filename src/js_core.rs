@@ -57,9 +57,15 @@ impl FNModuleLoader {
                     let module = ModuleSource::new(module_type, code, &module_string, None);
                     Ok(module)
                 }
-                Err(_) => Err(ModuleLoaderError::NotFound),
+                Err(_) => Err(JsErrorBox::generic(format!(
+                    "module: {} not found",
+                    module_name
+                ))),
             },
-            None => Err(ModuleLoaderError::NotFound),
+            None => Err(JsErrorBox::generic(format!(
+                "module: {} not found",
+                module_name
+            ))),
         }
     }
 }

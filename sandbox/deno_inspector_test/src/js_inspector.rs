@@ -410,13 +410,20 @@ async fn pump_websocket_messages(
     'pump: loop {
         tokio::select! {
             Some(msg) = outbound_rx.next() => {
+                // println!("debugger_out: {}", msg.content);
                 let msg = Frame::text(msg.content.into_bytes().into());
-                let _ = websocket.write_frame(msg).await;
+                if let Err(error) = websocket.write_frame(msg).await {
+                    println!("debugger_out_error: {}", error);
+                    // send resume to debugger when communication cannot be handled
+                    // static RESUME_MSG: &str = r#"{"method":"Debugger.resumed","params":{}}"#;
+                    // let _ = inbound_tx.unbounded_send(String::from(RESUME_MSG));
+                };
             }
             Ok(msg) = websocket.read_frame() => {
                 match msg.opcode {
                     OpCode::Text => {
                         if let Ok(s) = String::from_utf8(msg.payload.to_vec()) {
+                          // println!("debugger_in: {}", s);
                           let _ = inbound_tx.unbounded_send(s);
                         }
                     }

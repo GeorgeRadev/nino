@@ -5,13 +5,13 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<meta name="description" content="Nino Portal">
+    <meta name="description" content="Nino Portal">
     <link rel="shortcut icon" href="favicon.ico" />
 
     <title>Log In | Nino Portal</title>
 
-    <link href="portal.css" rel="stylesheet">
-    <script type="text/javascript" src="portal.js"></script>
+    <link href="/portal/portal.css" rel="stylesheet">
+    <script src="/portal/portal.js" type="text/javascript"></script>
 </head>
 
 <body>
@@ -31,7 +31,7 @@
                         <div class="card">
                             <div class="card-body">
                                 <div class="m-sm-3">
-                                    <form action="nino_login" method="post" id="login_form">
+                                    <form action="portal/login" method="post" id="login_form">
                                         <div class="mb-3">
                                             <label class="form-label">Username</label>
                                             <input class="form-control form-control-lg" type="username" name="username"
@@ -46,7 +46,7 @@
                                             &nbsp;
                                         </div>
                                         <div class="d-grid gap-2 mt-3">
-                                            <a href="index.html" class="btn btn-lg btn-primary">Log in</a>
+                                            <button type="submit" class="btn btn-lg btn-primary">Log in</button>
                                         </div>
                                     </form>
                                 </div>
@@ -58,4 +58,5 @@
         </div>
     </main>
 </body>
+
 </html>

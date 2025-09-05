@@ -66,66 +66,68 @@ write_request   "google"        "http://www.google.com"   true    false
 
 #add demo requests and responses
 write_request    "demo"                   "demo.html"                        false   false
-write_response   "demo.html"              "text/html;charset=UTF-8"          false   false  "transport/demo.html"
-write_request    "demo_static.json"       "demo_static.json"                 false   false
-write_response   "demo_static.json"       "application/json;charset=UTF-8"   false   false  "transport/demo_static.json"
-write_request    "demo_dynamic.json"      "demo_dynamic.json"                false   false
-write_response   "demo_dynamic.json"      "application/json;charset=UTF-8"   true    true   "transport/demo_dynamic_json.js"
-write_request    "demo_test_servlet"      "demo_test_servlet"                false   false
-write_response   "demo_test_servlet"      "text/html;charset=UTF-8"          true    false  "transport/demo_test_servlet.js"
-write_request    "demo_notify_servlet"    "demo_notify_servlet"              false   false
-write_response   "demo_notify_servlet"    "text/html;charset=UTF-8"          true    false  "transport/demo_notify_servlet.js"
-write_request    "demo_jsqlx_servlet"     "demo_jsqlx_servlet"               false   false
-write_response   "demo_jsqlx_servlet"     "text/html;charset=UTF-8"          true    false  "transport/demo_jsqlx_servlet.js"
-write_request    "demo_db_servlet"        "demo_db_servlet"                  false   false
-write_response   "demo_db_servlet"        "text/html;charset=UTF-8"          true    true   "transport/demo_db_servlet.js"
-write_request    "demo_db_list"           "demo_db_list"                     false   false
-write_response   "demo_db_list"           "text/html;charset=UTF-8"          true    true   "transport/demo_db_list.js"
-write_request    "demo_fetch_servlet"     "demo_fetch_servlet"               false   false
-write_response   "demo_fetch_servlet"     "application/json;charset=UTF-8"   true    true   "transport/demo_fetch_servlet.js"
-write_request    "demo_fetch_binary_servlet" "demo_fetch_binary_servlet"     false   false
-write_response   "demo_fetch_binary_servlet" "image/png"                     true    true   "transport/demo_fetch_binary_servlet.js"
-write_request    "demo_fetch_response_servlet" "demo_fetch_response_servlet" false   false
-write_response   "demo_fetch_response_servlet" "image/png"                   true    true   "transport/demo_fetch_response_servlet.js"
+write_response   "demo.html"              "text/html;charset=UTF-8"          false   false  "transport/demo/index.html"
+write_request    "demo/static.json"       "demo/static.json"                 false   false
+write_response   "demo/static.json"       "application/json;charset=UTF-8"   false   false  "transport/demo/static.json"
+write_request    "demo/dynamic.json"      "demo/dynamic.json"                false   false
+write_response   "demo/dynamic.json"      "application/json;charset=UTF-8"   true    true   "transport/demo/dynamic_json.js"
+write_request    "demo/test_servlet"      "demo/test_servlet"                false   false
+write_response   "demo/test_servlet"      "text/html;charset=UTF-8"          true    false  "transport/demo/test_servlet.js"
+write_request    "demo/notify_servlet"    "demo/notify_servlet"              false   false
+write_response   "demo/notify_servlet"    "text/html;charset=UTF-8"          true    false  "transport/demo/notify_servlet.js"
+write_request    "demo/jsqlx_servlet"     "demo/jsqlx_servlet"               false   false
+write_response   "demo/jsqlx_servlet"     "text/html;charset=UTF-8"          true    false  "transport/demo/jsqlx_servlet.js"
+write_request    "demo/db_servlet"        "demo/db_servlet"                  false   false
+write_response   "demo/db_servlet"        "text/html;charset=UTF-8"          true    true   "transport/demo/db_servlet.js"
+write_request    "demo/db_list"           "demo/db_list"                     false   false
+write_response   "demo/db_list"           "text/html;charset=UTF-8"          true    true   "transport/demo/db_list.js"
+write_request    "demo/fetch_servlet"     "demo/fetch_servlet"               false   false
+write_response   "demo/fetch_servlet"     "application/json;charset=UTF-8"   true    true   "transport/demo/fetch_servlet.js"
+write_request    "demo/fetch_binary_servlet" "demo/fetch_binary_servlet"     false   false
+write_response   "demo/fetch_binary_servlet" "image/png"                     true    true   "transport/demo/fetch_binary_servlet.js"
+write_request    "demo/fetch_response_servlet" "demo/fetch_response_servlet" false   false
+write_response   "demo/fetch_response_servlet" "image/png"                   true    true   "transport/demo/fetch_response_servlet.js"
 
 #add PORTAL code with login
 write_request    "login"                "login.html"                             false   false
 write_response   "login.html"           "text/html;charset=UTF-8"                false   false  "transport/login.html"
-write_request    "portal_login"         "portal_login"                           false   false
-write_response   "portal_login"         "text/html;charset=UTF-8"                true    true   "transport/portal_login.js"
-write_request    "/"                    "portal_main"                            false   true
-write_request    "index.html"           "portal_main"                            false   true
-write_request    "portal"               "portal_main"                            false   true
-write_response   "portal_main"          "text/html;charset=UTF-8"                true    true  "transport/portal_main.js"
-write_request    "portal_rest"          "portal_rest"                            false   true
-write_response   "portal_rest"          "application/json;charset=UTF-8"         true    true  "transport/portal_rest.js"
-write_request    "portal.js"            "portal.js"                              false   false
-write_response   "portal.js"            "application/javascript;charset=UTF-8"   false   false  "transport/portal.js"
-write_request    "portal.css"           "portal.css"                             false   false
-write_response   "portal.css"           "text/css;charset=UTF-8"                 false   false  "transport/portal.css"
-write_request    "portlet_menu.js"      "portlet_menu.js"                        false   true
-write_response   "portlet_menu.js"      "application/javascript;charset=UTF-8"   false   true   "transport/portlet_menu.js"
-write_request    "portlet_about.js"     "portlet_about.js"                       false   true
-write_response   "portlet_about.js"     "application/javascript;charset=UTF-8"   false   true   "transport/portlet_about.js"
-write_request    "portlet_counter.js"   "portlet_counter.js"                     false   true
-write_response   "portlet_counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portlet_counter.js"
+write_request    "portal/login"         "portal/login"                           false   false
+write_response   "portal/login"         "text/html;charset=UTF-8"                true    true   "transport/portal/login.js"
+write_request    "/"                    "portal/main"                            false   true
+write_request    "index.html"           "portal/main"                            false   true
+write_request    "portal"               "portal/main"                            false   true
+write_response   "portal/main"          "text/html;charset=UTF-8"                true    true   "transport/portal/main.js"
+write_response   "portal/portal.js"     "application/javascript;charset=UTF-8"   false   false  "transport/portal/portal.js"
+write_request    "portal/portal.js"     "portal/portal.js"                       false   false
+write_request    "portal/portal.css"    "portal/portal.css"                      false   false
+write_response   "portal/portal.css"    "text/css;charset=UTF-8"                 false   false  "transport/portal/portal.css"
+write_request    "portal/menu.js"       "portal/menu.js"                         false   true
+write_response   "portal/menu.js"       "application/javascript;charset=UTF-8"   false   true   "transport/portal/menu.js"
 
-write_request    "portlet_admin_requests.js"   "portlet_admin_requests.js"            false   true
-write_response   "portlet_admin_requests.js"   "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_requests.js"
-write_request    "portlet_admin_responses.js"  "portlet_admin_responses.js"           false   true
-write_response   "portlet_admin_responses.js"  "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_responses.js"
-write_request    "portlet_admin_roles.js"      "portlet_admin_roles.js"               false   true
-write_response   "portlet_admin_roles.js"      "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_roles.js"
-write_request    "portlet_admin_portlets.js"   "portlet_admin_portlets.js"            false   true
-write_response   "portlet_admin_portlets.js"   "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_portlets.js"
-write_request    "portlet_admin_settings.js"   "portlet_admin_settings.js"            false   true
-write_response   "portlet_admin_settings.js"   "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_settings.js"
-write_request    "portlet_admin_databases.js"  "portlet_admin_databases.js"           false   true
-write_response   "portlet_admin_databases.js"  "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_databases.js"
-write_request    "portlet_admin_queries.js"    "portlet_admin_queries.js"             false   true
-write_response   "portlet_admin_queries.js"    "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_queries.js"
-write_request    "portlet_admin_logs.js"       "portlet_admin_logs.js"                false   true
-write_response   "portlet_admin_logs.js"       "application/javascript;charset=UTF-8" false   true   "transport/portlet_admin_logs.js"
+write_request    "portal/rest"          "portal/rest"                            false   true
+write_response   "portal/rest"          "application/json;charset=UTF-8"         true    true  "transport/_nino_rest.js"
+
+write_request    "portal/portlet/about.js"     "portal/portlet/about.js"                false   true
+write_response   "portal/portlet/about.js"     "application/javascript;charset=UTF-8"   false   true   "transport/portal/portlet/about.js"
+write_request    "portal/portlet/counter.js"   "portal/portlet/counter.js"              false   true
+write_response   "portal/portlet/counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portal/portlet/counter.js"
+
+write_request    "portal/portlet/admin_requests.js"   "portal/portlet/admin_requests.js"            false   true
+write_response   "portal/portlet/admin_requests.js"   "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_requests.js"
+write_request    "portal/portlet/admin_responses.js"  "portal/portlet/admin_responses.js"           false   true
+write_response   "portal/portlet/admin_responses.js"  "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_responses.js"
+write_request    "portal/portlet/admin_roles.js"      "portal/portlet/admin_roles.js"               false   true
+write_response   "portal/portlet/admin_roles.js"      "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_roles.js"
+write_request    "portal/portlet/admin_portlets.js"   "portal/portlet/admin_portlets.js"            false   true
+write_response   "portal/portlet/admin_portlets.js"   "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_portlets.js"
+write_request    "portal/portlet/admin_settings.js"   "portal/portlet/admin_settings.js"            false   true
+write_response   "portal/portlet/admin_settings.js"   "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_settings.js"
+write_request    "portal/portlet/admin_databases.js"  "portal/portlet/admin_databases.js"           false   true
+write_response   "portal/portlet/admin_databases.js"  "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_databases.js"
+write_request    "portal/portlet/admin_queries.js"    "portal/portlet/admin_queries.js"             false   true
+write_response   "portal/portlet/admin_queries.js"    "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_queries.js"
+write_request    "portal/portlet/admin_logs.js"       "portal/portlet/admin_logs.js"                false   true
+write_response   "portal/portlet/admin_logs.js"       "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_logs.js"
 
 #add ide in react
 # write_request    "ide"               "ide/index.html"                         false   false
@@ -138,17 +140,17 @@ write_response   "portlet_admin_logs.js"       "application/javascript;charset=U
 # update lengths
 echo "UPDATE nino_response SET response_content_length = length(response_content);" >> "$out_file"
 
-write_portlet "portal"  "Home"                  0 "home"      "portlet_about.js"
-write_portlet "demo"    "Demo/Counter"         10 "file-plus" "portlet_counter.js"
-write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portlet_admin_requests.js"
-write_portlet "admin"   "Admin/Responses"     910 "log-out"   "portlet_admin_responses.js"
-write_portlet "admin"   "Admin/Roles"         920 "users"     "portlet_admin_roles.js"
-write_portlet "admin"   "Admin/Portlets"      940 "layout"    "portlet_admin_portlets.js"
-write_portlet "admin"   "Admin/Settings"      950 "settings"  "portlet_admin_settings.js"
-write_portlet "admin"   "Admin/Databases"     960 "database"  "portlet_admin_databases.js"
-write_portlet "admin"   "Admin/Queries"       970 "box"       "portlet_admin_queries.js"
-write_portlet "admin"   "Admin/Schedules"     980 "clock"     "portlet_about.js"
-write_portlet "admin"   "Admin/Logs"          991 "monitor"   "portlet_admin_logs.js"
-write_portlet "admin"   "Admin/Transports"    999 "truck"     "portlet_admin_transports.js"
+write_portlet "portal"  "Home"                  0 "home"      "portal/portlet/about.js"
+write_portlet "demo"    "Demo/Counter"         10 "file-plus" "portal/portlet/counter.js"
+write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portal/portlet/admin_requests.js"
+write_portlet "admin"   "Admin/Responses"     910 "log-out"   "portal/portlet/admin_responses.js"
+write_portlet "admin"   "Admin/Roles"         920 "users"     "portal/portlet/admin_roles.js"
+write_portlet "admin"   "Admin/Portlets"      940 "layout"    "portal/portlet/admin_portlets.js"
+write_portlet "admin"   "Admin/Settings"      950 "settings"  "portal/portlet/admin_settings.js"
+write_portlet "admin"   "Admin/Databases"     960 "database"  "portal/portlet/admin_databases.js"
+write_portlet "admin"   "Admin/Queries"       970 "box"       "portal/portlet/admin_queries.js"
+write_portlet "admin"   "Admin/Schedules"     980 "clock"     "portal/portlet/about.js"
+write_portlet "admin"   "Admin/Logs"          991 "monitor"   "portal/portlet/admin_logs.js"
+write_portlet "admin"   "Admin/Transports"    999 "truck"     "portal/portlet/admin_transports.js"
 
 echo "...DONE"
