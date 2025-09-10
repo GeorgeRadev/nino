@@ -29,15 +29,11 @@ export default function portlet_admin_requests() {
   async function fetchResponseDetails() {
     if (selectIx >= 0 && selectIx < requests.length) {
       try {
-        const response = await fetch("/portal/rest?op=/responses/detail&name=" + new URLSearchParams({
-          name: requests[selectIx].response_name,
+        const response = await fetch("/portal/rest?op=/requests/detail&" + new URLSearchParams({
+          name: requests[selectIx].request_path,
         }));
         const details = await response.json();
         setResponseDetails(details);
-        document.getElementById('requests_jsqlx_code').textContent = details.response_content;
-        document.getElementById('requests_transpiled_code').textContent = details.javascript;
-        document.getElementById('requests_jsqlx_code').style.display = "block";
-        document.getElementById('requests_transpiled_code').style.display = "none";
         setDialogVisible(true);
       } catch (e) {
         alert(e);
@@ -61,9 +57,9 @@ export default function portlet_admin_requests() {
     var request = requests[i];
     requestRows.push(<tr class={(i == selectIx) ? "table-primary" : ""} data-index={i} onClick={onRowClick}>
       <td>{request.request_path}</td>
-      <td>{request.response_name}</td>
-      <td><i class="align-middle" data-feather={request.redirect_flag == 'true' ? 'check-square' : 'minus'}></i></td>
       <td><i class="align-middle" data-feather={request.authorize_flag == 'true' ? 'check-square' : 'minus'}></i></td>
+      <td><i class="align-middle" data-feather={request.redirect_flag == 'true' ? 'check-square' : 'minus'}></i></td>
+      <td>{request.response_name}</td>
     </tr>);
   }
 
@@ -82,9 +78,9 @@ export default function portlet_admin_requests() {
                 <thead>
                   <tr>
                     <th>request path</th>
-                    <th>response name</th>
-                    <th>redirect</th>
                     <th>authorize</th>
+                    <th>redirect</th>
+                    <th>response name</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -110,40 +106,22 @@ export default function portlet_admin_requests() {
             <div class="card-body">
               <table>
                 <tr>
-                  <td>response name:&nbsp;&nbsp;</td>
+                  <td>request path:&nbsp;&nbsp;</td>
+                  <td>{responseDetails['request_path']}</td>
+                </tr>
+                <tr>
+                  <td>authorization required:</td>
+                  <td>{responseDetails['authorize_flag']}</td>
+                </tr>
+                <tr>
+                  <td>redirect:</td>
+                  <td>{responseDetails['redirect_flag']}</td>
+                </tr>
+                <tr>
+                  <td>response name:</td>
                   <td>{responseDetails['response_name']}</td>
                 </tr>
-                <tr>
-                  <td>mime_type:</td>
-                  <td>{responseDetails['response_mime_type']}</td>
-                </tr>
-                <tr>
-                  <td>execute:</td>
-                  <td>{responseDetails['execute_flag']}</td>
-                </tr>
-                <tr>
-                  <td>transpile:</td>
-                  <td>{responseDetails['transpile_flag']}</td>
-                </tr>
-                <tr>
-                  <td>code: </td>
-                  <td>
-                    <button class="btn btn-primary" onClick={() => {
-                      document.getElementById('requests_jsqlx_code').style.display = "block";
-                      document.getElementById('requests_transpiled_code').style.display = "none";
-                    }}>jsqlx</button>
-                    &nbsp;
-                    <button class="btn btn-primary"
-                      {...((responseDetails['transpile_flag'] == 'false') ? { hidden: 'hidden' } : {})}
-                      onClick={() => {
-                        document.getElementById('requests_jsqlx_code').style.display = "none";
-                        document.getElementById('requests_transpiled_code').style.display = "block";
-                      }}>transpiled js</button>
-                  </td>
-                </tr>
               </table>
-              <textarea class="form-control" style="font-family: Courier;" id="requests_jsqlx_code" rows="20"></textarea>
-              <textarea class="form-control" style="font-family: Courier;" id="requests_transpiled_code" rows="20"></textarea>
             </div>
           </div>
         </div>

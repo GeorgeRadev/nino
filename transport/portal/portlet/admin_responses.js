@@ -55,9 +55,9 @@ export default function portlet_admin_responses() {
     var response = responses[i];
     responseRows.push(<tr class={(i == selectIx) ? "table-primary" : ""} data-index={i} onClick={onRowClick}>
       <td>{response.response_name}</td>
+      <td><i class="align-middle" data-feather={response.transpile_flag == 'true' ? 'chevrons-right' : 'minus'}></i></td>
+      <td><i class="align-middle" data-feather={response.execute_flag == 'true' ? 'hash' : 'minus'}></i></td>
       <td>{response.response_mime_type}</td>
-      <td><i class="align-middle" data-feather={response.execute_flag == 'true' ? 'check-square' : 'minus'}></i></td>
-      <td><i class="align-middle" data-feather={response.transpile_flag == 'true' ? 'check-square' : 'minus'}></i></td>
     </tr>);
   }
 
@@ -76,9 +76,9 @@ export default function portlet_admin_responses() {
                 <thead>
                   <tr>
                     <th>response name</th>
-                    <th>mime_type</th>
-                    <th>execute</th>
                     <th>transpile</th>
+                    <th>execute</th>
+                    <th>mime_type</th>
                   </tr>
                 </thead>
                 <tbody>

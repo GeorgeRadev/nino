@@ -111,6 +111,8 @@ write_request    "portal/portlet/about.js"     "portal/portlet/about.js"        
 write_response   "portal/portlet/about.js"     "application/javascript;charset=UTF-8"   false   true   "transport/portal/portlet/about.js"
 write_request    "portal/portlet/counter.js"   "portal/portlet/counter.js"              false   true
 write_response   "portal/portlet/counter.js"   "application/javascript;charset=UTF-8"   false   true   "transport/portal/portlet/counter.js"
+write_request    "portal/portlet/styles.js"   "portal/portlet/styles.js"                false   true
+write_response   "portal/portlet/styles.js"   "application/javascript;charset=UTF-8"    false   true   "transport/portal/portlet/styles.js"
 
 write_request    "portal/portlet/admin_requests.js"   "portal/portlet/admin_requests.js"            false   true
 write_response   "portal/portlet/admin_requests.js"   "application/javascript;charset=UTF-8"        false   true   "transport/portal/portlet/admin_requests.js"
@@ -142,6 +144,7 @@ echo "UPDATE nino_response SET response_content_length = length(response_content
 
 write_portlet "portal"  "Home"                  0 "home"      "portal/portlet/about.js"
 write_portlet "demo"    "Demo/Counter"         10 "file-plus" "portal/portlet/counter.js"
+write_portlet "demo"    "Demo/Styles"          20 "feather"   "portal/portlet/styles.js"
 write_portlet "admin"   "Admin/Requests"      900 "log-in"    "portal/portlet/admin_requests.js"
 write_portlet "admin"   "Admin/Responses"     910 "log-out"   "portal/portlet/admin_responses.js"
 write_portlet "admin"   "Admin/Roles"         920 "users"     "portal/portlet/admin_roles.js"

@@ -223,7 +223,10 @@ async fn nino_init(settings: InitialSettings) -> Result<(), Error> {
     // brodcast initial message
     tokio::spawn(async move { notifier.notify("to all".to_string()).await });
 
-    web.start().await?;
+    if let Err(error) = web.start().await {
+        eprintln!("!!! panic: {}", error);
+        std::process::exit(1);
+    }
     Ok(())
 }
 

@@ -96,11 +96,30 @@ export default class nino_core {
         await conn.query(sql, function (request_path, response_name, redirect_flag, authorize_flag) {
             result.push({
                 request_path: request_path,
-                response_name: response_name,
                 redirect_flag: redirect_flag,
-                authorize_flag: authorize_flag
+                authorize_flag: authorize_flag,
+                response_name: response_name,
             });
             return true;
+        });
+        return result;
+    }
+
+    static async ninoRequestsDetail(name) {
+        const conn = await db();
+        const sql = SELECT request_path, response_name, redirect_flag, authorize_flag
+                    FROM nino_request 
+                    WHERE request_path = : name;
+
+        var result;
+        await conn.query(sql, function (request_path, response_name, redirect_flag, authorize_flag) {
+            result = {
+                request_path: request_path,
+                response_name: response_name,
+                redirect_flag: redirect_flag,
+                authorize_flag: authorize_flag,
+            };
+            return false;
         });
         return result;
     }
@@ -128,8 +147,7 @@ export default class nino_core {
         const conn = await db();
         const sql = SELECT response_name, response_mime_type, execute_flag, transpile_flag, response_content, javascript
                     FROM nino_response 
-                    WHERE response_name = : name
-                    ORDER BY response_name;
+                    WHERE response_name = : name;
 
         var result;
         await conn.query(sql, function (response_name, response_mime_type, execute_flag, transpile_flag, response_content, javascript) {
@@ -268,15 +286,15 @@ export default class nino_core {
 
     static async ninoLogsGet(limit) {
         const conn = await db();
-        const sql = SELECT to_char(time_stamp, 'YYYY-MM-DD HH24:MI:SS'), method, request, response, log_message
+        const sql = SELECT to_char(log_timestamp, 'YYYY-MM-DD HH24:MI:SS'), method, request, response, log_message
                     FROM nino_log 
-                    ORDER BY time_stamp DESC
+                    ORDER BY log_timestamp DESC
                     LIMIT :limit;
 
         var result = [];
-        await conn.query(sql, function (time_stamp, method, request, response, message) {
+        await conn.query(sql, function (log_timestamp, method, request, response, message) {
             result.push({
-                time_stamp: time_stamp,
+                log_timestamp: log_timestamp,
                 method: method,
                 request: request,
                 response: response,

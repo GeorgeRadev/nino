@@ -42,10 +42,10 @@ export default async function portal(request) {
   <script type="importmap">
   {
       "imports": {
-        "preact": "https://esm.sh/preact@10.17.1",
-        "preact/": "https://esm.sh/preact@10.17.1/",
-        "react": "https://esm.sh/preact@10.17.1/compat",
-        "react-dom": "https://esm.sh/preact@10.17.1/compat"
+        "preact": "https://esm.sh/preact@10.27.1",
+        "preact/": "https://esm.sh/preact@10.27.1/",
+        "react": "https://esm.sh/preact@10.27.1/compat",
+        "react-dom": "https://esm.sh/preact@10.27.1/compat"
       }
   }
   </script>

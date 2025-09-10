@@ -21,7 +21,7 @@ export default function portlet_admin_logs() {
   for (var i = 0; i < logs.length; i++) {
     var setting = logs[i];
     logsRows.push(<tr>
-      <td>{setting.time_stamp}</td>
+      <td>{setting.log_timestamp}</td>
       <td>{setting.method}</td>
       <td>{setting.request}</td>
       <td>{setting.response}</td>

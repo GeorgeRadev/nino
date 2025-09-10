@@ -28,14 +28,14 @@ VALUES ('_main', 'postgres', 'reserved name for the defailt db alias of the main
 -- nino_log
 DROP TABLE IF EXISTS nino_log;
 CREATE TABLE IF NOT EXISTS nino_log (
-    time_stamp TIMESTAMP DEFAULT NOW(),
+    log_timestamp TIMESTAMP DEFAULT NOW(),
     method VARCHAR(256) NOT NULL,
     request VARCHAR(1024),
     response VARCHAR(4096),
     log_message BYTEA
 );
 DROP INDEX IF EXISTS nino_log_ix;
-CREATE INDEX IF NOT EXISTS nino_log_ix ON nino_log(time_stamp);
+CREATE INDEX IF NOT EXISTS nino_log_ix ON nino_log(log_timestamp);
 
 -- request table for defining the requests
 DROP TABLE IF EXISTS nino_request;
@@ -103,3 +103,31 @@ CREATE TABLE IF NOT EXISTS nino_portlet (
 );
 DROP INDEX IF EXISTS nino_portlet_ix;
 CREATE INDEX IF NOT EXISTS nino_portlet_ix ON nino_portlet(user_role);
+
+
+-- transports table with information
+DROP TABLE IF EXISTS nino_transport;
+CREATE TABLE IF NOT EXISTS nino_transport (
+    transport_id          VARCHAR(64) NOT NULL,
+    transport_status      VARCHAR(32) NOT NULL,
+    transport_creator     VARCHAR(256) NOT NULL,
+    transport_date        TIMESTAMP DEFAULT NOW(),
+	transport_description TEXT
+);
+DROP INDEX IF EXISTS nino_transport_ix;
+CREATE INDEX IF NOT EXISTS nino_transport_ix ON nino_transport(transport_id);
+
+
+DROP TABLE IF EXISTS nino_transport_object;
+CREATE TABLE IF NOT EXISTS nino_transport_object (
+    transport_id           VARCHAR(64) NOT NULL,
+    object_type            VARCHAR(32) NOT NULL,
+    object_name            VARCHAR(512) NOT NULL,
+    object_date            TIMESTAMP DEFAULT NOW(),
+	object_description     TEXT,
+	object_parameters_json TEXT NOT NULL,
+	object_content         BYTEA NOT NULL,
+	object_content_old     BYTEA NOT NULL
+);
+DROP INDEX IF EXISTS nino_transport_object_ix;
+CREATE INDEX IF NOT EXISTS nino_transport_object_ix ON nino_transport_object(transport_id, object_type , object_name);

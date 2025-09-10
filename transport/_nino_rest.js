@@ -13,16 +13,24 @@ export default async function portal_rest(request) {
   switch (op[0]) {
     case '/requests/get':
       return await nino.ninoRequestsGet();
+    case '/requests/detail':
+      debugger;
+      {
+        const name = request.parameters['name'];
+        if (!name || !name[0]) {
+          return { error: "no query parameter 'name' provided" };
+        }
+        return await nino.ninoRequestsDetail(name[0]);
+      }
     case '/responses/get':
       return await nino.ninoResponsesGet();
     case '/responses/detail':
       {
         const name = request.parameters['name'];
         if (!name || !name[0]) {
-          return null;
-        } else {
-          return await nino.ninoResponsesDetail(name[0]);
+          return { error: "no query parameter 'name' provided" };
         }
+        return await nino.ninoResponsesDetail(name[0]);
       }
     case '/users/get':
       return await nino.ninoUsersRolesGet();
