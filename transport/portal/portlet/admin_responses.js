@@ -34,6 +34,7 @@ export default function portlet_admin_responses() {
         document.getElementById('requests_transpiled_code').style.display = "none";
         setDialogVisible(true);
       } catch (e) {
+        console.log(e);
         alert(e);
       }
     }
@@ -124,12 +125,12 @@ export default function portlet_admin_responses() {
                       <button class="btn btn-primary" onClick={() => {
                         document.getElementById('requests_jsqlx_code').style.display = "block";
                         document.getElementById('requests_transpiled_code').style.display = "none";
-                      }}>jsqlx</button>
+                      }}>source (jsqlx)</button>
                       &nbsp;
                       <button class="btn btn-primary" onClick={() => {
                         document.getElementById('requests_jsqlx_code').style.display = "none";
                         document.getElementById('requests_transpiled_code').style.display = "block";
-                      }}>transpiled js</button>
+                      }}>transpiled (jsm)</button>
                     </td>
                   </tr>
                 </table>
